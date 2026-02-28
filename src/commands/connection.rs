@@ -1,18 +1,32 @@
-use crate::commands::util::{wrong_args, Args};
+use crate::commands::util::{eq_ascii, wrong_args, Args};
 use crate::protocol::types::RespFrame;
 
 pub fn handle(command: &[u8], args: &Args) -> Option<RespFrame> {
-    match command {
-        b"AUTH" => Some(auth(args)),
-        b"HELLO" => Some(hello(args)),
-        b"CLIENT" => Some(client(args)),
-        b"COMMAND" => Some(RespFrame::Array(Some(vec![]))),
-        b"SELECT" => Some(select_db(args)),
-        b"QUIT" => Some(quit(args)),
-        b"PING" => Some(ping(args)),
-        b"ECHO" => Some(echo(args)),
-        _ => None,
+    if eq_ascii(command, b"AUTH") {
+        return Some(auth(args));
     }
+    if eq_ascii(command, b"HELLO") {
+        return Some(hello(args));
+    }
+    if eq_ascii(command, b"CLIENT") {
+        return Some(client(args));
+    }
+    if eq_ascii(command, b"COMMAND") {
+        return Some(RespFrame::Array(Some(vec![])));
+    }
+    if eq_ascii(command, b"SELECT") {
+        return Some(select_db(args));
+    }
+    if eq_ascii(command, b"QUIT") {
+        return Some(quit(args));
+    }
+    if eq_ascii(command, b"PING") {
+        return Some(ping(args));
+    }
+    if eq_ascii(command, b"ECHO") {
+        return Some(echo(args));
+    }
+    None
 }
 
 fn auth(args: &Args) -> RespFrame {
@@ -92,15 +106,15 @@ fn client(args: &Args) -> RespFrame {
         return wrong_args("CLIENT");
     }
 
-    let sub = args[1]
-        .iter()
-        .map(u8::to_ascii_uppercase)
-        .collect::<Vec<u8>>();
-    match sub.as_slice() {
-        b"SETINFO" | b"SETNAME" => RespFrame::ok(),
-        b"GETNAME" => RespFrame::Bulk(None),
-        b"ID" => RespFrame::Integer(1),
-        _ => RespFrame::Error("ERR unknown subcommand for CLIENT".to_string()),
+    let sub = args[1].as_slice();
+    if eq_ascii(sub, b"SETINFO") || eq_ascii(sub, b"SETNAME") {
+        RespFrame::ok()
+    } else if eq_ascii(sub, b"GETNAME") {
+        RespFrame::Bulk(None)
+    } else if eq_ascii(sub, b"ID") {
+        RespFrame::Integer(1)
+    } else {
+        RespFrame::Error("ERR unknown subcommand for CLIENT".to_string())
     }
 }
 

@@ -2,8 +2,8 @@ use crate::protocol::types::RespFrame;
 
 pub type Args = [Vec<u8>];
 
-pub fn upper(value: &[u8]) -> Vec<u8> {
-    value.iter().map(u8::to_ascii_uppercase).collect()
+pub fn eq_ascii(command: &[u8], expected: &[u8]) -> bool {
+    command.eq_ignore_ascii_case(expected)
 }
 
 pub fn wrong_args(command: &str) -> RespFrame {

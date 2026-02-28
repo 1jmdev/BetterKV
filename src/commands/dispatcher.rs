@@ -1,4 +1,4 @@
-use crate::commands::{connection, keyspace, string, ttl, util};
+use crate::commands::{connection, keyspace, string, ttl};
 use crate::engine::store::Store;
 use crate::protocol::types::RespFrame;
 
@@ -12,17 +12,17 @@ pub fn dispatch(store: &Store, frame: RespFrame) -> RespFrame {
         return RespFrame::Error("ERR empty command".to_string());
     }
 
-    let command = util::upper(&args[0]);
-    if let Some(response) = connection::handle(&command, &args) {
+    let command = args[0].as_slice();
+    if let Some(response) = connection::handle(command, &args) {
         return response;
     }
-    if let Some(response) = string::handle(store, &command, &args) {
+    if let Some(response) = string::handle(store, command, &args) {
         return response;
     }
-    if let Some(response) = keyspace::handle(store, &command, &args) {
+    if let Some(response) = keyspace::handle(store, command, &args) {
         return response;
     }
-    if let Some(response) = ttl::handle(store, &command, &args) {
+    if let Some(response) = ttl::handle(store, command, &args) {
         return response;
     }
 
