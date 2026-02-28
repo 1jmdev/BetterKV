@@ -15,6 +15,19 @@ pub enum CompactBytes<const INLINE_CAPACITY: usize> {
 }
 
 impl<const INLINE_CAPACITY: usize> CompactBytes<INLINE_CAPACITY> {
+    pub fn from_slice(value: &[u8]) -> Self {
+        if value.len() <= INLINE_CAPACITY {
+            let mut data = [0; INLINE_CAPACITY];
+            data[..value.len()].copy_from_slice(value);
+            Self::Inline {
+                len: value.len() as u8,
+                data,
+            }
+        } else {
+            Self::Heap(value.to_vec().into_boxed_slice())
+        }
+    }
+
     pub fn from_vec(value: Vec<u8>) -> Self {
         if value.len() <= INLINE_CAPACITY {
             let mut data = [0; INLINE_CAPACITY];
@@ -95,6 +108,12 @@ pub struct Entry {
 }
 
 impl Entry {
+    pub fn from_slice(value: &[u8]) -> Self {
+        Self {
+            value: CompactValue::from_slice(value),
+        }
+    }
+
     pub fn new(value: Vec<u8>) -> Self {
         Self {
             value: CompactValue::from_vec(value),

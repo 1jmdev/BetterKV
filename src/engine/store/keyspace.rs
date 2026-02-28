@@ -4,29 +4,31 @@ use super::pattern::wildcard_match;
 use crate::engine::value::CompactKey;
 
 impl Store {
-    pub fn del(&self, keys: &[Vec<u8>]) -> i64 {
+    pub fn del<K: AsRef<[u8]>>(&self, keys: &[K]) -> i64 {
         let mut removed = 0;
         for key in keys {
+            let key = key.as_ref();
             let idx = self.shard_index(key);
             let mut shard = self.shards[idx].write();
-            shard.ttl.remove(key.as_slice());
-            if shard.entries.remove(key.as_slice()).is_some() {
+            shard.ttl.remove(key);
+            if shard.entries.remove(key).is_some() {
                 removed += 1;
             }
         }
         removed
     }
 
-    pub fn exists(&self, keys: &[Vec<u8>]) -> i64 {
+    pub fn exists<K: AsRef<[u8]>>(&self, keys: &[K]) -> i64 {
         let now_ms = monotonic_now_ms();
         let mut count = 0;
         for key in keys {
+            let key = key.as_ref();
             let idx = self.shard_index(key);
             let shard = self.shards[idx].read();
-            if shard.entries.get(key.as_slice()).is_some_and(|_| {
+            if shard.entries.get(key).is_some_and(|_| {
                 shard
                     .ttl
-                    .get(key.as_slice())
+                    .get(key)
                     .copied()
                     .is_none_or(|deadline| now_ms < deadline)
             }) {
@@ -36,11 +38,11 @@ impl Store {
         count
     }
 
-    pub fn touch(&self, keys: &[Vec<u8>]) -> i64 {
+    pub fn touch<K: AsRef<[u8]>>(&self, keys: &[K]) -> i64 {
         self.exists(keys)
     }
 
-    pub fn rename(&self, from: &[u8], to: Vec<u8>) -> bool {
+    pub fn rename(&self, from: &[u8], to: &[u8]) -> bool {
         let from_idx = self.shard_index(from);
         let mut source = self.shards[from_idx].write();
         let now_ms = monotonic_now_ms();
@@ -54,9 +56,9 @@ impl Store {
         let deadline = source.ttl.remove(from);
         drop(source);
 
-        let to_idx = self.shard_index(&to);
+        let to_idx = self.shard_index(to);
         let mut destination = self.shards[to_idx].write();
-        let key = CompactKey::from_vec(to);
+        let key = CompactKey::from_slice(to);
         destination.entries.insert(key.clone(), entry);
         if let Some(deadline) = deadline {
             destination.ttl.insert(key, deadline);
@@ -66,7 +68,7 @@ impl Store {
         true
     }
 
-    pub fn renamenx(&self, from: &[u8], to: Vec<u8>) -> Result<i64, ()> {
+    pub fn renamenx(&self, from: &[u8], to: &[u8]) -> Result<i64, ()> {
         let from_idx = self.shard_index(from);
         let mut source = self.shards[from_idx].write();
         let now_ms = monotonic_now_ms();
@@ -80,14 +82,12 @@ impl Store {
         let deadline = source.ttl.get(from).copied();
         drop(source);
 
-        let to_idx = self.shard_index(&to);
+        let to_idx = self.shard_index(to);
         let mut destination = self.shards[to_idx].write();
-        if !purge_if_expired(&mut destination, to.as_slice(), now_ms)
-            && destination.entries.contains_key(to.as_slice())
-        {
+        if !purge_if_expired(&mut destination, to, now_ms) && destination.entries.contains_key(to) {
             return Ok(0);
         }
-        let key = CompactKey::from_vec(to);
+        let key = CompactKey::from_slice(to);
         destination.entries.insert(key.clone(), entry);
         if let Some(deadline) = deadline {
             destination.ttl.insert(key, deadline);

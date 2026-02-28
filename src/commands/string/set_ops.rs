@@ -86,11 +86,11 @@ fn set(store: &Store, args: &Args) -> RespFrame {
         return RespFrame::Error("ERR syntax error".to_string());
     }
 
-    let key = args[1].to_vec();
-    let value = args[2].to_vec();
+    let key = args[1].as_slice();
+    let value = args[2].as_slice();
 
     let old_value = if return_old {
-        store.get(&key).map(BulkData::Value)
+        store.get(key).map(BulkData::Value)
     } else {
         None
     };
@@ -118,7 +118,7 @@ fn setnx(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 3 {
         return wrong_args("SETNX");
     }
-    RespFrame::Integer(store.setnx(args[1].to_vec(), args[2].to_vec(), None) as i64)
+    RespFrame::Integer(store.setnx(&args[1], &args[2], None) as i64)
 }
 
 fn getset(store: &Store, args: &Args) -> RespFrame {
@@ -127,7 +127,7 @@ fn getset(store: &Store, args: &Args) -> RespFrame {
     }
     RespFrame::Bulk(
         store
-            .getset(args[1].to_vec(), args[2].to_vec())
+            .getset(&args[1], &args[2])
             .map(|value| BulkData::Arg(CompactArg::from_vec(value))),
     )
 }
@@ -147,7 +147,7 @@ fn append(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 3 {
         return wrong_args("APPEND");
     }
-    RespFrame::Integer(store.append(args[1].to_vec(), &args[2]) as i64)
+    RespFrame::Integer(store.append(&args[1], &args[2]) as i64)
 }
 
 fn strlen(store: &Store, args: &Args) -> RespFrame {

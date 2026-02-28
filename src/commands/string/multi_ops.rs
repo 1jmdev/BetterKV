@@ -34,7 +34,7 @@ fn mset(store: &Store, args: &Args) -> RespFrame {
     }
     let mut pairs = Vec::with_capacity((args.len() - 1) / 2);
     for chunk in args[1..].chunks(2) {
-        pairs.push((chunk[0].to_vec(), chunk[1].to_vec()));
+        pairs.push((chunk[0].clone(), chunk[1].clone()));
     }
     store.mset(pairs);
     RespFrame::ok()
@@ -46,7 +46,7 @@ fn msetnx(store: &Store, args: &Args) -> RespFrame {
     }
     let mut pairs = Vec::with_capacity((args.len() - 1) / 2);
     for chunk in args[1..].chunks(2) {
-        pairs.push((chunk[0].to_vec(), chunk[1].to_vec()));
+        pairs.push((chunk[0].clone(), chunk[1].clone()));
     }
     RespFrame::Integer(store.msetnx(pairs) as i64)
 }

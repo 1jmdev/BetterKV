@@ -47,7 +47,7 @@ fn parse_inline(src: &[u8], offset: usize) -> Result<(RespFrame, usize), ParseEr
     let parts: Vec<RespFrame> = line
         .split(|byte| byte.is_ascii_whitespace())
         .filter(|part| !part.is_empty())
-        .map(|part| RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_vec(part.to_vec())))))
+        .map(|part| RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(part)))))
         .collect();
 
     if parts.is_empty() {
@@ -94,7 +94,7 @@ fn parse_bulk(src: &[u8], offset: usize) -> Result<(RespFrame, usize), ParseErro
     }
 
     let end = cursor + size;
-    let payload = BulkData::Arg(CompactArg::from_vec(src[cursor..end].to_vec()));
+    let payload = BulkData::Arg(CompactArg::from_slice(&src[cursor..end]));
     cursor = end;
 
     if src.get(cursor) != Some(&b'\r') || src.get(cursor + 1) != Some(&b'\n') {
