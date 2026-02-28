@@ -1,5 +1,6 @@
 pub mod config;
 pub mod net;
+pub mod protocol;
 
 use crate::config::Config;
 use crate::net::listener::run_listener;
