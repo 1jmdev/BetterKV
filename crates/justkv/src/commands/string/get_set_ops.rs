@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::commands::util::{Args, eq_ascii, wrong_args, wrong_type};
+use crate::commands::util::{eq_ascii, wrong_args, wrong_type, Args};
 use crate::engine::store::Store;
 use crate::engine::value::CompactArg;
 use crate::protocol::types::{BulkData, RespFrame};
@@ -28,7 +28,10 @@ fn get(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 2 {
         return wrong_args("GET");
     }
-    if matches!(store.value_kind(&args[1]), Some("hash")) {
+    if store
+        .value_kind(&args[1])
+        .is_some_and(|kind| kind != "string")
+    {
         return wrong_type();
     }
     RespFrame::Bulk(store.get(&args[1]).map(BulkData::Value))
@@ -122,7 +125,10 @@ fn getset(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 3 {
         return wrong_args("GETSET");
     }
-    if matches!(store.value_kind(&args[1]), Some("hash")) {
+    if store
+        .value_kind(&args[1])
+        .is_some_and(|kind| kind != "string")
+    {
         return wrong_type();
     }
     RespFrame::Bulk(
@@ -136,7 +142,10 @@ fn getdel(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 2 {
         return wrong_args("GETDEL");
     }
-    if matches!(store.value_kind(&args[1]), Some("hash")) {
+    if store
+        .value_kind(&args[1])
+        .is_some_and(|kind| kind != "string")
+    {
         return wrong_type();
     }
     RespFrame::Bulk(

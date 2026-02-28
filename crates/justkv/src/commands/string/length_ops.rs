@@ -1,4 +1,4 @@
-use crate::commands::util::{Args, eq_ascii, int_error, wrong_args, wrong_type};
+use crate::commands::util::{eq_ascii, int_error, wrong_args, wrong_type, Args};
 use crate::engine::store::Store;
 use crate::protocol::types::{BulkData, RespFrame};
 
@@ -22,7 +22,10 @@ fn append(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 3 {
         return wrong_args("APPEND");
     }
-    if matches!(store.value_kind(&args[1]), Some("hash")) {
+    if store
+        .value_kind(&args[1])
+        .is_some_and(|kind| kind != "string")
+    {
         return wrong_type();
     }
     RespFrame::Integer(store.append(&args[1], &args[2]) as i64)
@@ -32,7 +35,10 @@ fn strlen(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 2 {
         return wrong_args("STRLEN");
     }
-    if matches!(store.value_kind(&args[1]), Some("hash")) {
+    if store
+        .value_kind(&args[1])
+        .is_some_and(|kind| kind != "string")
+    {
         return wrong_type();
     }
     RespFrame::Integer(store.strlen(&args[1]) as i64)
@@ -42,7 +48,10 @@ fn setrange(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 4 {
         return wrong_args("SETRANGE");
     }
-    if matches!(store.value_kind(&args[1]), Some("hash")) {
+    if store
+        .value_kind(&args[1])
+        .is_some_and(|kind| kind != "string")
+    {
         return wrong_type();
     }
 
@@ -58,7 +67,10 @@ fn getrange(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 4 {
         return wrong_args("GETRANGE");
     }
-    if matches!(store.value_kind(&args[1]), Some("hash")) {
+    if store
+        .value_kind(&args[1])
+        .is_some_and(|kind| kind != "string")
+    {
         return wrong_type();
     }
 

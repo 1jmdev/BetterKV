@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::commands::util::{Args, eq_ascii, int_error, wrong_args, wrong_type};
+use crate::commands::util::{eq_ascii, int_error, wrong_args, wrong_type, Args};
 use crate::engine::store::{GetExMode, Store};
 use crate::engine::value::CompactArg;
 use crate::protocol::types::{BulkData, RespFrame};
@@ -50,7 +50,10 @@ fn getex(store: &Store, args: &Args) -> RespFrame {
     if args.len() < 2 {
         return wrong_args("GETEX");
     }
-    if matches!(store.value_kind(&args[1]), Some("hash")) {
+    if store
+        .value_kind(&args[1])
+        .is_some_and(|kind| kind != "string")
+    {
         return wrong_type();
     }
 

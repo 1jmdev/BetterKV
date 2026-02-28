@@ -1,4 +1,4 @@
-use crate::commands::util::{Args, eq_ascii, wrong_args, wrong_type};
+use crate::commands::util::{eq_ascii, wrong_args, wrong_type, Args};
 use crate::engine::store::Store;
 use crate::protocol::types::{BulkData, RespFrame};
 
@@ -21,7 +21,7 @@ fn mget(store: &Store, args: &Args) -> RespFrame {
     }
     if args[1..]
         .iter()
-        .any(|key| matches!(store.value_kind(key), Some("hash")))
+        .any(|key| store.value_kind(key).is_some_and(|kind| kind != "string"))
     {
         return wrong_type();
     }

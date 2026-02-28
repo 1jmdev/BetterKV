@@ -1,4 +1,4 @@
-use crate::commands::util::{Args, eq_ascii, int_error, wrong_args, wrong_type};
+use crate::commands::util::{eq_ascii, int_error, wrong_args, wrong_type, Args};
 use crate::engine::store::Store;
 use crate::protocol::types::RespFrame;
 
@@ -22,7 +22,10 @@ fn incr(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 2 {
         return wrong_args("INCR");
     }
-    if matches!(store.value_kind(&args[1]), Some("hash")) {
+    if store
+        .value_kind(&args[1])
+        .is_some_and(|kind| kind != "string")
+    {
         return wrong_type();
     }
     match store.incr(&args[1]) {
@@ -35,7 +38,10 @@ fn incrby(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 3 {
         return wrong_args("INCRBY");
     }
-    if matches!(store.value_kind(&args[1]), Some("hash")) {
+    if store
+        .value_kind(&args[1])
+        .is_some_and(|kind| kind != "string")
+    {
         return wrong_type();
     }
 
@@ -54,7 +60,10 @@ fn decr(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 2 {
         return wrong_args("DECR");
     }
-    if matches!(store.value_kind(&args[1]), Some("hash")) {
+    if store
+        .value_kind(&args[1])
+        .is_some_and(|kind| kind != "string")
+    {
         return wrong_type();
     }
 
@@ -68,7 +77,10 @@ fn decrby(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 3 {
         return wrong_args("DECRBY");
     }
-    if matches!(store.value_kind(&args[1]), Some("hash")) {
+    if store
+        .value_kind(&args[1])
+        .is_some_and(|kind| kind != "string")
+    {
         return wrong_type();
     }
 
