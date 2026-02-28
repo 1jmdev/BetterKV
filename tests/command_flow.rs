@@ -5,8 +5,8 @@ use valkey::protocol::types::RespFrame;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn set_get_del_flow_works() {
-    let server = spawn_server().await;
-    let mut conn = connect().await;
+    let (server, port) = spawn_server().await;
+    let mut conn = connect(port).await;
 
     let set = send_command(&mut conn, &[b"SET", b"name", b"maty"]).await;
     assert_eq!(set, RespFrame::Simple("OK".to_string()));
@@ -25,8 +25,8 @@ async fn set_get_del_flow_works() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn mset_mget_flow_works() {
-    let server = spawn_server().await;
-    let mut conn = connect().await;
+    let (server, port) = spawn_server().await;
+    let mut conn = connect(port).await;
 
     let mset = send_command(&mut conn, &[b"MSET", b"a", b"1", b"b", b"2"]).await;
     assert_eq!(mset, RespFrame::Simple("OK".to_string()));

@@ -7,12 +7,12 @@ use valkey::protocol::types::RespFrame;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn concurrent_increments_are_consistent() {
-    let server = spawn_server().await;
+    let (server, port) = spawn_server().await;
 
     let mut tasks = JoinSet::new();
     for _ in 0..16 {
-        tasks.spawn(async {
-            let mut conn = connect().await;
+        tasks.spawn(async move {
+            let mut conn = connect(port).await;
             for _ in 0..40 {
                 let _ = send_command(&mut conn, &[b"INCR", b"hot_counter"]).await;
             }
@@ -23,7 +23,7 @@ async fn concurrent_increments_are_consistent() {
         result.expect("task finishes");
     }
 
-    let mut check = connect().await;
+    let mut check = connect(port).await;
     let value = send_command(&mut check, &[b"GET", b"hot_counter"]).await;
     assert_eq!(value, RespFrame::Bulk(Some(b"640".to_vec())));
 

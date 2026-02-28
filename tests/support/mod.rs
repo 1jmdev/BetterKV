@@ -1,5 +1,6 @@
 use std::sync::atomic::{AtomicU16, Ordering};
 use std::time::Duration;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use bytes::BytesMut;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -11,10 +12,10 @@ use valkey::net::listener::run_listener;
 use valkey::protocol::parser::parse_frame;
 use valkey::protocol::types::RespFrame;
 
-static NEXT_PORT: AtomicU16 = AtomicU16::new(19000);
+static NEXT_PORT: AtomicU16 = AtomicU16::new(0);
 
-pub async fn spawn_server() -> JoinHandle<()> {
-    let port = NEXT_PORT.fetch_add(1, Ordering::Relaxed);
+pub async fn spawn_server() -> (JoinHandle<()>, u16) {
+    let port = next_port();
     let config = Config {
         bind: "127.0.0.1".to_string(),
         port,
@@ -27,15 +28,25 @@ pub async fn spawn_server() -> JoinHandle<()> {
     });
 
     tokio::time::sleep(Duration::from_millis(60)).await;
-    handle
+    (handle, port)
 }
 
-pub fn current_port() -> u16 {
-    NEXT_PORT.load(Ordering::Relaxed) - 1
+fn next_port() -> u16 {
+    let current = NEXT_PORT.load(Ordering::Relaxed);
+    if current == 0 {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("unix epoch")
+            .subsec_nanos() as u32;
+        let base = 20000 + ((std::process::id() + now) % 20000) as u16;
+        let _ = NEXT_PORT.compare_exchange(0, base, Ordering::SeqCst, Ordering::SeqCst);
+    }
+
+    NEXT_PORT.fetch_add(1, Ordering::Relaxed)
 }
 
-pub async fn connect() -> TcpStream {
-    TcpStream::connect(("127.0.0.1", current_port()))
+pub async fn connect(port: u16) -> TcpStream {
+    TcpStream::connect(("127.0.0.1", port))
         .await
         .expect("connect to server")
 }
