@@ -71,7 +71,10 @@ async fn watch_and_unwatch_work() {
         send_command(&mut conn, &[b"SET", b"tx", b"1"]).await,
         RespFrame::Simple("QUEUED".to_string())
     );
-    assert_eq!(send_command(&mut conn, &[b"EXEC"]).await, RespFrame::Array(None));
+    assert_eq!(
+        send_command(&mut conn, &[b"EXEC"]).await,
+        RespFrame::Array(None)
+    );
 
     assert_eq!(
         send_command(&mut conn, &[b"WATCH", b"watched"]).await,

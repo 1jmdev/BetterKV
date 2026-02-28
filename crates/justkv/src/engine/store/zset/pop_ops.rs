@@ -27,7 +27,11 @@ impl Store {
             if let Some(mut items) = popped
                 && let Some((member, score)) = items.pop()
             {
-                return Ok(Some((CompactKey::from_slice(key.as_slice()), member, score)));
+                return Ok(Some((
+                    CompactKey::from_slice(key.as_slice()),
+                    member,
+                    score,
+                )));
             }
         }
         Ok(None)
@@ -55,7 +59,12 @@ impl Store {
         Ok(None)
     }
 
-    fn zpop_edge(&self, key: &[u8], count: usize, max: bool) -> Result<Option<Vec<(CompactKey, f64)>>, ()> {
+    fn zpop_edge(
+        &self,
+        key: &[u8],
+        count: usize,
+        max: bool,
+    ) -> Result<Option<Vec<(CompactKey, f64)>>, ()> {
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
         let now_ms = monotonic_now_ms();

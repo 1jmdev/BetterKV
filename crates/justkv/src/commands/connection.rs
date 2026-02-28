@@ -1,4 +1,4 @@
-use crate::commands::util::{eq_ascii, wrong_args, Args};
+use crate::commands::util::{Args, eq_ascii, wrong_args};
 use crate::protocol::types::{BulkData, RespFrame};
 
 pub fn handle(command: &[u8], args: &Args) -> Option<RespFrame> {

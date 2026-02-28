@@ -16,7 +16,10 @@ fn get_zset_mut(entry: &mut Entry) -> Option<&mut ZSetValueMap> {
 }
 
 fn sorted_by_score(map: &ZSetValueMap, reverse: bool) -> Vec<(CompactKey, f64)> {
-    let mut items: Vec<_> = map.iter().map(|(member, score)| (member.clone(), *score)).collect();
+    let mut items: Vec<_> = map
+        .iter()
+        .map(|(member, score)| (member.clone(), *score))
+        .collect();
     items.sort_by(|left, right| compare_member_score(left, right, reverse));
     items
 }

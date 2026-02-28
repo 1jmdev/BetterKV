@@ -1,4 +1,4 @@
-use crate::commands::util::{eq_ascii, int_error, wrong_args, Args};
+use crate::commands::util::{Args, eq_ascii, int_error, wrong_args};
 use crate::engine::store::Store;
 use crate::protocol::types::RespFrame;
 

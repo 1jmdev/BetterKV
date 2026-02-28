@@ -1,4 +1,4 @@
-use crate::commands::util::{eq_ascii, int_error, wrong_args, wrong_type, Args};
+use crate::commands::util::{Args, eq_ascii, int_error, wrong_args, wrong_type};
 use crate::engine::store::{RestoreError, SortError, SortOptions, SortOrder, SortResult, Store};
 use crate::protocol::types::{BulkData, RespFrame};
 

@@ -10,11 +10,18 @@ async fn keyspace_extended_commands_work() {
 
     let _ = send_command(&mut conn, &[b"MSET", b"a", b"1", b"b", b"2", b"c", b"3"]).await;
 
-    let scan = send_command(&mut conn, &[b"SCAN", b"0", b"MATCH", b"a*", b"COUNT", b"10"]).await;
+    let scan = send_command(
+        &mut conn,
+        &[b"SCAN", b"0", b"MATCH", b"a*", b"COUNT", b"10"],
+    )
+    .await;
     match scan {
         RespFrame::Array(Some(values)) => {
             assert_eq!(values.len(), 2);
-            assert_eq!(values[0], RespFrame::Bulk(Some(BulkData::from_vec(b"0".to_vec()))));
+            assert_eq!(
+                values[0],
+                RespFrame::Bulk(Some(BulkData::from_vec(b"0".to_vec())))
+            );
             assert_eq!(
                 values[1],
                 RespFrame::Array(Some(vec![RespFrame::Bulk(Some(BulkData::from_vec(
@@ -45,7 +52,11 @@ async fn keyspace_extended_commands_work() {
     };
 
     assert_eq!(
-        send_command(&mut conn, &[b"RESTORE", b"restored", b"0", payload.as_slice()]).await,
+        send_command(
+            &mut conn,
+            &[b"RESTORE", b"restored", b"0", payload.as_slice()]
+        )
+        .await,
         RespFrame::Simple("OK".to_string())
     );
     assert_eq!(
@@ -53,7 +64,11 @@ async fn keyspace_extended_commands_work() {
         RespFrame::Bulk(Some(BulkData::from_vec(b"1".to_vec())))
     );
     assert_eq!(
-        send_command(&mut conn, &[b"RESTORE", b"restored", b"0", payload.as_slice()]).await,
+        send_command(
+            &mut conn,
+            &[b"RESTORE", b"restored", b"0", payload.as_slice()]
+        )
+        .await,
         RespFrame::Error("BUSYKEY Target key name already exists.".to_string())
     );
 
@@ -90,7 +105,11 @@ async fn sort_variants_work() {
         ]))
     );
     assert_eq!(
-        send_command(&mut conn, &[b"SORT", b"nums", b"DESC", b"LIMIT", b"0", b"2"]).await,
+        send_command(
+            &mut conn,
+            &[b"SORT", b"nums", b"DESC", b"LIMIT", b"0", b"2"]
+        )
+        .await,
         RespFrame::Array(Some(vec![
             RespFrame::Bulk(Some(BulkData::from_vec(b"3".to_vec()))),
             RespFrame::Bulk(Some(BulkData::from_vec(b"2".to_vec()))),
