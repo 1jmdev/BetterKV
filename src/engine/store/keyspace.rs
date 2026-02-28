@@ -1,6 +1,7 @@
 use super::helpers::{monotonic_now_ms, purge_if_expired};
 use super::pattern::wildcard_match;
 use super::Store;
+use crate::engine::value::CompactBytes;
 
 impl Store {
     pub fn del(&self, keys: &[Vec<u8>]) -> i64 {
@@ -50,7 +51,7 @@ impl Store {
         let to_idx = self.shard_index(&to);
         self.shards[to_idx]
             .write()
-            .insert(to.into_boxed_slice(), entry);
+            .insert(CompactBytes::from_vec(to), entry);
         true
     }
 
@@ -74,7 +75,7 @@ impl Store {
         {
             return Ok(0);
         }
-        destination.insert(to.into_boxed_slice(), entry);
+        destination.insert(CompactBytes::from_vec(to), entry);
         drop(destination);
 
         self.shards[from_idx].write().remove(from);
@@ -108,7 +109,7 @@ impl Store {
         for shard in self.shards.iter() {
             let guard = shard.read();
             for (key, entry) in guard.iter() {
-                if !entry.is_expired(now_ms) && wildcard_match(pattern, key) {
+                if !entry.is_expired(now_ms) && wildcard_match(pattern, key.as_slice()) {
                     out.push(key.to_vec());
                 }
             }

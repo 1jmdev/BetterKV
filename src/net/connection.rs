@@ -19,20 +19,18 @@ pub async fn handle_connection(
     let mut write_buf = BytesMut::with_capacity(WRITE_BUFFER_CAPACITY);
 
     loop {
-        let mut parsed_any = false;
-        while let Some(frame) = parse_next_frame(&mut read_buf)? {
-            parsed_any = true;
-            encode(&dispatch(&store, frame), &mut write_buf);
-        }
-
-        if parsed_any {
-            stream.write_all(&write_buf).await?;
-            write_buf.clear();
-        }
-
         let bytes_read = stream.read_buf(&mut read_buf).await?;
         if bytes_read == 0 {
             break;
+        }
+
+        while let Some(frame) = parse_next_frame(&mut read_buf)? {
+            encode(&dispatch(&store, frame), &mut write_buf);
+        }
+
+        if !write_buf.is_empty() {
+            stream.write_all(&write_buf).await?;
+            write_buf.clear();
         }
     }
 

@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::engine::value::Entry;
+use crate::engine::value::{CompactBytes, Entry};
 
 use super::helpers::{deadline_from_ttl, monotonic_now_ms, purge_if_expired};
 use super::Store;
@@ -19,9 +19,10 @@ impl Store {
     pub fn set(&self, key: Vec<u8>, value: Vec<u8>, ttl: Option<Duration>) {
         let idx = self.shard_index(&key);
         let expires_at_ms = ttl.map(deadline_from_ttl).unwrap_or(0);
-        self.shards[idx]
-            .write()
-            .insert(key.into_boxed_slice(), Entry::new(value, expires_at_ms));
+        self.shards[idx].write().insert(
+            CompactBytes::from_vec(key),
+            Entry::new(value, expires_at_ms),
+        );
     }
 
     pub fn setnx(&self, key: Vec<u8>, value: Vec<u8>, ttl: Option<Duration>) -> bool {
@@ -33,7 +34,10 @@ impl Store {
         }
 
         let expires_at_ms = ttl.map(deadline_from_ttl).unwrap_or(0);
-        shard.insert(key.into_boxed_slice(), Entry::new(value, expires_at_ms));
+        shard.insert(
+            CompactBytes::from_vec(key),
+            Entry::new(value, expires_at_ms),
+        );
         true
     }
 
@@ -46,7 +50,10 @@ impl Store {
         }
 
         let expires_at_ms = ttl.map(deadline_from_ttl).unwrap_or(0);
-        shard.insert(key.into_boxed_slice(), Entry::new(value, expires_at_ms));
+        shard.insert(
+            CompactBytes::from_vec(key),
+            Entry::new(value, expires_at_ms),
+        );
         true
     }
 
@@ -60,7 +67,7 @@ impl Store {
             shard.get(key.as_slice()).map(|entry| entry.value.to_vec())
         };
 
-        shard.insert(key.into_boxed_slice(), Entry::new(value, 0));
+        shard.insert(CompactBytes::from_vec(key), Entry::new(value, 0));
         old_value
     }
 
@@ -91,7 +98,7 @@ impl Store {
 
         base.extend_from_slice(suffix);
         let size = base.len();
-        shard.insert(key.into_boxed_slice(), Entry::new(base, 0));
+        shard.insert(CompactBytes::from_vec(key), Entry::new(base, 0));
         size
     }
 
@@ -119,7 +126,7 @@ impl Store {
         } else {
             match shard.get(key) {
                 Some(entry) => {
-                    let text = std::str::from_utf8(&entry.value).map_err(|_| ())?;
+                    let text = std::str::from_utf8(entry.value.as_slice()).map_err(|_| ())?;
                     text.parse::<i64>().map_err(|_| ())?
                 }
                 None => 0,
@@ -128,7 +135,7 @@ impl Store {
 
         let next = current.checked_add(delta).ok_or(())?;
         shard.insert(
-            key.to_vec().into_boxed_slice(),
+            CompactBytes::from_vec(key.to_vec()),
             Entry::new(next.to_string().into_bytes(), 0),
         );
         Ok(next)
@@ -138,15 +145,30 @@ impl Store {
         keys.iter().map(|key| self.get(key)).collect()
     }
 
-    pub fn mset(&self, pairs: &[(Vec<u8>, Vec<u8>)]) {
+    pub fn mset(&self, pairs: Vec<(Vec<u8>, Vec<u8>)>) {
+        let shard_count = self.shards.len();
+        let mut grouped = vec![Vec::new(); shard_count];
+
         for (key, value) in pairs {
-            self.set(key.clone(), value.clone(), None);
+            let idx = self.shard_index(&key);
+            grouped[idx].push((CompactBytes::from_vec(key), Entry::new(value, 0)));
+        }
+
+        for (idx, entries) in grouped.into_iter().enumerate() {
+            if entries.is_empty() {
+                continue;
+            }
+
+            let mut shard = self.shards[idx].write();
+            for (key, entry) in entries {
+                shard.insert(key, entry);
+            }
         }
     }
 
-    pub fn msetnx(&self, pairs: &[(Vec<u8>, Vec<u8>)]) -> bool {
+    pub fn msetnx(&self, pairs: Vec<(Vec<u8>, Vec<u8>)>) -> bool {
         let now_ms = monotonic_now_ms();
-        for (key, _) in pairs {
+        for (key, _) in &pairs {
             let idx = self.shard_index(key);
             let mut shard = self.shards[idx].write();
             if !purge_if_expired(&mut shard, key, now_ms) && shard.contains_key(key.as_slice()) {
@@ -154,9 +176,7 @@ impl Store {
             }
         }
 
-        for (key, value) in pairs {
-            self.set(key.clone(), value.clone(), None);
-        }
+        self.mset(pairs);
         true
     }
 }

@@ -10,9 +10,9 @@ use ahash::RandomState;
 use hashbrown::HashMap;
 use parking_lot::RwLock;
 
-use crate::engine::value::Entry;
+use crate::engine::value::{CompactBytes, Entry};
 
-type StoreMap = HashMap<Box<[u8]>, Entry, RandomState>;
+type StoreMap = HashMap<CompactBytes, Entry, RandomState>;
 
 #[derive(Clone)]
 pub struct Store {

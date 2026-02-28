@@ -32,7 +32,7 @@ fn mset(store: &Store, args: &Args) -> RespFrame {
     for chunk in args[1..].chunks(2) {
         pairs.push((chunk[0].clone(), chunk[1].clone()));
     }
-    store.mset(&pairs);
+    store.mset(pairs);
     RespFrame::ok()
 }
 
@@ -44,5 +44,5 @@ fn msetnx(store: &Store, args: &Args) -> RespFrame {
     for chunk in args[1..].chunks(2) {
         pairs.push((chunk[0].clone(), chunk[1].clone()));
     }
-    RespFrame::Integer(store.msetnx(&pairs) as i64)
+    RespFrame::Integer(store.msetnx(pairs) as i64)
 }
