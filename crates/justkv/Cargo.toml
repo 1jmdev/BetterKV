@@ -1,0 +1,18 @@
+[package]
+name = "justkv"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+ahash.workspace = true
+bytes.workspace = true
+hashbrown.workspace = true
+itoa.workspace = true
+mimalloc.workspace = true
+parking_lot.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+tokio-test.workspace = true

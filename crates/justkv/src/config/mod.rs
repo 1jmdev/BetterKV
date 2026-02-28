@@ -1,23 +1,23 @@
-use clap::Parser;
-
-#[derive(Clone, Debug, Parser)]
-#[command(name = "justkv")]
+#[derive(Clone, Debug)]
 pub struct Config {
-    #[arg(long, default_value = "127.0.0.1")]
     pub bind: String,
-    #[arg(long, default_value_t = 6379)]
     pub port: u16,
-    #[arg(long, default_value_t = default_shards())]
     pub shards: usize,
-    #[arg(long, default_value_t = 250)]
     pub sweep_interval_ms: u64,
 }
 
-impl Config {
-    pub fn from_env() -> Self {
-        Self::parse()
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            bind: "127.0.0.1".to_string(),
+            port: 6379,
+            shards: default_shards(),
+            sweep_interval_ms: 250,
+        }
     }
+}
 
+impl Config {
     pub fn addr(&self) -> String {
         format!("{}:{}", self.bind, self.port)
     }

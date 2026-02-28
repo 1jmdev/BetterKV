@@ -14,10 +14,15 @@
   - `INCR`, `MGET`, `MSET`
   - `EXPIRE`, `TTL`
 
+## Workspace
+
+- `crates/justkv`: JustKV server library (protocol, engine, networking).
+- `crates/justkv-cli`: CLI binary package exposing the `justkv` executable.
+
 ## Run
 
 ```bash
-cargo run -- --bind 127.0.0.1 --port 6379
+cargo run -p justkv-cli -- --bind 127.0.0.1 --port 6379
 ```
 
 Optional tuning:
@@ -28,5 +33,5 @@ Optional tuning:
 ## Test
 
 ```bash
-cargo test
+cargo test --workspace
 ```

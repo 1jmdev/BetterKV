@@ -1,9 +1,12 @@
-[package]
-name = "justkv"
+[workspace]
+members = ["crates/justkv", "crates/justkv-cli"]
+resolver = "3"
+
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
 
-[dependencies]
+[workspace.dependencies]
 ahash = "0.8.12"
 bytes = "1.11.1"
 clap = { version = "4.5.60", features = ["derive"] }
@@ -11,9 +14,7 @@ hashbrown = "0.16.1"
 itoa = "1.0.17"
 mimalloc = "0.1.48"
 parking_lot = "0.12.5"
+proptest = "1.10.0"
 thiserror = "2.0.18"
 tokio = { version = "1.49.0", features = ["full"] }
-
-[dev-dependencies]
-proptest = "1.10.0"
 tokio-test = "0.4.5"
