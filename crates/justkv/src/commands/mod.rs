@@ -7,3 +7,4 @@ pub mod set;
 pub mod string;
 pub mod ttl;
 pub mod util;
+pub mod zset;

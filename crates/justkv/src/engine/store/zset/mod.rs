@@ -43,19 +43,6 @@ fn compare_member_score(
     }
 }
 
-fn normalize_index(index: i64, len: usize) -> Option<usize> {
-    if len == 0 {
-        return None;
-    }
-    let len_i64 = len as i64;
-    let normalized = if index < 0 { len_i64 + index } else { index };
-    if !(0..len_i64).contains(&normalized) {
-        None
-    } else {
-        Some(normalized as usize)
-    }
-}
-
 fn normalize_range(start: i64, stop: i64, len: usize) -> Option<(usize, usize)> {
     if len == 0 {
         return None;
