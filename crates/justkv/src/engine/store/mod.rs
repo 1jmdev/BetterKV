@@ -3,6 +3,7 @@ mod helpers;
 mod keyspace;
 mod list;
 mod pattern;
+mod set;
 mod strings;
 mod ttl;
 

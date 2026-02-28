@@ -1,5 +1,5 @@
 use std::borrow::Borrow;
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 
@@ -108,12 +108,14 @@ pub type CompactArg = CompactBytes<INLINE_BYTES_CAPACITY>;
 
 pub type HashValueMap = HashMap<CompactKey, CompactValue, RandomState>;
 pub type ListValue = VecDeque<CompactValue>;
+pub type SetValue = HashSet<CompactKey, RandomState>;
 
 #[derive(Clone, Debug)]
 pub enum Entry {
     String(CompactValue),
     Hash(HashValueMap),
     List(ListValue),
+    Set(SetValue),
 }
 
 impl Entry {
@@ -132,21 +134,21 @@ impl Entry {
     pub fn as_string(&self) -> Option<&CompactValue> {
         match self {
             Self::String(value) => Some(value),
-            Self::Hash(_) | Self::List(_) => None,
+            Self::Hash(_) | Self::List(_) | Self::Set(_) => None,
         }
     }
 
     pub fn into_string(self) -> Option<CompactValue> {
         match self {
             Self::String(value) => Some(value),
-            Self::Hash(_) | Self::List(_) => None,
+            Self::Hash(_) | Self::List(_) | Self::Set(_) => None,
         }
     }
 
     pub fn as_hash(&self) -> Option<&HashValueMap> {
         match self {
             Self::Hash(value) => Some(value),
-            Self::String(_) | Self::List(_) => None,
+            Self::String(_) | Self::List(_) | Self::Set(_) => None,
         }
     }
 
@@ -155,20 +157,35 @@ impl Entry {
             Self::Hash(value) => Some(value),
             Self::String(_) => None,
             Self::List(_) => None,
+            Self::Set(_) => None,
         }
     }
 
     pub fn as_list(&self) -> Option<&ListValue> {
         match self {
             Self::List(value) => Some(value),
-            Self::String(_) | Self::Hash(_) => None,
+            Self::String(_) | Self::Hash(_) | Self::Set(_) => None,
         }
     }
 
     pub fn as_list_mut(&mut self) -> Option<&mut ListValue> {
         match self {
             Self::List(value) => Some(value),
-            Self::String(_) | Self::Hash(_) => None,
+            Self::String(_) | Self::Hash(_) | Self::Set(_) => None,
+        }
+    }
+
+    pub fn as_set(&self) -> Option<&SetValue> {
+        match self {
+            Self::Set(value) => Some(value),
+            Self::String(_) | Self::Hash(_) | Self::List(_) => None,
+        }
+    }
+
+    pub fn as_set_mut(&mut self) -> Option<&mut SetValue> {
+        match self {
+            Self::Set(value) => Some(value),
+            Self::String(_) | Self::Hash(_) | Self::List(_) => None,
         }
     }
 
@@ -177,6 +194,7 @@ impl Entry {
             Self::String(_) => "string",
             Self::Hash(_) => "hash",
             Self::List(_) => "list",
+            Self::Set(_) => "set",
         }
     }
 }
