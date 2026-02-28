@@ -51,10 +51,15 @@ async fn inline_ping_is_supported() {
     let (server, port) = spawn_server().await;
     let mut conn = connect(port).await;
 
-    conn.write_all(b"PING\r\n").await.expect("write inline ping");
+    conn.write_all(b"PING\r\n")
+        .await
+        .expect("write inline ping");
 
     let mut response = [0_u8; 64];
-    let read = conn.read(&mut response).await.expect("read inline response");
+    let read = conn
+        .read(&mut response)
+        .await
+        .expect("read inline response");
     assert_eq!(&response[..read], b"+PONG\r\n");
 
     server.abort();

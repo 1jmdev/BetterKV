@@ -49,7 +49,10 @@ async fn keyspace_commands_work() {
     let mut conn = connect(port).await;
 
     let _ = send_command(&mut conn, &[b"MSET", b"a", b"1", b"ab", b"2", b"b", b"3"]).await;
-    assert_eq!(send_command(&mut conn, &[b"DBSIZE"]).await, RespFrame::Integer(3));
+    assert_eq!(
+        send_command(&mut conn, &[b"DBSIZE"]).await,
+        RespFrame::Integer(3)
+    );
     assert_eq!(
         send_command(&mut conn, &[b"TYPE", b"a"]).await,
         RespFrame::Simple("string".to_string())
@@ -61,10 +64,22 @@ async fn keyspace_commands_work() {
         other => panic!("unexpected KEYS response: {other:?}"),
     }
 
-    assert_eq!(send_command(&mut conn, &[b"RENAME", b"a", b"x"]).await, RespFrame::Simple("OK".to_string()));
-    assert_eq!(send_command(&mut conn, &[b"RENAMENX", b"ab", b"x"]).await, RespFrame::Integer(0));
-    assert_eq!(send_command(&mut conn, &[b"FLUSHDB"]).await, RespFrame::Simple("OK".to_string()));
-    assert_eq!(send_command(&mut conn, &[b"DBSIZE"]).await, RespFrame::Integer(0));
+    assert_eq!(
+        send_command(&mut conn, &[b"RENAME", b"a", b"x"]).await,
+        RespFrame::Simple("OK".to_string())
+    );
+    assert_eq!(
+        send_command(&mut conn, &[b"RENAMENX", b"ab", b"x"]).await,
+        RespFrame::Integer(0)
+    );
+    assert_eq!(
+        send_command(&mut conn, &[b"FLUSHDB"]).await,
+        RespFrame::Simple("OK".to_string())
+    );
+    assert_eq!(
+        send_command(&mut conn, &[b"DBSIZE"]).await,
+        RespFrame::Integer(0)
+    );
 
     server.abort();
 }
@@ -75,27 +90,43 @@ async fn ttl_variants_work() {
     let mut conn = connect(port).await;
 
     let _ = send_command(&mut conn, &[b"SET", b"exp", b"v"]).await;
-    assert_eq!(send_command(&mut conn, &[b"PEXPIRE", b"exp", b"900"]).await, RespFrame::Integer(1));
+    assert_eq!(
+        send_command(&mut conn, &[b"PEXPIRE", b"exp", b"900"]).await,
+        RespFrame::Integer(1)
+    );
 
     match send_command(&mut conn, &[b"PTTL", b"exp"]).await {
         RespFrame::Integer(value) => assert!(value > 0),
         other => panic!("unexpected PTTL response: {other:?}"),
     }
 
-    assert_eq!(send_command(&mut conn, &[b"PERSIST", b"exp"]).await, RespFrame::Integer(1));
-    assert_eq!(send_command(&mut conn, &[b"PTTL", b"exp"]).await, RespFrame::Integer(-1));
+    assert_eq!(
+        send_command(&mut conn, &[b"PERSIST", b"exp"]).await,
+        RespFrame::Integer(1)
+    );
+    assert_eq!(
+        send_command(&mut conn, &[b"PTTL", b"exp"]).await,
+        RespFrame::Integer(-1)
+    );
 
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .expect("unix epoch")
         .as_secs();
     assert_eq!(
-        send_command(&mut conn, &[b"EXPIREAT", b"exp", (now + 1).to_string().as_bytes()]).await,
+        send_command(
+            &mut conn,
+            &[b"EXPIREAT", b"exp", (now + 1).to_string().as_bytes()]
+        )
+        .await,
         RespFrame::Integer(1)
     );
 
     tokio::time::sleep(Duration::from_millis(1200)).await;
-    assert_eq!(send_command(&mut conn, &[b"TTL", b"exp"]).await, RespFrame::Integer(-2));
+    assert_eq!(
+        send_command(&mut conn, &[b"TTL", b"exp"]).await,
+        RespFrame::Integer(-2)
+    );
 
     server.abort();
 }
