@@ -14,7 +14,11 @@ impl Store {
             return None;
         }
 
-        let value = shard.entries.get(key).map(|entry| entry.value.to_vec())?;
+        let value = shard
+            .entries
+            .get(key)
+            .and_then(|entry| entry.as_string())
+            .map(|value| value.to_vec())?;
 
         match mode {
             GetExMode::KeepTtl => {}

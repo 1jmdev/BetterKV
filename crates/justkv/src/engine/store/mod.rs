@@ -1,4 +1,5 @@
 mod helpers;
+mod hash;
 mod keyspace;
 mod pattern;
 mod strings;
@@ -23,6 +24,19 @@ pub enum GetExMode {
     Px(u64),
     ExAt(u64),
     PxAt(u64),
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum HashIntOpError {
+    WrongType,
+    InvalidInteger,
+    Overflow,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum HashFloatOpError {
+    WrongType,
+    InvalidFloat,
 }
 
 pub(super) struct Shard {

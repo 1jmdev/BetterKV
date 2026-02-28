@@ -19,7 +19,10 @@ impl Store {
         } else {
             match shard.entries.get(key) {
                 Some(entry) => {
-                    let text = std::str::from_utf8(entry.value.as_slice()).map_err(|_| ())?;
+                    let Some(value) = entry.as_string() else {
+                        return Err(());
+                    };
+                    let text = std::str::from_utf8(value.as_slice()).map_err(|_| ())?;
                     text.parse::<i64>().map_err(|_| ())?
                 }
                 None => 0,

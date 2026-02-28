@@ -16,7 +16,8 @@ impl Store {
             shard
                 .entries
                 .get(key)
-                .map(|entry| entry.value.to_vec())
+                .and_then(|entry| entry.as_string())
+                .map(|value| value.to_vec())
                 .unwrap_or_default()
         };
         if value.is_empty() {

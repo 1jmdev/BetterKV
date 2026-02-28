@@ -21,7 +21,7 @@ impl Store {
                     .copied()
                     .is_none_or(|deadline| now_ms < deadline)
             })
-            .map(|entry| entry.value.clone())
+            .and_then(|entry| entry.as_string().cloned())
     }
 
     pub fn set(&self, key: &[u8], value: &[u8], ttl: Option<Duration>) {
@@ -76,7 +76,11 @@ impl Store {
         let old_value = if purge_if_expired(&mut shard, key, now_ms) {
             None
         } else {
-            shard.entries.get(key).map(|entry| entry.value.to_vec())
+            shard
+                .entries
+                .get(key)
+                .and_then(|entry| entry.as_string())
+                .map(|value| value.to_vec())
         };
 
         write_entry(&mut shard, key, Entry::from_slice(value), None);
@@ -95,7 +99,8 @@ impl Store {
         shard
             .entries
             .remove(key)
-            .map(|entry| entry.value.into_vec())
+            .and_then(|entry| entry.into_string())
+            .map(|value| value.into_vec())
     }
 
     pub fn append(&self, key: &[u8], suffix: &[u8]) -> usize {
@@ -109,7 +114,8 @@ impl Store {
             shard
                 .entries
                 .get(key)
-                .map(|entry| entry.value.to_vec())
+                .and_then(|entry| entry.as_string())
+                .map(|value| value.to_vec())
                 .unwrap_or_default()
         };
         let ttl_deadline = shard.ttl.get(key).copied();
@@ -134,6 +140,7 @@ impl Store {
                     .copied()
                     .is_none_or(|deadline| now_ms < deadline)
             })
-            .map_or(0, |entry| entry.value.len())
+            .and_then(|entry| entry.as_string().map(|value| value.len()))
+            .unwrap_or(0)
     }
 }

@@ -16,3 +16,9 @@ pub fn wrong_args(command: &str) -> RespFrame {
 pub fn int_error() -> RespFrame {
     RespFrame::Error("ERR value is not an integer or out of range".to_string())
 }
+
+pub fn wrong_type() -> RespFrame {
+    RespFrame::Error(
+        "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
+    )
+}

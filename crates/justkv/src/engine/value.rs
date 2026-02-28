@@ -2,6 +2,9 @@ use std::borrow::Borrow;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 
+use ahash::RandomState;
+use hashbrown::HashMap;
+
 const INLINE_BYTES_CAPACITY: usize = 22;
 const INLINE_VALUE_CAPACITY: usize = 7;
 
@@ -102,21 +105,59 @@ pub type CompactKey = CompactBytes<INLINE_BYTES_CAPACITY>;
 pub type CompactValue = CompactBytes<INLINE_VALUE_CAPACITY>;
 pub type CompactArg = CompactBytes<INLINE_BYTES_CAPACITY>;
 
+pub type HashValueMap = HashMap<CompactKey, CompactValue, RandomState>;
+
 #[derive(Clone, Debug)]
-pub struct Entry {
-    pub value: CompactValue,
+pub enum Entry {
+    String(CompactValue),
+    Hash(HashValueMap),
 }
 
 impl Entry {
     pub fn from_slice(value: &[u8]) -> Self {
-        Self {
-            value: CompactValue::from_slice(value),
-        }
+        Self::String(CompactValue::from_slice(value))
     }
 
     pub fn new(value: Vec<u8>) -> Self {
-        Self {
-            value: CompactValue::from_vec(value),
+        Self::String(CompactValue::from_vec(value))
+    }
+
+    pub fn empty_hash() -> Self {
+        Self::Hash(HashMap::with_hasher(RandomState::new()))
+    }
+
+    pub fn as_string(&self) -> Option<&CompactValue> {
+        match self {
+            Self::String(value) => Some(value),
+            Self::Hash(_) => None,
+        }
+    }
+
+    pub fn into_string(self) -> Option<CompactValue> {
+        match self {
+            Self::String(value) => Some(value),
+            Self::Hash(_) => None,
+        }
+    }
+
+    pub fn as_hash(&self) -> Option<&HashValueMap> {
+        match self {
+            Self::Hash(value) => Some(value),
+            Self::String(_) => None,
+        }
+    }
+
+    pub fn as_hash_mut(&mut self) -> Option<&mut HashValueMap> {
+        match self {
+            Self::Hash(value) => Some(value),
+            Self::String(_) => None,
+        }
+    }
+
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::String(_) => "string",
+            Self::Hash(_) => "hash",
         }
     }
 }
