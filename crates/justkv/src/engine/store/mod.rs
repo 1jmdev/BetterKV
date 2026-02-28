@@ -6,6 +6,7 @@ mod pattern;
 mod set;
 mod strings;
 mod ttl;
+mod zset;
 
 use std::sync::Arc;
 
