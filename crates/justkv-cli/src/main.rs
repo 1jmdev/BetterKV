@@ -3,6 +3,7 @@ mod cli;
 mod client;
 mod command;
 mod output;
+mod repl;
 
 use std::process::ExitCode;
 
