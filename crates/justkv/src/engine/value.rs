@@ -1,10 +1,10 @@
 use std::borrow::Borrow;
-use std::collections::{HashSet, VecDeque};
+use std::collections::VecDeque;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 
 use ahash::RandomState;
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 
 const INLINE_BYTES_CAPACITY: usize = 22;
 const INLINE_VALUE_CAPACITY: usize = 7;
