@@ -3,7 +3,7 @@ mod support;
 use tokio::task::JoinSet;
 
 use support::{connect, send_command, spawn_server};
-use valkey::protocol::types::{BulkData, RespFrame};
+use justkv::protocol::types::{BulkData, RespFrame};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn concurrent_increments_are_consistent() {

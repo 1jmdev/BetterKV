@@ -57,7 +57,7 @@ fn hello_response(proto: u8) -> RespFrame {
         return RespFrame::Map(vec![
             (
                 RespFrame::Bulk(Some(BulkData::from_vec(b"server".to_vec()))),
-                RespFrame::Bulk(Some(BulkData::from_vec(b"valkey".to_vec()))),
+                RespFrame::Bulk(Some(BulkData::from_vec(b"justkv".to_vec()))),
             ),
             (
                 RespFrame::Bulk(Some(BulkData::from_vec(b"version".to_vec()))),
@@ -90,7 +90,7 @@ fn hello_response(proto: u8) -> RespFrame {
 
     RespFrame::Array(Some(vec![
         RespFrame::Bulk(Some(BulkData::from_vec(b"server".to_vec()))),
-        RespFrame::Bulk(Some(BulkData::from_vec(b"valkey".to_vec()))),
+        RespFrame::Bulk(Some(BulkData::from_vec(b"justkv".to_vec()))),
         RespFrame::Bulk(Some(BulkData::from_vec(b"version".to_vec()))),
         RespFrame::Bulk(Some(BulkData::from_vec(
             env!("CARGO_PKG_VERSION").as_bytes().to_vec(),

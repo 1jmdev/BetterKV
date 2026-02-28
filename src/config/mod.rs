@@ -1,7 +1,7 @@
 use clap::Parser;
 
 #[derive(Clone, Debug, Parser)]
-#[command(name = "valkey")]
+#[command(name = "justkv")]
 pub struct Config {
     #[arg(long, default_value = "127.0.0.1")]
     pub bind: String,

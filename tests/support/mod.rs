@@ -7,10 +7,10 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::task::JoinHandle;
 
-use valkey::config::Config;
-use valkey::net::listener::run_listener;
-use valkey::protocol::parser::parse_frame;
-use valkey::protocol::types::RespFrame;
+use justkv::config::Config;
+use justkv::net::listener::run_listener;
+use justkv::protocol::parser::parse_frame;
+use justkv::protocol::types::RespFrame;
 
 static NEXT_PORT: AtomicU16 = AtomicU16::new(0);
 

@@ -1,6 +1,6 @@
-# valkey
+# JustKV
 
-`valkey` is a lightweight Redis-compatible in-memory server written in Rust.
+`JustKV` is a lightweight Redis-compatible in-memory server written in Rust.
 
 ## Features
 

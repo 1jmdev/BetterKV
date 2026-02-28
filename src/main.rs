@@ -1,4 +1,4 @@
-use valkey::run;
+use justkv::run;
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
