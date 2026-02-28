@@ -1,4 +1,5 @@
 use std::borrow::Borrow;
+use std::collections::VecDeque;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 
@@ -106,11 +107,13 @@ pub type CompactValue = CompactBytes<INLINE_VALUE_CAPACITY>;
 pub type CompactArg = CompactBytes<INLINE_BYTES_CAPACITY>;
 
 pub type HashValueMap = HashMap<CompactKey, CompactValue, RandomState>;
+pub type ListValue = VecDeque<CompactValue>;
 
 #[derive(Clone, Debug)]
 pub enum Entry {
     String(CompactValue),
     Hash(HashValueMap),
+    List(ListValue),
 }
 
 impl Entry {
@@ -129,21 +132,21 @@ impl Entry {
     pub fn as_string(&self) -> Option<&CompactValue> {
         match self {
             Self::String(value) => Some(value),
-            Self::Hash(_) => None,
+            Self::Hash(_) | Self::List(_) => None,
         }
     }
 
     pub fn into_string(self) -> Option<CompactValue> {
         match self {
             Self::String(value) => Some(value),
-            Self::Hash(_) => None,
+            Self::Hash(_) | Self::List(_) => None,
         }
     }
 
     pub fn as_hash(&self) -> Option<&HashValueMap> {
         match self {
             Self::Hash(value) => Some(value),
-            Self::String(_) => None,
+            Self::String(_) | Self::List(_) => None,
         }
     }
 
@@ -151,6 +154,21 @@ impl Entry {
         match self {
             Self::Hash(value) => Some(value),
             Self::String(_) => None,
+            Self::List(_) => None,
+        }
+    }
+
+    pub fn as_list(&self) -> Option<&ListValue> {
+        match self {
+            Self::List(value) => Some(value),
+            Self::String(_) | Self::Hash(_) => None,
+        }
+    }
+
+    pub fn as_list_mut(&mut self) -> Option<&mut ListValue> {
+        match self {
+            Self::List(value) => Some(value),
+            Self::String(_) | Self::Hash(_) => None,
         }
     }
 
@@ -158,6 +176,7 @@ impl Entry {
         match self {
             Self::String(_) => "string",
             Self::Hash(_) => "hash",
+            Self::List(_) => "list",
         }
     }
 }

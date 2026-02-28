@@ -1,6 +1,7 @@
 mod hash;
 mod helpers;
 mod keyspace;
+mod list;
 mod pattern;
 mod strings;
 mod ttl;
@@ -37,6 +38,25 @@ pub enum HashIntOpError {
 pub enum HashFloatOpError {
     WrongType,
     InvalidFloat,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum ListSide {
+    Left,
+    Right,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum ListInsertPosition {
+    Before,
+    After,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum ListSetError {
+    NoSuchKey,
+    OutOfRange,
+    WrongType,
 }
 
 pub(super) struct Shard {
