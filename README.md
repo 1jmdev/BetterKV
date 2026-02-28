@@ -18,11 +18,15 @@
 
 - `crates/justkv`: JustKV server library (protocol, engine, networking).
 - `crates/justkv-cli`: CLI binary package exposing the `justkv` executable.
+- `crates/justkv-server`: Redis-style server binary exposing the `justkv-server` executable.
 
 ## Run
 
 ```bash
-cargo run -p justkv-cli -- --bind 127.0.0.1 --port 6379
+cargo run -p justkv-server -- --bind 127.0.0.1 --port 6379
+
+# redis-server style
+cargo run -p justkv-server -- ./redis.conf --port 6379
 ```
 
 Optional tuning:
