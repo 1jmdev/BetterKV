@@ -9,7 +9,17 @@ pub fn encode(frame: &RespFrame, out: &mut BytesMut) {
             out.extend_from_slice(value.as_bytes());
             out.extend_from_slice(b"\r\n");
         }
+        RespFrame::SimpleStatic(value) => {
+            out.extend_from_slice(b"+");
+            out.extend_from_slice(value.as_bytes());
+            out.extend_from_slice(b"\r\n");
+        }
         RespFrame::Error(value) => {
+            out.extend_from_slice(b"-");
+            out.extend_from_slice(value.as_bytes());
+            out.extend_from_slice(b"\r\n");
+        }
+        RespFrame::ErrorStatic(value) => {
             out.extend_from_slice(b"-");
             out.extend_from_slice(value.as_bytes());
             out.extend_from_slice(b"\r\n");

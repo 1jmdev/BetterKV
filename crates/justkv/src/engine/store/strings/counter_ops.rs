@@ -31,10 +31,12 @@ impl Store {
 
         let ttl_deadline = shard.ttl.get(key).copied();
         let next = current.checked_add(delta).ok_or(())?;
+        let mut buffer = itoa::Buffer::new();
+        let encoded = buffer.format(next);
         write_entry(
             &mut shard,
             key,
-            Entry::new(next.to_string().into_bytes()),
+            Entry::from_slice(encoded.as_bytes()),
             ttl_deadline,
         );
         Ok(next)

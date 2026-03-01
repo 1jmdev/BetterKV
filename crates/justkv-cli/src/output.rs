@@ -10,6 +10,7 @@ pub fn render(frame: &RespFrame, raw: bool) -> String {
 fn render_raw(frame: &RespFrame) -> String {
     match frame {
         RespFrame::Simple(value) | RespFrame::Error(value) => value.clone(),
+        RespFrame::SimpleStatic(value) | RespFrame::ErrorStatic(value) => value.to_string(),
         RespFrame::Integer(value) => value.to_string(),
         RespFrame::Bulk(Some(value)) => String::from_utf8_lossy(value.as_slice()).to_string(),
         RespFrame::Bulk(None) | RespFrame::Array(None) => String::new(),
@@ -29,7 +30,9 @@ fn render_raw(frame: &RespFrame) -> String {
 fn render_human(frame: &RespFrame) -> String {
     match frame {
         RespFrame::Simple(value) => value.clone(),
+        RespFrame::SimpleStatic(value) => value.to_string(),
         RespFrame::Error(value) => format!("(error) {value}"),
+        RespFrame::ErrorStatic(value) => format!("(error) {value}"),
         RespFrame::Integer(value) => format!("(integer) {value}"),
         RespFrame::Bulk(None) | RespFrame::Array(None) => "(nil)".to_string(),
         RespFrame::Bulk(Some(value)) => {

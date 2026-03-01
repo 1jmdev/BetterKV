@@ -34,7 +34,7 @@ fn hello(args: &Args) -> RespFrame {
 
     match version {
         Some(proto) if proto == 2 || proto == 3 => hello_response(proto),
-        _ => RespFrame::Error("NOPROTO unsupported protocol version".to_string()),
+        _ => RespFrame::error_static("NOPROTO unsupported protocol version"),
     }
 }
 
@@ -107,7 +107,7 @@ fn client(args: &Args) -> RespFrame {
     } else if eq_ascii(sub, b"ID") {
         RespFrame::Integer(1)
     } else {
-        RespFrame::Error("ERR unknown subcommand for CLIENT".to_string())
+        RespFrame::error_static("ERR unknown subcommand for CLIENT")
     }
 }
 
@@ -123,8 +123,8 @@ fn select_db(args: &Args) -> RespFrame {
 
     match index {
         Some(0) => RespFrame::ok(),
-        Some(_) => RespFrame::Error("ERR DB index is out of range".to_string()),
-        None => RespFrame::Error("ERR value is not an integer or out of range".to_string()),
+        Some(_) => RespFrame::error_static("ERR DB index is out of range"),
+        None => RespFrame::error_static("ERR value is not an integer or out of range"),
     }
 }
 
@@ -137,7 +137,7 @@ fn quit(args: &Args) -> RespFrame {
 
 fn ping(args: &Args) -> RespFrame {
     if args.len() == 1 {
-        return RespFrame::Simple("PONG".to_string());
+        return RespFrame::simple_static("PONG");
     }
     if args.len() == 2 {
         return RespFrame::Bulk(Some(BulkData::Arg(args[1].clone())));

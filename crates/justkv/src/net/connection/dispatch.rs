@@ -18,10 +18,10 @@ pub(super) fn execute_regular_command(
 ) -> RespFrame {
     let args = match parse_command(frame) {
         Ok(value) => value,
-        Err(err) => return RespFrame::Error(err),
+        Err(err) => return RespFrame::error_static(err),
     };
     if args.is_empty() {
-        return RespFrame::Error("ERR empty command".to_string());
+        return RespFrame::error_static("ERR empty command");
     }
 
     if let Some(response) = handle_pubsub_or_config_command(hub, push_tx, pubsub_state, &args) {

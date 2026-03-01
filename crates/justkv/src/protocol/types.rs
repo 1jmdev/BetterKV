@@ -29,7 +29,9 @@ impl BulkData {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RespFrame {
     Simple(String),
+    SimpleStatic(&'static str),
     Error(String),
+    ErrorStatic(&'static str),
     Integer(i64),
     Bulk(Option<BulkData>),
     Array(Option<Vec<RespFrame>>),
@@ -38,6 +40,14 @@ pub enum RespFrame {
 
 impl RespFrame {
     pub fn ok() -> Self {
-        Self::Simple("OK".to_string())
+        Self::SimpleStatic("OK")
+    }
+
+    pub fn simple_static(value: &'static str) -> Self {
+        Self::SimpleStatic(value)
+    }
+
+    pub fn error_static(value: &'static str) -> Self {
+        Self::ErrorStatic(value)
     }
 }

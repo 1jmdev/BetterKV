@@ -26,10 +26,12 @@ impl Store {
             None => 0,
         };
         let next = current.checked_add(delta).ok_or(HashIntOpError::Overflow)?;
+        let mut buffer = itoa::Buffer::new();
+        let encoded = buffer.format(next);
 
         map.insert(
             CompactKey::from_slice(field),
-            CompactValue::from_vec(next.to_string().into_bytes()),
+            CompactValue::from_slice(encoded.as_bytes()),
         );
         Ok(next)
     }
@@ -63,10 +65,12 @@ impl Store {
         if !next.is_finite() {
             return Err(HashFloatOpError::InvalidFloat);
         }
+        let mut buffer = ryu::Buffer::new();
+        let encoded = buffer.format(next);
 
         map.insert(
             CompactKey::from_slice(field),
-            CompactValue::from_vec(next.to_string().into_bytes()),
+            CompactValue::from_slice(encoded.as_bytes()),
         );
         Ok(next)
     }

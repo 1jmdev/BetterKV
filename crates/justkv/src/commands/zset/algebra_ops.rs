@@ -1,4 +1,4 @@
-use crate::commands::util::{eq_ascii, int_error, wrong_args, wrong_type, Args};
+use crate::commands::util::{eq_ascii, f64_to_bytes, int_error, wrong_args, wrong_type, Args};
 use crate::engine::store::Store;
 use crate::protocol::types::{BulkData, RespFrame};
 
@@ -42,9 +42,7 @@ pub(super) fn zop(store: &Store, args: &Args, command: &str) -> RespFrame {
                         .flat_map(|(member, score)| {
                             [
                                 RespFrame::Bulk(Some(BulkData::Arg(member))),
-                                RespFrame::Bulk(Some(BulkData::from_vec(
-                                    score.to_string().into_bytes(),
-                                ))),
+                                RespFrame::Bulk(Some(BulkData::from_vec(f64_to_bytes(score)))),
                             ]
                         })
                         .collect(),

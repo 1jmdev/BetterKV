@@ -7,7 +7,7 @@ use crate::protocol::types::{BulkData, RespFrame};
 pub fn dispatch(store: &Store, frame: RespFrame) -> RespFrame {
     let args = match parse_command(frame) {
         Ok(args) => args,
-        Err(err) => return RespFrame::Error(err),
+        Err(err) => return RespFrame::error_static(err),
     };
 
     dispatch_args(store, &args)
@@ -15,7 +15,7 @@ pub fn dispatch(store: &Store, frame: RespFrame) -> RespFrame {
 
 pub fn dispatch_args(store: &Store, args: &[CompactArg]) -> RespFrame {
     if args.is_empty() {
-        return RespFrame::Error("ERR empty command".to_string());
+        return RespFrame::error_static("ERR empty command");
     }
 
     // The command was already uppercased in parse_command; resolve it to an
@@ -164,13 +164,13 @@ pub fn dispatch_args(store: &Store, args: &[CompactArg]) -> RespFrame {
         | CommandId::Ttl
         | CommandId::Pttl => ttl::handle(store, cmd, args),
 
-        CommandId::Unknown => RespFrame::Error("ERR unknown command".to_string()),
+        CommandId::Unknown => RespFrame::error_static("ERR unknown command"),
     }
 }
 
-pub fn parse_command(frame: RespFrame) -> Result<Vec<CompactArg>, String> {
+pub fn parse_command(frame: RespFrame) -> Result<Vec<CompactArg>, &'static str> {
     let RespFrame::Array(Some(items)) = frame else {
-        return Err("ERR protocol error".to_string());
+        return Err("ERR protocol error");
     };
 
     let mut args = Vec::with_capacity(items.len());
@@ -181,14 +181,15 @@ pub fn parse_command(frame: RespFrame) -> Result<Vec<CompactArg>, String> {
                 args.push(CompactArg::from_vec(bytes.into_vec()))
             }
             RespFrame::Simple(value) => args.push(CompactArg::from_vec(value.into_bytes())),
-            _ => return Err("ERR invalid argument type".to_string()),
+            RespFrame::SimpleStatic(value) => {
+                args.push(CompactArg::from_slice(value.as_bytes()));
+            }
+            _ => return Err("ERR invalid argument type"),
         }
     }
 
     if let Some(command) = args.first_mut() {
-        let mut normalized = command.to_vec();
-        normalized.make_ascii_uppercase();
-        *command = CompactArg::from_vec(normalized);
+        command.make_ascii_uppercase();
     }
 
     Ok(args)

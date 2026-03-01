@@ -68,6 +68,17 @@ impl<const INLINE_CAPACITY: usize> CompactBytes<INLINE_CAPACITY> {
             Self::Heap(value) => value.into_vec(),
         }
     }
+
+    pub fn make_ascii_uppercase(&mut self) {
+        match self {
+            Self::Inline { len, data } => {
+                data[..*len as usize].make_ascii_uppercase();
+            }
+            Self::Heap(value) => {
+                value.make_ascii_uppercase();
+            }
+        }
+    }
 }
 
 impl<const INLINE_CAPACITY: usize> PartialEq for CompactBytes<INLINE_CAPACITY> {

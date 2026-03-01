@@ -6,7 +6,7 @@ pub(super) fn mget(store: &Store, args: &Args) -> RespFrame {
     if args.len() < 2 {
         return wrong_args("MGET");
     }
-    match store.mget(&args[1..].iter().map(|key| key.to_vec()).collect::<Vec<_>>()) {
+    match store.mget(&args[1..]) {
         Ok(values) => RespFrame::Array(Some(
             values
                 .into_iter()

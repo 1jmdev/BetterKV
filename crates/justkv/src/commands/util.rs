@@ -304,13 +304,11 @@ pub fn wrong_args(command: &str) -> RespFrame {
 }
 
 pub fn int_error() -> RespFrame {
-    RespFrame::Error("ERR value is not an integer or out of range".to_string())
+    RespFrame::error_static("ERR value is not an integer or out of range")
 }
 
 pub fn wrong_type() -> RespFrame {
-    RespFrame::Error(
-        "WRONGTYPE Operation against a key holding the wrong kind of value".to_string(),
-    )
+    RespFrame::error_static("WRONGTYPE Operation against a key holding the wrong kind of value")
 }
 
 pub fn u64_to_bytes(value: u64) -> Vec<u8> {
