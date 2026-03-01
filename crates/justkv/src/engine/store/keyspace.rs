@@ -1,8 +1,8 @@
 use std::collections::VecDeque;
 
-use super::Store;
 use super::helpers::{monotonic_now_ms, purge_if_expired};
 use super::pattern::wildcard_match;
+use super::Store;
 use crate::engine::value::{CompactKey, CompactValue, Entry};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -405,7 +405,9 @@ impl Store {
             .map(|value| CompactValue::from_vec(value.clone()))
             .collect();
         let key = CompactKey::from_slice(destination);
-        shard.entries.insert(key.clone(), Entry::List(list));
+        shard
+            .entries
+            .insert(key.clone(), Entry::List(Box::new(list)));
         shard.ttl.remove(key.as_slice());
         values.len() as i64
     }
@@ -437,7 +439,7 @@ fn serialize_entry(entry: &Entry) -> Vec<u8> {
         Entry::Hash(map) => {
             out.push(1);
             write_u32(&mut out, map.len() as u32);
-            for (field, value) in map {
+            for (field, value) in map.iter() {
                 write_bytes(&mut out, field.as_slice());
                 write_bytes(&mut out, value.as_slice());
             }
@@ -445,21 +447,21 @@ fn serialize_entry(entry: &Entry) -> Vec<u8> {
         Entry::List(list) => {
             out.push(2);
             write_u32(&mut out, list.len() as u32);
-            for value in list {
+            for value in list.iter() {
                 write_bytes(&mut out, value.as_slice());
             }
         }
         Entry::Set(set) => {
             out.push(3);
             write_u32(&mut out, set.len() as u32);
-            for member in set {
+            for member in set.iter() {
                 write_bytes(&mut out, member.as_slice());
             }
         }
         Entry::ZSet(map) => {
             out.push(4);
             write_u32(&mut out, map.len() as u32);
-            for (member, score) in map {
+            for (member, score) in map.iter() {
                 write_bytes(&mut out, member.as_slice());
                 out.extend_from_slice(&score.to_le_bytes());
             }
@@ -493,7 +495,7 @@ fn deserialize_entry(payload: &[u8]) -> Option<Entry> {
             if !input.is_empty() {
                 return None;
             }
-            Some(Entry::Hash(map))
+            Some(Entry::Hash(Box::new(map)))
         }
         2 => {
             let count = read_u32(&mut input)? as usize;
@@ -504,7 +506,7 @@ fn deserialize_entry(payload: &[u8]) -> Option<Entry> {
             if !input.is_empty() {
                 return None;
             }
-            Some(Entry::List(list))
+            Some(Entry::List(Box::new(list)))
         }
         3 => {
             let count = read_u32(&mut input)? as usize;
@@ -515,7 +517,7 @@ fn deserialize_entry(payload: &[u8]) -> Option<Entry> {
             if !input.is_empty() {
                 return None;
             }
-            Some(Entry::Set(set))
+            Some(Entry::Set(Box::new(set)))
         }
         4 => {
             let count = read_u32(&mut input)? as usize;
@@ -533,7 +535,7 @@ fn deserialize_entry(payload: &[u8]) -> Option<Entry> {
             if !input.is_empty() {
                 return None;
             }
-            Some(Entry::ZSet(zset))
+            Some(Entry::ZSet(Box::new(zset)))
         }
         _ => None,
     }

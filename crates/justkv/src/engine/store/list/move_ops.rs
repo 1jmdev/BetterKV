@@ -82,7 +82,7 @@ fn move_inside_shard(
     let destination_entry = shard
         .entries
         .entry(CompactKey::from_slice(destination))
-        .or_insert_with(|| Entry::List(std::collections::VecDeque::new()));
+        .or_insert_with(|| Entry::List(Box::new(std::collections::VecDeque::new())));
     let destination_list = get_list_mut(destination_entry).ok_or(())?;
     if let Some(value) = moved.clone() {
         push_side(destination_list, value, to);
@@ -115,7 +115,7 @@ fn move_across_shards(
     let destination_entry = destination_shard
         .entries
         .entry(CompactKey::from_slice(destination))
-        .or_insert_with(|| Entry::List(std::collections::VecDeque::new()));
+        .or_insert_with(|| Entry::List(Box::new(std::collections::VecDeque::new())));
     let destination_list = get_list_mut(destination_entry).ok_or(())?;
     if let Some(value) = moved.clone() {
         push_side(destination_list, value, to);

@@ -7,7 +7,7 @@ use ahash::RandomState;
 use hashbrown::{HashMap, HashSet};
 
 const INLINE_BYTES_CAPACITY: usize = 22;
-const INLINE_VALUE_CAPACITY: usize = 7;
+const INLINE_VALUE_CAPACITY: usize = 22;
 
 #[derive(Clone, Debug)]
 pub enum CompactBytes<const INLINE_CAPACITY: usize> {
@@ -114,10 +114,10 @@ pub type ZSetValueMap = HashMap<CompactKey, f64, RandomState>;
 #[derive(Clone, Debug)]
 pub enum Entry {
     String(CompactValue),
-    Hash(HashValueMap),
-    List(ListValue),
-    Set(SetValue),
-    ZSet(ZSetValueMap),
+    Hash(Box<HashValueMap>),
+    List(Box<ListValue>),
+    Set(Box<SetValue>),
+    ZSet(Box<ZSetValueMap>),
 }
 
 impl Entry {
@@ -130,7 +130,7 @@ impl Entry {
     }
 
     pub fn empty_hash() -> Self {
-        Self::Hash(HashMap::with_hasher(RandomState::new()))
+        Self::Hash(Box::new(HashMap::with_hasher(RandomState::new())))
     }
 
     pub fn as_string(&self) -> Option<&CompactValue> {

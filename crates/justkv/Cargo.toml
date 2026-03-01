@@ -8,9 +8,9 @@ ahash.workspace = true
 bytes.workspace = true
 hashbrown.workspace = true
 itoa.workspace = true
-mimalloc.workspace = true
 parking_lot.workspace = true
 thiserror.workspace = true
+tikv-jemallocator.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]

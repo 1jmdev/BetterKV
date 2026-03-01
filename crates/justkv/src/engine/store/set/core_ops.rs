@@ -14,7 +14,7 @@ impl Store {
         let entry = shard
             .entries
             .entry(CompactKey::from_slice(key))
-            .or_insert_with(|| Entry::Set(new_set()));
+            .or_insert_with(|| Entry::Set(Box::new(new_set())));
         let set = get_set_mut(entry).ok_or(())?;
 
         let mut added = 0;
@@ -155,7 +155,7 @@ fn smove_inside_shard(
     let destination_entry = shard
         .entries
         .entry(CompactKey::from_slice(destination))
-        .or_insert_with(|| Entry::Set(new_set()));
+        .or_insert_with(|| Entry::Set(Box::new(new_set())));
     let destination_set = get_set_mut(destination_entry).ok_or(())?;
     destination_set.insert(CompactKey::from_slice(member));
     Ok(1)
@@ -184,7 +184,7 @@ fn smove_across_shards(
     let destination_entry = destination_shard
         .entries
         .entry(CompactKey::from_slice(destination))
-        .or_insert_with(|| Entry::Set(new_set()));
+        .or_insert_with(|| Entry::Set(Box::new(new_set())));
     let destination_set = get_set_mut(destination_entry).ok_or(())?;
     destination_set.insert(CompactKey::from_slice(member));
     Ok(1)

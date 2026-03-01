@@ -17,7 +17,7 @@ impl Store {
         let entry = shard
             .entries
             .entry(CompactKey::from_slice(key))
-            .or_insert_with(|| Entry::ZSet(new_zset()));
+            .or_insert_with(|| Entry::ZSet(Box::new(new_zset())));
         let zset = get_zset_mut(entry).ok_or(())?;
 
         let mut added = 0;
@@ -116,7 +116,7 @@ impl Store {
         let entry = shard
             .entries
             .entry(CompactKey::from_slice(key))
-            .or_insert_with(|| Entry::ZSet(new_zset()));
+            .or_insert_with(|| Entry::ZSet(Box::new(new_zset())));
         let zset = get_zset_mut(entry).ok_or(())?;
 
         let member_key = CompactKey::from_slice(member);
