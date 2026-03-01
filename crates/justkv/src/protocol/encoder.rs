@@ -38,6 +38,19 @@ pub fn encode(frame: &RespFrame, out: &mut BytesMut) {
             out.extend_from_slice(bytes);
             out.extend_from_slice(b"\r\n");
         }
+        RespFrame::BulkValues(values) => {
+            out.extend_from_slice(b"*");
+            push_usize(out, values.len());
+            out.extend_from_slice(b"\r\n");
+            for value in values {
+                out.extend_from_slice(b"$");
+                let bytes = value.as_slice();
+                push_usize(out, bytes.len());
+                out.extend_from_slice(b"\r\n");
+                out.extend_from_slice(bytes);
+                out.extend_from_slice(b"\r\n");
+            }
+        }
         RespFrame::Array(None) => out.extend_from_slice(b"*-1\r\n"),
         RespFrame::Array(Some(items)) => {
             out.extend_from_slice(b"*");

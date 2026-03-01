@@ -34,6 +34,7 @@ pub enum RespFrame {
     ErrorStatic(&'static str),
     Integer(i64),
     Bulk(Option<BulkData>),
+    BulkValues(Vec<CompactValue>),
     Array(Option<Vec<RespFrame>>),
     Map(Vec<(RespFrame, RespFrame)>),
 }

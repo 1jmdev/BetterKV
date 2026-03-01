@@ -1,4 +1,4 @@
-use crate::commands::util::{Args, eq_ascii, int_error, wrong_args, wrong_type};
+use crate::commands::util::{eq_ascii, int_error, wrong_args, wrong_type, Args};
 use crate::engine::store::{ListInsertPosition, ListSetError, Store};
 use crate::protocol::types::{BulkData, RespFrame};
 
@@ -29,12 +29,7 @@ pub(crate) fn lrange(store: &Store, args: &Args) -> RespFrame {
         Err(response) => return response,
     };
     match store.lrange(&args[1], start, stop) {
-        Ok(values) => RespFrame::Array(Some(
-            values
-                .into_iter()
-                .map(|value| RespFrame::Bulk(Some(BulkData::Value(value))))
-                .collect(),
-        )),
+        Ok(values) => RespFrame::BulkValues(values),
         Err(_) => wrong_type(),
     }
 }
