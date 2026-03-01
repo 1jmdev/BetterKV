@@ -5,7 +5,6 @@ edition.workspace = true
 
 [features]
 default = []
-store-hashmap = []
 
 [dependencies]
 ahash.workspace = true
