@@ -5,26 +5,7 @@ use crate::engine::store::Store;
 use crate::engine::value::CompactArg;
 use crate::protocol::types::{BulkData, RespFrame};
 
-pub(super) fn handle(store: &Store, command: &[u8], args: &Args) -> Option<RespFrame> {
-    if eq_ascii(command, b"GET") {
-        return Some(get(store, args));
-    }
-    if eq_ascii(command, b"SET") {
-        return Some(set(store, args));
-    }
-    if eq_ascii(command, b"SETNX") {
-        return Some(setnx(store, args));
-    }
-    if eq_ascii(command, b"GETSET") {
-        return Some(getset(store, args));
-    }
-    if eq_ascii(command, b"GETDEL") {
-        return Some(getdel(store, args));
-    }
-    None
-}
-
-fn get(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn get(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 2 {
         return wrong_args("GET");
     }
@@ -34,7 +15,7 @@ fn get(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn set(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn set(store: &Store, args: &Args) -> RespFrame {
     if args.len() < 3 {
         return wrong_args("SET");
     }
@@ -114,14 +95,14 @@ fn set(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn setnx(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn setnx(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 3 {
         return wrong_args("SETNX");
     }
     RespFrame::Integer(store.setnx(&args[1], &args[2], None) as i64)
 }
 
-fn getset(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn getset(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 3 {
         return wrong_args("GETSET");
     }
@@ -131,7 +112,7 @@ fn getset(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn getdel(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn getdel(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 2 {
         return wrong_args("GETDEL");
     }

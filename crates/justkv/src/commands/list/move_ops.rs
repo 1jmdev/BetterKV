@@ -1,21 +1,8 @@
-use crate::commands::util::{Args, eq_ascii, int_error, wrong_args, wrong_type};
+use crate::commands::util::{eq_ascii, int_error, wrong_args, wrong_type, Args};
 use crate::engine::store::{ListSide, Store};
 use crate::protocol::types::{BulkData, RespFrame};
 
-pub(super) fn handle(store: &Store, command: &[u8], args: &Args) -> Option<RespFrame> {
-    if eq_ascii(command, b"LMOVE") {
-        return Some(lmove(store, args));
-    }
-    if eq_ascii(command, b"BRPOPLPUSH") {
-        return Some(brpoplpush(store, args));
-    }
-    if eq_ascii(command, b"LMPOP") {
-        return Some(lmpop(store, args));
-    }
-    None
-}
-
-fn lmove(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn lmove(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 5 {
         return wrong_args("LMOVE");
     }
@@ -35,7 +22,7 @@ fn lmove(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn brpoplpush(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn brpoplpush(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 4 {
         return wrong_args("BRPOPLPUSH");
     }
@@ -49,7 +36,7 @@ fn brpoplpush(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn lmpop(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn lmpop(store: &Store, args: &Args) -> RespFrame {
     if args.len() < 4 {
         return wrong_args("LMPOP");
     }

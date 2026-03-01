@@ -1,24 +1,8 @@
-use crate::commands::util::{eq_ascii, int_error, wrong_args, wrong_type, Args};
+use crate::commands::util::{int_error, wrong_args, wrong_type, Args};
 use crate::engine::store::Store;
 use crate::protocol::types::RespFrame;
 
-pub(super) fn handle(store: &Store, command: &[u8], args: &Args) -> Option<RespFrame> {
-    if eq_ascii(command, b"INCR") {
-        return Some(incr(store, args));
-    }
-    if eq_ascii(command, b"INCRBY") {
-        return Some(incrby(store, args));
-    }
-    if eq_ascii(command, b"DECR") {
-        return Some(decr(store, args));
-    }
-    if eq_ascii(command, b"DECRBY") {
-        return Some(decrby(store, args));
-    }
-    None
-}
-
-fn incr(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn incr(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 2 {
         return wrong_args("INCR");
     }
@@ -31,7 +15,7 @@ fn incr(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn incrby(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn incrby(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 3 {
         return wrong_args("INCRBY");
     }
@@ -49,7 +33,7 @@ fn incrby(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn decr(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn decr(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 2 {
         return wrong_args("DECR");
     }
@@ -62,7 +46,7 @@ fn decr(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn decrby(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn decrby(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 3 {
         return wrong_args("DECRBY");
     }

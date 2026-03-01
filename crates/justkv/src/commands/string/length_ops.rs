@@ -1,24 +1,8 @@
-use crate::commands::util::{eq_ascii, int_error, wrong_args, wrong_type, Args};
+use crate::commands::util::{int_error, wrong_args, wrong_type, Args};
 use crate::engine::store::Store;
 use crate::protocol::types::{BulkData, RespFrame};
 
-pub(super) fn handle(store: &Store, command: &[u8], args: &Args) -> Option<RespFrame> {
-    if eq_ascii(command, b"APPEND") {
-        return Some(append(store, args));
-    }
-    if eq_ascii(command, b"STRLEN") {
-        return Some(strlen(store, args));
-    }
-    if eq_ascii(command, b"SETRANGE") {
-        return Some(setrange(store, args));
-    }
-    if eq_ascii(command, b"GETRANGE") {
-        return Some(getrange(store, args));
-    }
-    None
-}
-
-fn append(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn append(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 3 {
         return wrong_args("APPEND");
     }
@@ -28,7 +12,7 @@ fn append(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn strlen(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn strlen(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 2 {
         return wrong_args("STRLEN");
     }
@@ -38,7 +22,7 @@ fn strlen(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn setrange(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn setrange(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 4 {
         return wrong_args("SETRANGE");
     }
@@ -53,7 +37,7 @@ fn setrange(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn getrange(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn getrange(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 4 {
         return wrong_args("GETRANGE");
     }

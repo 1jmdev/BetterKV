@@ -2,14 +2,7 @@ use crate::commands::util::{eq_ascii, int_error, u64_to_bytes, wrong_args, wrong
 use crate::engine::store::Store;
 use crate::protocol::types::{BulkData, RespFrame};
 
-pub(super) fn handle(store: &Store, command: &[u8], args: &Args) -> Option<RespFrame> {
-    if eq_ascii(command, b"SSCAN") {
-        return Some(sscan(store, args));
-    }
-    None
-}
-
-fn sscan(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn sscan(store: &Store, args: &Args) -> RespFrame {
     if args.len() < 3 {
         return wrong_args("SSCAN");
     }

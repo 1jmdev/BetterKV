@@ -1,21 +1,8 @@
-use crate::commands::util::{Args, eq_ascii, int_error, wrong_args, wrong_type};
+use crate::commands::util::{eq_ascii, int_error, wrong_args, wrong_type, Args};
 use crate::engine::store::Store;
 use crate::protocol::types::{BulkData, RespFrame};
 
-pub(super) fn handle(store: &Store, command: &[u8], args: &Args) -> Option<RespFrame> {
-    if eq_ascii(command, b"ZINTER") {
-        return Some(zop(store, args, "ZINTER"));
-    }
-    if eq_ascii(command, b"ZUNION") {
-        return Some(zop(store, args, "ZUNION"));
-    }
-    if eq_ascii(command, b"ZDIFF") {
-        return Some(zop(store, args, "ZDIFF"));
-    }
-    None
-}
-
-fn zop(store: &Store, args: &Args, command: &str) -> RespFrame {
+pub(super) fn zop(store: &Store, args: &Args, command: &str) -> RespFrame {
     if args.len() < 3 {
         return wrong_args(command);
     }

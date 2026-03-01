@@ -1,18 +1,8 @@
-use crate::commands::util::{eq_ascii, f64_to_bytes, int_error, wrong_args, wrong_type, Args};
+use crate::commands::util::{f64_to_bytes, int_error, wrong_args, wrong_type, Args};
 use crate::engine::store::{HashFloatOpError, HashIntOpError, Store};
 use crate::protocol::types::{BulkData, RespFrame};
 
-pub(super) fn handle(store: &Store, command: &[u8], args: &Args) -> Option<RespFrame> {
-    if eq_ascii(command, b"HINCRBY") {
-        return Some(hincrby(store, args));
-    }
-    if eq_ascii(command, b"HINCRBYFLOAT") {
-        return Some(hincrbyfloat(store, args));
-    }
-    None
-}
-
-fn hincrby(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn hincrby(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 4 {
         return wrong_args("HINCRBY");
     }
@@ -34,7 +24,7 @@ fn hincrby(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn hincrbyfloat(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn hincrbyfloat(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 4 {
         return wrong_args("HINCRBYFLOAT");
     }

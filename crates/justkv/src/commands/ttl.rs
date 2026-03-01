@@ -1,30 +1,18 @@
-use crate::commands::util::{Args, eq_ascii, int_error, wrong_args};
+use crate::commands::util::{int_error, wrong_args, Args, CommandId};
 use crate::engine::store::Store;
 use crate::protocol::types::RespFrame;
 
-pub fn handle(store: &Store, command: &[u8], args: &Args) -> Option<RespFrame> {
-    if eq_ascii(command, b"EXPIRE") {
-        return Some(expire(store, args));
+pub fn handle(store: &Store, cmd: CommandId, args: &Args) -> RespFrame {
+    match cmd {
+        CommandId::Expire => expire(store, args),
+        CommandId::Pexpire => pexpire(store, args),
+        CommandId::Expireat => expireat(store, args),
+        CommandId::Pexpireat => pexpireat(store, args),
+        CommandId::Persist => persist(store, args),
+        CommandId::Ttl => ttl(store, args),
+        CommandId::Pttl => pttl(store, args),
+        _ => unreachable!("ttl::handle called with non-ttl command"),
     }
-    if eq_ascii(command, b"PEXPIRE") {
-        return Some(pexpire(store, args));
-    }
-    if eq_ascii(command, b"EXPIREAT") {
-        return Some(expireat(store, args));
-    }
-    if eq_ascii(command, b"PEXPIREAT") {
-        return Some(pexpireat(store, args));
-    }
-    if eq_ascii(command, b"PERSIST") {
-        return Some(persist(store, args));
-    }
-    if eq_ascii(command, b"TTL") {
-        return Some(ttl(store, args));
-    }
-    if eq_ascii(command, b"PTTL") {
-        return Some(pttl(store, args));
-    }
-    None
 }
 
 fn expire(store: &Store, args: &Args) -> RespFrame {

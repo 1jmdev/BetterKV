@@ -1,18 +1,8 @@
-use crate::commands::util::{Args, eq_ascii, int_error, wrong_args, wrong_type};
+use crate::commands::util::{int_error, wrong_args, wrong_type, Args};
 use crate::engine::store::Store;
 use crate::protocol::types::{BulkData, RespFrame};
 
-pub(super) fn handle(store: &Store, command: &[u8], args: &Args) -> Option<RespFrame> {
-    if eq_ascii(command, b"SPOP") {
-        return Some(spop(store, args));
-    }
-    if eq_ascii(command, b"SRANDMEMBER") {
-        return Some(srandmember(store, args));
-    }
-    None
-}
-
-fn spop(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn spop(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 2 && args.len() != 3 {
         return wrong_args("SPOP");
     }
@@ -39,7 +29,7 @@ fn spop(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn srandmember(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn srandmember(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 2 && args.len() != 3 {
         return wrong_args("SRANDMEMBER");
     }

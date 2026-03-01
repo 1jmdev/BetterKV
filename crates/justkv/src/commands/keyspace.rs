@@ -1,60 +1,30 @@
-use crate::commands::util::{eq_ascii, int_error, u64_to_bytes, wrong_args, wrong_type, Args};
+use crate::commands::util::{
+    eq_ascii, int_error, u64_to_bytes, wrong_args, wrong_type, Args, CommandId,
+};
 use crate::engine::store::{RestoreError, SortError, SortOptions, SortOrder, SortResult, Store};
 use crate::protocol::types::{BulkData, RespFrame};
 
-pub fn handle(store: &Store, command: &[u8], args: &Args) -> Option<RespFrame> {
-    if eq_ascii(command, b"DEL") {
-        return Some(del(store, args));
+pub fn handle(store: &Store, cmd: CommandId, args: &Args) -> RespFrame {
+    match cmd {
+        CommandId::Del => del(store, args),
+        CommandId::Exists => exists(store, args),
+        CommandId::Touch => touch(store, args),
+        CommandId::Unlink => unlink(store, args),
+        CommandId::Type => key_type(store, args),
+        CommandId::Rename => rename(store, args),
+        CommandId::Renamenx => renamenx(store, args),
+        CommandId::Dbsize => dbsize(store, args),
+        CommandId::Keys => keys(store, args),
+        CommandId::Scan => scan(store, args),
+        CommandId::Move => move_key(store, args),
+        CommandId::Dump => dump(store, args),
+        CommandId::Restore => restore(store, args),
+        CommandId::Sort => sort(store, args),
+        CommandId::Copy => copy(store, args),
+        CommandId::Flushdb => flushdb(store, args),
+        CommandId::Flushall => flushall(store, args),
+        _ => unreachable!("keyspace::handle called with non-keyspace command"),
     }
-    if eq_ascii(command, b"EXISTS") {
-        return Some(exists(store, args));
-    }
-    if eq_ascii(command, b"TOUCH") {
-        return Some(touch(store, args));
-    }
-    if eq_ascii(command, b"UNLINK") {
-        return Some(unlink(store, args));
-    }
-    if eq_ascii(command, b"TYPE") {
-        return Some(key_type(store, args));
-    }
-    if eq_ascii(command, b"RENAME") {
-        return Some(rename(store, args));
-    }
-    if eq_ascii(command, b"RENAMENX") {
-        return Some(renamenx(store, args));
-    }
-    if eq_ascii(command, b"DBSIZE") {
-        return Some(dbsize(store, args));
-    }
-    if eq_ascii(command, b"KEYS") {
-        return Some(keys(store, args));
-    }
-    if eq_ascii(command, b"SCAN") {
-        return Some(scan(store, args));
-    }
-    if eq_ascii(command, b"MOVE") {
-        return Some(move_key(store, args));
-    }
-    if eq_ascii(command, b"DUMP") {
-        return Some(dump(store, args));
-    }
-    if eq_ascii(command, b"RESTORE") {
-        return Some(restore(store, args));
-    }
-    if eq_ascii(command, b"SORT") {
-        return Some(sort(store, args));
-    }
-    if eq_ascii(command, b"COPY") {
-        return Some(copy(store, args));
-    }
-    if eq_ascii(command, b"FLUSHDB") {
-        return Some(flushdb(store, args));
-    }
-    if eq_ascii(command, b"FLUSHALL") || eq_ascii(command, b"FLUSH") {
-        return Some(flushall(store, args));
-    }
-    None
 }
 
 fn del(store: &Store, args: &Args) -> RespFrame {

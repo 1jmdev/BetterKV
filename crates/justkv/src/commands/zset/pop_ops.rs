@@ -2,29 +2,7 @@ use crate::commands::util::{eq_ascii, f64_to_bytes, int_error, wrong_args, wrong
 use crate::engine::store::Store;
 use crate::protocol::types::{BulkData, RespFrame};
 
-pub(super) fn handle(store: &Store, command: &[u8], args: &Args) -> Option<RespFrame> {
-    if eq_ascii(command, b"ZPOPMIN") {
-        return Some(zpop(store, args, false));
-    }
-    if eq_ascii(command, b"ZPOPMAX") {
-        return Some(zpop(store, args, true));
-    }
-    if eq_ascii(command, b"BZPOPMIN") {
-        return Some(bzpop(store, args, false));
-    }
-    if eq_ascii(command, b"BZPOPMAX") {
-        return Some(bzpop(store, args, true));
-    }
-    if eq_ascii(command, b"ZMPOP") {
-        return Some(zmpop(store, args));
-    }
-    if eq_ascii(command, b"BZMPOP") {
-        return Some(bzmpop(store, args));
-    }
-    None
-}
-
-fn zpop(store: &Store, args: &Args, max: bool) -> RespFrame {
+pub(super) fn zpop(store: &Store, args: &Args, max: bool) -> RespFrame {
     if args.len() != 2 && args.len() != 3 {
         return wrong_args(if max { "ZPOPMAX" } else { "ZPOPMIN" });
     }
@@ -48,7 +26,7 @@ fn zpop(store: &Store, args: &Args, max: bool) -> RespFrame {
     }
 }
 
-fn bzpop(store: &Store, args: &Args, max: bool) -> RespFrame {
+pub(super) fn bzpop(store: &Store, args: &Args, max: bool) -> RespFrame {
     if args.len() < 3 {
         return wrong_args(if max { "BZPOPMAX" } else { "BZPOPMIN" });
     }
@@ -67,7 +45,7 @@ fn bzpop(store: &Store, args: &Args, max: bool) -> RespFrame {
     }
 }
 
-fn zmpop(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn zmpop(store: &Store, args: &Args) -> RespFrame {
     if args.len() < 4 {
         return wrong_args("ZMPOP");
     }
@@ -112,7 +90,7 @@ fn zmpop(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn bzmpop(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn bzmpop(store: &Store, args: &Args) -> RespFrame {
     if args.len() < 5 {
         return wrong_args("BZMPOP");
     }

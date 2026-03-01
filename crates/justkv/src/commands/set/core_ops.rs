@@ -1,30 +1,8 @@
-use crate::commands::util::{Args, eq_ascii, wrong_args, wrong_type};
+use crate::commands::util::{wrong_args, wrong_type, Args};
 use crate::engine::store::Store;
 use crate::protocol::types::{BulkData, RespFrame};
 
-pub(super) fn handle(store: &Store, command: &[u8], args: &Args) -> Option<RespFrame> {
-    if eq_ascii(command, b"SADD") {
-        return Some(sadd(store, args));
-    }
-    if eq_ascii(command, b"SREM") {
-        return Some(srem(store, args));
-    }
-    if eq_ascii(command, b"SMEMBERS") {
-        return Some(smembers(store, args));
-    }
-    if eq_ascii(command, b"SISMEMBER") {
-        return Some(sismember(store, args));
-    }
-    if eq_ascii(command, b"SCARD") {
-        return Some(scard(store, args));
-    }
-    if eq_ascii(command, b"SMOVE") {
-        return Some(smove(store, args));
-    }
-    None
-}
-
-fn sadd(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn sadd(store: &Store, args: &Args) -> RespFrame {
     if args.len() < 3 {
         return wrong_args("SADD");
     }
@@ -34,7 +12,7 @@ fn sadd(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn srem(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn srem(store: &Store, args: &Args) -> RespFrame {
     if args.len() < 3 {
         return wrong_args("SREM");
     }
@@ -44,7 +22,7 @@ fn srem(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn smembers(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn smembers(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 2 {
         return wrong_args("SMEMBERS");
     }
@@ -59,7 +37,7 @@ fn smembers(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn sismember(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn sismember(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 3 {
         return wrong_args("SISMEMBER");
     }
@@ -69,7 +47,7 @@ fn sismember(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn scard(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn scard(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 2 {
         return wrong_args("SCARD");
     }
@@ -79,7 +57,7 @@ fn scard(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn smove(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn smove(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 4 {
         return wrong_args("SMOVE");
     }

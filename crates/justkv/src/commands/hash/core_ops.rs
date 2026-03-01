@@ -1,51 +1,10 @@
-use crate::commands::util::{Args, eq_ascii, wrong_args, wrong_type};
+use crate::commands::util::{wrong_args, wrong_type, Args};
 use crate::engine::store::Store;
 use crate::protocol::types::{BulkData, RespFrame};
 
-pub(super) fn handle(store: &Store, command: &[u8], args: &Args) -> Option<RespFrame> {
-    if eq_ascii(command, b"HSET") || eq_ascii(command, b"HMSET") {
-        return Some(hset(store, command, args));
-    }
-    if eq_ascii(command, b"HSETNX") {
-        return Some(hsetnx(store, args));
-    }
-    if eq_ascii(command, b"HGET") {
-        return Some(hget(store, args));
-    }
-    if eq_ascii(command, b"HMGET") {
-        return Some(hmget(store, args));
-    }
-    if eq_ascii(command, b"HGETALL") {
-        return Some(hgetall(store, args));
-    }
-    if eq_ascii(command, b"HDEL") {
-        return Some(hdel(store, args));
-    }
-    if eq_ascii(command, b"HEXISTS") {
-        return Some(hexists(store, args));
-    }
-    if eq_ascii(command, b"HKEYS") {
-        return Some(hkeys(store, args));
-    }
-    if eq_ascii(command, b"HVALS") {
-        return Some(hvals(store, args));
-    }
-    if eq_ascii(command, b"HLEN") {
-        return Some(hlen(store, args));
-    }
-    if eq_ascii(command, b"HSTRLEN") {
-        return Some(hstrlen(store, args));
-    }
-    None
-}
-
-fn hset(store: &Store, command: &[u8], args: &Args) -> RespFrame {
+pub(super) fn hset(store: &Store, args: &Args) -> RespFrame {
     if args.len() < 4 || args.len() % 2 != 0 {
-        return wrong_args(if eq_ascii(command, b"HMSET") {
-            "HMSET"
-        } else {
-            "HSET"
-        });
+        return wrong_args("HSET");
     }
 
     let pairs: Vec<_> = args[2..]
@@ -54,18 +13,28 @@ fn hset(store: &Store, command: &[u8], args: &Args) -> RespFrame {
         .collect();
 
     match store.hset(&args[1], &pairs) {
-        Ok(created) => {
-            if eq_ascii(command, b"HMSET") {
-                RespFrame::ok()
-            } else {
-                RespFrame::Integer(created)
-            }
-        }
+        Ok(created) => RespFrame::Integer(created),
         Err(_) => wrong_type(),
     }
 }
 
-fn hsetnx(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn hmset(store: &Store, args: &Args) -> RespFrame {
+    if args.len() < 4 || args.len() % 2 != 0 {
+        return wrong_args("HMSET");
+    }
+
+    let pairs: Vec<_> = args[2..]
+        .chunks(2)
+        .map(|chunk| (chunk[0].clone(), chunk[1].clone()))
+        .collect();
+
+    match store.hset(&args[1], &pairs) {
+        Ok(_) => RespFrame::ok(),
+        Err(_) => wrong_type(),
+    }
+}
+
+pub(super) fn hsetnx(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 4 {
         return wrong_args("HSETNX");
     }
@@ -75,7 +44,7 @@ fn hsetnx(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn hget(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn hget(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 3 {
         return wrong_args("HGET");
     }
@@ -85,7 +54,7 @@ fn hget(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn hmget(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn hmget(store: &Store, args: &Args) -> RespFrame {
     if args.len() < 3 {
         return wrong_args("HMGET");
     }
@@ -100,7 +69,7 @@ fn hmget(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn hgetall(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn hgetall(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 2 {
         return wrong_args("HGETALL");
     }
@@ -117,7 +86,7 @@ fn hgetall(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn hdel(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn hdel(store: &Store, args: &Args) -> RespFrame {
     if args.len() < 3 {
         return wrong_args("HDEL");
     }
@@ -127,7 +96,7 @@ fn hdel(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn hexists(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn hexists(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 3 {
         return wrong_args("HEXISTS");
     }
@@ -137,7 +106,7 @@ fn hexists(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn hkeys(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn hkeys(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 2 {
         return wrong_args("HKEYS");
     }
@@ -152,7 +121,7 @@ fn hkeys(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn hvals(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn hvals(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 2 {
         return wrong_args("HVALS");
     }
@@ -167,7 +136,7 @@ fn hvals(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn hlen(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn hlen(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 2 {
         return wrong_args("HLEN");
     }
@@ -177,7 +146,7 @@ fn hlen(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn hstrlen(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn hstrlen(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 3 {
         return wrong_args("HSTRLEN");
     }

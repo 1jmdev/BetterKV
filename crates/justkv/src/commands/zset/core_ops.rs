@@ -1,39 +1,8 @@
-use crate::commands::util::{eq_ascii, f64_to_bytes, wrong_args, wrong_type, Args};
+use crate::commands::util::{f64_to_bytes, wrong_args, wrong_type, Args};
 use crate::engine::store::Store;
 use crate::protocol::types::{BulkData, RespFrame};
 
-pub(super) fn handle(store: &Store, command: &[u8], args: &Args) -> Option<RespFrame> {
-    if eq_ascii(command, b"ZADD") {
-        return Some(zadd(store, args));
-    }
-    if eq_ascii(command, b"ZREM") {
-        return Some(zrem(store, args));
-    }
-    if eq_ascii(command, b"ZCARD") {
-        return Some(zcard(store, args));
-    }
-    if eq_ascii(command, b"ZCOUNT") {
-        return Some(zcount(store, args));
-    }
-    if eq_ascii(command, b"ZSCORE") {
-        return Some(zscore(store, args));
-    }
-    if eq_ascii(command, b"ZRANK") {
-        return Some(zrank(store, args, false));
-    }
-    if eq_ascii(command, b"ZREVRANK") {
-        return Some(zrank(store, args, true));
-    }
-    if eq_ascii(command, b"ZINCRBY") {
-        return Some(zincrby(store, args));
-    }
-    if eq_ascii(command, b"ZMSCORE") {
-        return Some(zmscore(store, args));
-    }
-    None
-}
-
-fn zadd(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn zadd(store: &Store, args: &Args) -> RespFrame {
     if args.len() < 4 || args.len() % 2 != 0 {
         return wrong_args("ZADD");
     }
@@ -53,7 +22,7 @@ fn zadd(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn zrem(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn zrem(store: &Store, args: &Args) -> RespFrame {
     if args.len() < 3 {
         return wrong_args("ZREM");
     }
@@ -63,7 +32,7 @@ fn zrem(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn zcard(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn zcard(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 2 {
         return wrong_args("ZCARD");
     }
@@ -73,7 +42,7 @@ fn zcard(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn zcount(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn zcount(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 4 {
         return wrong_args("ZCOUNT");
     }
@@ -91,7 +60,7 @@ fn zcount(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn zscore(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn zscore(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 3 {
         return wrong_args("ZSCORE");
     }
@@ -102,7 +71,7 @@ fn zscore(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn zrank(store: &Store, args: &Args, reverse: bool) -> RespFrame {
+pub(super) fn zrank(store: &Store, args: &Args, reverse: bool) -> RespFrame {
     if args.len() != 3 {
         return wrong_args(if reverse { "ZREVRANK" } else { "ZRANK" });
     }
@@ -113,7 +82,7 @@ fn zrank(store: &Store, args: &Args, reverse: bool) -> RespFrame {
     }
 }
 
-fn zincrby(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn zincrby(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 4 {
         return wrong_args("ZINCRBY");
     }
@@ -127,7 +96,7 @@ fn zincrby(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn zmscore(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn zmscore(store: &Store, args: &Args) -> RespFrame {
     if args.len() < 3 {
         return wrong_args("ZMSCORE");
     }

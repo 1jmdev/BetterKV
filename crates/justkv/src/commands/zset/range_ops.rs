@@ -2,23 +2,7 @@ use crate::commands::util::{eq_ascii, f64_to_bytes, int_error, wrong_args, wrong
 use crate::engine::store::Store;
 use crate::protocol::types::{BulkData, RespFrame};
 
-pub(super) fn handle(store: &Store, command: &[u8], args: &Args) -> Option<RespFrame> {
-    if eq_ascii(command, b"ZRANGE") {
-        return Some(zrange(store, args, false));
-    }
-    if eq_ascii(command, b"ZREVRANGE") {
-        return Some(zrange(store, args, true));
-    }
-    if eq_ascii(command, b"ZRANGEBYSCORE") {
-        return Some(zrange_by_score(store, args, false));
-    }
-    if eq_ascii(command, b"ZREVRANGEBYSCORE") {
-        return Some(zrange_by_score(store, args, true));
-    }
-    None
-}
-
-fn zrange(store: &Store, args: &Args, reverse: bool) -> RespFrame {
+pub(super) fn zrange(store: &Store, args: &Args, reverse: bool) -> RespFrame {
     if args.len() != 4 && args.len() != 5 {
         return wrong_args(if reverse { "ZREVRANGE" } else { "ZRANGE" });
     }
@@ -42,7 +26,7 @@ fn zrange(store: &Store, args: &Args, reverse: bool) -> RespFrame {
     }
 }
 
-fn zrange_by_score(store: &Store, args: &Args, reverse: bool) -> RespFrame {
+pub(super) fn zrange_by_score(store: &Store, args: &Args, reverse: bool) -> RespFrame {
     if args.len() < 4 {
         return wrong_args(if reverse {
             "ZREVRANGEBYSCORE"

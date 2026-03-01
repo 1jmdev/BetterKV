@@ -5,20 +5,7 @@ use crate::engine::store::{GetExMode, Store};
 use crate::engine::value::CompactArg;
 use crate::protocol::types::{BulkData, RespFrame};
 
-pub(super) fn handle(store: &Store, command: &[u8], args: &Args) -> Option<RespFrame> {
-    if eq_ascii(command, b"SETEX") {
-        return Some(setex(store, args));
-    }
-    if eq_ascii(command, b"PSETEX") {
-        return Some(psetex(store, args));
-    }
-    if eq_ascii(command, b"GETEX") {
-        return Some(getex(store, args));
-    }
-    None
-}
-
-fn setex(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn setex(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 4 {
         return wrong_args("SETEX");
     }
@@ -32,7 +19,7 @@ fn setex(store: &Store, args: &Args) -> RespFrame {
     RespFrame::ok()
 }
 
-fn psetex(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn psetex(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 4 {
         return wrong_args("PSETEX");
     }
@@ -46,7 +33,7 @@ fn psetex(store: &Store, args: &Args) -> RespFrame {
     RespFrame::ok()
 }
 
-fn getex(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn getex(store: &Store, args: &Args) -> RespFrame {
     if args.len() < 2 {
         return wrong_args("GETEX");
     }

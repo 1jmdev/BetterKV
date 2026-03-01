@@ -1,30 +1,8 @@
-use crate::commands::util::{Args, eq_ascii, int_error, wrong_args, wrong_type};
+use crate::commands::util::{eq_ascii, int_error, wrong_args, wrong_type, Args};
 use crate::engine::store::{ListInsertPosition, ListSetError, Store};
 use crate::protocol::types::{BulkData, RespFrame};
 
-pub(super) fn handle(store: &Store, command: &[u8], args: &Args) -> Option<RespFrame> {
-    if eq_ascii(command, b"LINDEX") {
-        return Some(lindex(store, args));
-    }
-    if eq_ascii(command, b"LRANGE") {
-        return Some(lrange(store, args));
-    }
-    if eq_ascii(command, b"LSET") {
-        return Some(lset(store, args));
-    }
-    if eq_ascii(command, b"LTRIM") {
-        return Some(ltrim(store, args));
-    }
-    if eq_ascii(command, b"LINSERT") {
-        return Some(linsert(store, args));
-    }
-    if eq_ascii(command, b"LPOS") {
-        return Some(lpos(store, args));
-    }
-    None
-}
-
-fn lindex(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn lindex(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 3 {
         return wrong_args("LINDEX");
     }
@@ -38,7 +16,7 @@ fn lindex(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn lrange(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn lrange(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 4 {
         return wrong_args("LRANGE");
     }
@@ -61,7 +39,7 @@ fn lrange(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn lset(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn lset(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 4 {
         return wrong_args("LSET");
     }
@@ -77,7 +55,7 @@ fn lset(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn ltrim(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn ltrim(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 4 {
         return wrong_args("LTRIM");
     }
@@ -95,7 +73,7 @@ fn ltrim(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn linsert(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn linsert(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 5 {
         return wrong_args("LINSERT");
     }
@@ -112,7 +90,7 @@ fn linsert(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn lpos(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn lpos(store: &Store, args: &Args) -> RespFrame {
     if args.len() < 3 {
         return wrong_args("LPOS");
     }

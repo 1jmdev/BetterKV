@@ -1,40 +1,15 @@
-use crate::commands::util::{Args, eq_ascii, int_error, wrong_args, wrong_type};
+use crate::commands::util::{eq_ascii, int_error, wrong_args, wrong_type, Args};
 use crate::engine::store::Store;
 use crate::protocol::types::{BulkData, RespFrame};
 
-pub(super) fn handle(store: &Store, command: &[u8], args: &Args) -> Option<RespFrame> {
-    if eq_ascii(command, b"SINTER") {
-        return Some(sinter(store, args));
-    }
-    if eq_ascii(command, b"SINTERSTORE") {
-        return Some(sinterstore(store, args));
-    }
-    if eq_ascii(command, b"SUNION") {
-        return Some(sunion(store, args));
-    }
-    if eq_ascii(command, b"SUNIONSTORE") {
-        return Some(sunionstore(store, args));
-    }
-    if eq_ascii(command, b"SDIFF") {
-        return Some(sdiff(store, args));
-    }
-    if eq_ascii(command, b"SDIFFSTORE") {
-        return Some(sdiffstore(store, args));
-    }
-    if eq_ascii(command, b"SINTERCARD") {
-        return Some(sintercard(store, args));
-    }
-    None
-}
-
-fn sinter(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn sinter(store: &Store, args: &Args) -> RespFrame {
     if args.len() < 2 {
         return wrong_args("SINTER");
     }
     members_response(store.sinter(&args[1..]))
 }
 
-fn sinterstore(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn sinterstore(store: &Store, args: &Args) -> RespFrame {
     if args.len() < 3 {
         return wrong_args("SINTERSTORE");
     }
@@ -44,14 +19,14 @@ fn sinterstore(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn sunion(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn sunion(store: &Store, args: &Args) -> RespFrame {
     if args.len() < 2 {
         return wrong_args("SUNION");
     }
     members_response(store.sunion(&args[1..]))
 }
 
-fn sunionstore(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn sunionstore(store: &Store, args: &Args) -> RespFrame {
     if args.len() < 3 {
         return wrong_args("SUNIONSTORE");
     }
@@ -61,14 +36,14 @@ fn sunionstore(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn sdiff(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn sdiff(store: &Store, args: &Args) -> RespFrame {
     if args.len() < 2 {
         return wrong_args("SDIFF");
     }
     members_response(store.sdiff(&args[1..]))
 }
 
-fn sdiffstore(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn sdiffstore(store: &Store, args: &Args) -> RespFrame {
     if args.len() < 3 {
         return wrong_args("SDIFFSTORE");
     }
@@ -78,7 +53,7 @@ fn sdiffstore(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn sintercard(store: &Store, args: &Args) -> RespFrame {
+pub(super) fn sintercard(store: &Store, args: &Args) -> RespFrame {
     if args.len() < 3 {
         return wrong_args("SINTERCARD");
     }

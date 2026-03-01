@@ -1,32 +1,18 @@
-use crate::commands::util::{Args, eq_ascii, wrong_args};
+use crate::commands::util::{eq_ascii, wrong_args, Args, CommandId};
 use crate::protocol::types::{BulkData, RespFrame};
 
-pub fn handle(command: &[u8], args: &Args) -> Option<RespFrame> {
-    if eq_ascii(command, b"AUTH") {
-        return Some(auth(args));
+pub fn handle(cmd: CommandId, args: &Args) -> RespFrame {
+    match cmd {
+        CommandId::Auth => auth(args),
+        CommandId::Hello => hello(args),
+        CommandId::Client => client(args),
+        CommandId::Command => RespFrame::Array(Some(vec![])),
+        CommandId::Select => select_db(args),
+        CommandId::Quit => quit(args),
+        CommandId::Ping => ping(args),
+        CommandId::Echo => echo(args),
+        _ => unreachable!("connection::handle called with non-connection command"),
     }
-    if eq_ascii(command, b"HELLO") {
-        return Some(hello(args));
-    }
-    if eq_ascii(command, b"CLIENT") {
-        return Some(client(args));
-    }
-    if eq_ascii(command, b"COMMAND") {
-        return Some(RespFrame::Array(Some(vec![])));
-    }
-    if eq_ascii(command, b"SELECT") {
-        return Some(select_db(args));
-    }
-    if eq_ascii(command, b"QUIT") {
-        return Some(quit(args));
-    }
-    if eq_ascii(command, b"PING") {
-        return Some(ping(args));
-    }
-    if eq_ascii(command, b"ECHO") {
-        return Some(echo(args));
-    }
-    None
 }
 
 fn auth(args: &Args) -> RespFrame {
