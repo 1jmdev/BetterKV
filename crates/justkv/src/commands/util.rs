@@ -4,7 +4,7 @@ use crate::protocol::types::RespFrame;
 pub type Args = [CompactArg];
 
 pub fn eq_ascii(command: &[u8], expected: &[u8]) -> bool {
-    command.eq_ignore_ascii_case(expected)
+    command == expected || command.eq_ignore_ascii_case(expected)
 }
 
 pub fn wrong_args(command: &str) -> RespFrame {

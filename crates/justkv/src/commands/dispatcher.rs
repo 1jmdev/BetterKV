@@ -63,5 +63,11 @@ pub fn parse_command(frame: RespFrame) -> Result<Vec<CompactArg>, String> {
         }
     }
 
+    if let Some(command) = args.first_mut() {
+        let mut normalized = command.to_vec();
+        normalized.make_ascii_uppercase();
+        *command = CompactArg::from_vec(normalized);
+    }
+
     Ok(args)
 }

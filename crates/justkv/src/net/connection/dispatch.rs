@@ -42,25 +42,25 @@ fn handle_pubsub_or_config_command(
 ) -> Option<RespFrame> {
     let command = args[0].as_slice();
 
-    if command.eq_ignore_ascii_case(b"PUBLISH") {
+    if command == b"PUBLISH" {
         return Some(publish_command(hub, args));
     }
-    if command.eq_ignore_ascii_case(b"SUBSCRIBE") {
+    if command == b"SUBSCRIBE" {
         return Some(subscribe_command(hub, push_tx, pubsub_state, args));
     }
-    if command.eq_ignore_ascii_case(b"UNSUBSCRIBE") {
+    if command == b"UNSUBSCRIBE" {
         return Some(unsubscribe_command(hub, pubsub_state, args));
     }
-    if command.eq_ignore_ascii_case(b"PSUBSCRIBE") {
+    if command == b"PSUBSCRIBE" {
         return Some(psubscribe_command(hub, push_tx, pubsub_state, args));
     }
-    if command.eq_ignore_ascii_case(b"PUNSUBSCRIBE") {
+    if command == b"PUNSUBSCRIBE" {
         return Some(punsubscribe_command(hub, pubsub_state, args));
     }
-    if command.eq_ignore_ascii_case(b"PUBSUB") {
+    if command == b"PUBSUB" {
         return Some(pubsub_command(hub, args));
     }
-    if command.eq_ignore_ascii_case(b"CONFIG") {
+    if command == b"CONFIG" {
         return Some(config_command(hub, args));
     }
     None

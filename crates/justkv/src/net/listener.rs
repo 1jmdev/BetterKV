@@ -14,6 +14,7 @@ pub async fn run_listener(config: Config) -> Result<(), Box<dyn std::error::Erro
         store.clone(),
         Duration::from_millis(config.sweep_interval_ms),
     );
+    spawn_cached_clock_updater(store.clone());
 
     loop {
         let (socket, _) = listener.accept().await?;
@@ -32,6 +33,15 @@ fn spawn_expiry_sweeper(store: Store, interval: Duration) {
         loop {
             sleep(interval).await;
             let _ = store.sweep_expired();
+        }
+    });
+}
+
+fn spawn_cached_clock_updater(store: Store) {
+    tokio::spawn(async move {
+        loop {
+            store.refresh_cached_time();
+            sleep(Duration::from_millis(1)).await;
         }
     });
 }
