@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::engine::store::Store;
-use crate::protocol::types::{BulkData, RespFrame};
+use crate::protocol::types::RespFrame;
 
 #[derive(Default)]
 pub struct TransactionState {
@@ -29,7 +29,7 @@ impl TransactionState {
             return RespFrame::Error("ERR empty command".to_string());
         }
 
-        let command = args[0].as_slice();
+        let command = args[0];
         if command.eq_ignore_ascii_case(b"MULTI") {
             return self.multi(&args);
         }
@@ -54,7 +54,7 @@ impl TransactionState {
         execute(store, frame)
     }
 
-    fn multi(&mut self, args: &[Vec<u8>]) -> RespFrame {
+    fn multi(&mut self, args: &[&[u8]]) -> RespFrame {
         if args.len() != 1 {
             return wrong_args("MULTI");
         }
@@ -67,7 +67,7 @@ impl TransactionState {
         RespFrame::ok()
     }
 
-    fn exec_with<F>(&mut self, store: &Store, args: &[Vec<u8>], mut execute: F) -> RespFrame
+    fn exec_with<F>(&mut self, store: &Store, args: &[&[u8]], mut execute: F) -> RespFrame
     where
         F: FnMut(&Store, RespFrame) -> RespFrame,
     {
@@ -94,7 +94,7 @@ impl TransactionState {
         RespFrame::Array(Some(out))
     }
 
-    fn discard(&mut self, args: &[Vec<u8>]) -> RespFrame {
+    fn discard(&mut self, args: &[&[u8]]) -> RespFrame {
         if args.len() != 1 {
             return wrong_args("DISCARD");
         }
@@ -108,7 +108,7 @@ impl TransactionState {
         RespFrame::ok()
     }
 
-    fn watch(&mut self, store: &Store, args: &[Vec<u8>]) -> RespFrame {
+    fn watch(&mut self, store: &Store, args: &[&[u8]]) -> RespFrame {
         if args.len() < 2 {
             return wrong_args("WATCH");
         }
@@ -117,12 +117,12 @@ impl TransactionState {
         }
 
         for key in &args[1..] {
-            self.watched.insert(key.clone(), store.dump(key));
+            self.watched.insert(key.to_vec(), store.dump(key));
         }
         RespFrame::ok()
     }
 
-    fn unwatch(&mut self, args: &[Vec<u8>]) -> RespFrame {
+    fn unwatch(&mut self, args: &[&[u8]]) -> RespFrame {
         if args.len() != 1 {
             return wrong_args("UNWATCH");
         }
@@ -137,7 +137,7 @@ impl TransactionState {
     }
 }
 
-fn parse_args(frame: &RespFrame) -> Result<Vec<Vec<u8>>, String> {
+fn parse_args<'a>(frame: &'a RespFrame) -> Result<Vec<&'a [u8]>, String> {
     let RespFrame::Array(Some(items)) = frame else {
         return Err("ERR protocol error".to_string());
     };
@@ -145,9 +145,8 @@ fn parse_args(frame: &RespFrame) -> Result<Vec<Vec<u8>>, String> {
     let mut args = Vec::with_capacity(items.len());
     for item in items {
         match item {
-            RespFrame::Bulk(Some(BulkData::Arg(bytes))) => args.push(bytes.to_vec()),
-            RespFrame::Bulk(Some(BulkData::Value(bytes))) => args.push(bytes.to_vec()),
-            RespFrame::Simple(value) => args.push(value.as_bytes().to_vec()),
+            RespFrame::Bulk(Some(value)) => args.push(value.as_slice()),
+            RespFrame::Simple(value) => args.push(value.as_bytes()),
             _ => return Err("ERR invalid argument type".to_string()),
         }
     }

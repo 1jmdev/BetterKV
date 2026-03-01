@@ -9,40 +9,44 @@ pub fn dispatch(store: &Store, frame: RespFrame) -> RespFrame {
         Err(err) => return RespFrame::Error(err),
     };
 
+    dispatch_args(store, &args)
+}
+
+pub fn dispatch_args(store: &Store, args: &[CompactArg]) -> RespFrame {
     if args.is_empty() {
         return RespFrame::Error("ERR empty command".to_string());
     }
 
     let command = args[0].as_slice();
-    if let Some(response) = connection::handle(command, &args) {
+    if let Some(response) = connection::handle(command, args) {
         return response;
     }
-    if let Some(response) = string::handle(store, command, &args) {
+    if let Some(response) = string::handle(store, command, args) {
         return response;
     }
-    if let Some(response) = hash::handle(store, command, &args) {
+    if let Some(response) = hash::handle(store, command, args) {
         return response;
     }
-    if let Some(response) = list::handle(store, command, &args) {
+    if let Some(response) = list::handle(store, command, args) {
         return response;
     }
-    if let Some(response) = set::handle(store, command, &args) {
+    if let Some(response) = set::handle(store, command, args) {
         return response;
     }
-    if let Some(response) = zset::handle(store, command, &args) {
+    if let Some(response) = zset::handle(store, command, args) {
         return response;
     }
-    if let Some(response) = keyspace::handle(store, command, &args) {
+    if let Some(response) = keyspace::handle(store, command, args) {
         return response;
     }
-    if let Some(response) = ttl::handle(store, command, &args) {
+    if let Some(response) = ttl::handle(store, command, args) {
         return response;
     }
 
     RespFrame::Error("ERR unknown command".to_string())
 }
 
-fn parse_command(frame: RespFrame) -> Result<Vec<CompactArg>, String> {
+pub fn parse_command(frame: RespFrame) -> Result<Vec<CompactArg>, String> {
     let RespFrame::Array(Some(items)) = frame else {
         return Err("ERR protocol error".to_string());
     };

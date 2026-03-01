@@ -3,7 +3,7 @@ use crate::engine::value::CompactKey;
 
 use super::super::helpers::{monotonic_now_ms, purge_if_expired};
 use super::super::pattern::wildcard_match;
-use super::{collect_members, get_set};
+use super::get_set;
 
 impl Store {
     pub fn sscan(
@@ -25,29 +25,26 @@ impl Store {
         };
         let set = get_set(entry).ok_or(())?;
 
-        let members = collect_members(set);
-        if members.is_empty() {
+        if set.is_empty() {
             return Ok((0, Vec::new()));
         }
 
-        let mut index = usize::try_from(cursor)
-            .unwrap_or(usize::MAX)
-            .min(members.len());
+        let total_len = set.len();
+        let mut index = usize::try_from(cursor).unwrap_or(usize::MAX).min(total_len);
         let target = count.max(1);
         let mut out = Vec::with_capacity(target);
-        while index < members.len() && out.len() < target {
-            let member = &members[index];
+        let mut iter = set.iter().skip(index);
+        while out.len() < target {
+            let Some(member) = iter.next() else {
+                break;
+            };
             if pattern.is_none_or(|matcher| wildcard_match(matcher, member.as_slice())) {
                 out.push(member.clone());
             }
             index += 1;
         }
 
-        let next = if index >= members.len() {
-            0
-        } else {
-            index as u64
-        };
+        let next = if index >= total_len { 0 } else { index as u64 };
         Ok((next, out))
     }
 }

@@ -1,12 +1,13 @@
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::commands::dispatcher::dispatch;
+use crate::commands::dispatcher::{dispatch_args, parse_command};
 use crate::engine::store::Store;
+use crate::engine::value::CompactArg;
 use crate::protocol::types::{BulkData, RespFrame};
 
 use super::super::pubsub::{ConnectionPubSub, PubSubHub};
 use super::notifications::emit_command_notifications;
-use super::util::{collapse_pubsub_responses, parse_args, wrong_args};
+use super::util::{collapse_pubsub_responses, wrong_args};
 
 pub(super) fn execute_regular_command(
     store: &Store,
@@ -15,7 +16,7 @@ pub(super) fn execute_regular_command(
     pubsub_state: &mut ConnectionPubSub,
     frame: RespFrame,
 ) -> RespFrame {
-    let args = match parse_args(&frame) {
+    let args = match parse_command(frame) {
         Ok(value) => value,
         Err(err) => return RespFrame::Error(err),
     };
@@ -27,9 +28,9 @@ pub(super) fn execute_regular_command(
         return response;
     }
 
-    let command = args[0].clone();
-    let response = dispatch(store, frame);
-    emit_command_notifications(hub, &command, &args, &response);
+    let command = args[0].as_slice();
+    let response = dispatch_args(store, &args);
+    emit_command_notifications(hub, command, &args, &response);
     response
 }
 
@@ -37,7 +38,7 @@ fn handle_pubsub_or_config_command(
     hub: &PubSubHub,
     push_tx: &UnboundedSender<RespFrame>,
     pubsub_state: &mut ConnectionPubSub,
-    args: &[Vec<u8>],
+    args: &[CompactArg],
 ) -> Option<RespFrame> {
     let command = args[0].as_slice();
 
@@ -65,7 +66,7 @@ fn handle_pubsub_or_config_command(
     None
 }
 
-fn publish_command(hub: &PubSubHub, args: &[Vec<u8>]) -> RespFrame {
+fn publish_command(hub: &PubSubHub, args: &[CompactArg]) -> RespFrame {
     if args.len() != 3 {
         return wrong_args("PUBLISH");
     }
@@ -76,7 +77,7 @@ fn subscribe_command(
     hub: &PubSubHub,
     push_tx: &UnboundedSender<RespFrame>,
     pubsub_state: &mut ConnectionPubSub,
-    args: &[Vec<u8>],
+    args: &[CompactArg],
 ) -> RespFrame {
     if args.len() < 2 {
         return wrong_args("SUBSCRIBE");
@@ -87,7 +88,7 @@ fn subscribe_command(
         pubsub_state.subscribe(hub, channel, push_tx);
         responses.push(RespFrame::Array(Some(vec![
             RespFrame::Bulk(Some(BulkData::from_vec(b"subscribe".to_vec()))),
-            RespFrame::Bulk(Some(BulkData::from_vec(channel.clone()))),
+            RespFrame::Bulk(Some(BulkData::Arg(channel.clone()))),
             RespFrame::Integer(pubsub_state.subscription_count()),
         ])));
     }
@@ -97,14 +98,14 @@ fn subscribe_command(
 fn unsubscribe_command(
     hub: &PubSubHub,
     pubsub_state: &mut ConnectionPubSub,
-    args: &[Vec<u8>],
+    args: &[CompactArg],
 ) -> RespFrame {
     let channels = if args.len() == 1 {
         let existing = pubsub_state.unsubscribe_all(hub);
         if existing.is_empty() {
-            vec![Vec::new()]
+            vec![CompactArg::from_vec(Vec::new())]
         } else {
-            existing
+            existing.into_iter().map(CompactArg::from_vec).collect()
         }
     } else {
         let mut out = Vec::with_capacity(args.len() - 1);
@@ -122,7 +123,7 @@ fn unsubscribe_command(
             if channel.is_empty() {
                 RespFrame::Bulk(None)
             } else {
-                RespFrame::Bulk(Some(BulkData::from_vec(channel)))
+                RespFrame::Bulk(Some(BulkData::Arg(channel)))
             },
             RespFrame::Integer(pubsub_state.subscription_count()),
         ])));
@@ -135,7 +136,7 @@ fn psubscribe_command(
     hub: &PubSubHub,
     push_tx: &UnboundedSender<RespFrame>,
     pubsub_state: &mut ConnectionPubSub,
-    args: &[Vec<u8>],
+    args: &[CompactArg],
 ) -> RespFrame {
     if args.len() < 2 {
         return wrong_args("PSUBSCRIBE");
@@ -146,7 +147,7 @@ fn psubscribe_command(
         pubsub_state.psubscribe(hub, pattern, push_tx);
         responses.push(RespFrame::Array(Some(vec![
             RespFrame::Bulk(Some(BulkData::from_vec(b"psubscribe".to_vec()))),
-            RespFrame::Bulk(Some(BulkData::from_vec(pattern.clone()))),
+            RespFrame::Bulk(Some(BulkData::Arg(pattern.clone()))),
             RespFrame::Integer(pubsub_state.subscription_count()),
         ])));
     }
@@ -156,14 +157,14 @@ fn psubscribe_command(
 fn punsubscribe_command(
     hub: &PubSubHub,
     pubsub_state: &mut ConnectionPubSub,
-    args: &[Vec<u8>],
+    args: &[CompactArg],
 ) -> RespFrame {
     let patterns = if args.len() == 1 {
         let existing = pubsub_state.punsubscribe_all(hub);
         if existing.is_empty() {
-            vec![Vec::new()]
+            vec![CompactArg::from_vec(Vec::new())]
         } else {
-            existing
+            existing.into_iter().map(CompactArg::from_vec).collect()
         }
     } else {
         let mut out = Vec::with_capacity(args.len() - 1);
@@ -181,7 +182,7 @@ fn punsubscribe_command(
             if pattern.is_empty() {
                 RespFrame::Bulk(None)
             } else {
-                RespFrame::Bulk(Some(BulkData::from_vec(pattern)))
+                RespFrame::Bulk(Some(BulkData::Arg(pattern)))
             },
             RespFrame::Integer(pubsub_state.subscription_count()),
         ])));
@@ -190,7 +191,7 @@ fn punsubscribe_command(
     collapse_pubsub_responses(responses)
 }
 
-fn pubsub_command(hub: &PubSubHub, args: &[Vec<u8>]) -> RespFrame {
+fn pubsub_command(hub: &PubSubHub, args: &[CompactArg]) -> RespFrame {
     if args.len() < 2 {
         return wrong_args("PUBSUB");
     }
@@ -214,7 +215,10 @@ fn pubsub_command(hub: &PubSubHub, args: &[Vec<u8>]) -> RespFrame {
     }
 
     if subcommand.eq_ignore_ascii_case(b"NUMSUB") {
-        let channels = args[2..].to_vec();
+        let channels = args[2..]
+            .iter()
+            .map(|channel| channel.to_vec())
+            .collect::<Vec<_>>();
         let counts = hub.pubsub_numsub(&channels);
         let mut response = Vec::with_capacity(counts.len() * 2);
         for (channel, count) in counts {
@@ -234,7 +238,7 @@ fn pubsub_command(hub: &PubSubHub, args: &[Vec<u8>]) -> RespFrame {
     RespFrame::Error("ERR Unknown PUBSUB subcommand".to_string())
 }
 
-fn config_command(hub: &PubSubHub, args: &[Vec<u8>]) -> RespFrame {
+fn config_command(hub: &PubSubHub, args: &[CompactArg]) -> RespFrame {
     if args.len() < 2 {
         return wrong_args("CONFIG");
     }

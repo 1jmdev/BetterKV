@@ -1,3 +1,4 @@
+use crate::engine::value::CompactArg;
 use crate::protocol::types::RespFrame;
 
 use super::super::pubsub::PubSubHub;
@@ -5,7 +6,7 @@ use super::super::pubsub::PubSubHub;
 pub(super) fn emit_command_notifications(
     hub: &PubSubHub,
     command: &[u8],
-    args: &[Vec<u8>],
+    args: &[CompactArg],
     response: &RespFrame,
 ) {
     let Some((event, class, keys)) = keyspace_event_for_command(command, args, response) else {
@@ -19,7 +20,7 @@ pub(super) fn emit_command_notifications(
 
 fn keyspace_event_for_command<'a>(
     command: &[u8],
-    args: &'a [Vec<u8>],
+    args: &'a [CompactArg],
     response: &RespFrame,
 ) -> Option<(&'static [u8], u8, Vec<&'a [u8]>)> {
     let ok = !matches!(response, RespFrame::Error(_));
@@ -45,7 +46,7 @@ fn keyspace_event_for_command<'a>(
                 .iter()
                 .skip(1)
                 .step_by(2)
-                .map(Vec::as_slice)
+                .map(CompactArg::as_slice)
                 .collect::<Vec<_>>();
             return Some((b"set", b'$', keys));
         }
@@ -56,7 +57,11 @@ fn keyspace_event_for_command<'a>(
         if matches!(response, RespFrame::Integer(value) if *value <= 0) {
             return None;
         }
-        let keys = args.iter().skip(1).map(Vec::as_slice).collect::<Vec<_>>();
+        let keys = args
+            .iter()
+            .skip(1)
+            .map(CompactArg::as_slice)
+            .collect::<Vec<_>>();
         return Some((b"del", b'g', keys));
     }
 

@@ -24,9 +24,37 @@ fn sorted_by_score(map: &ZSetValueMap, reverse: bool) -> Vec<(CompactKey, f64)> 
     items
 }
 
+fn sorted_by_score_refs(map: &ZSetValueMap, reverse: bool) -> Vec<(&CompactKey, f64)> {
+    let mut items: Vec<_> = map.iter().map(|(member, score)| (member, *score)).collect();
+    items.sort_by(|left, right| compare_member_score_ref(left, right, reverse));
+    items
+}
+
 fn compare_member_score(
     left: &(CompactKey, f64),
     right: &(CompactKey, f64),
+    reverse: bool,
+) -> std::cmp::Ordering {
+    let score_order = left.1.total_cmp(&right.1);
+    let score_order = if reverse {
+        score_order.reverse()
+    } else {
+        score_order
+    };
+    if score_order == std::cmp::Ordering::Equal {
+        if reverse {
+            right.0.as_slice().cmp(left.0.as_slice())
+        } else {
+            left.0.as_slice().cmp(right.0.as_slice())
+        }
+    } else {
+        score_order
+    }
+}
+
+fn compare_member_score_ref(
+    left: &(&CompactKey, f64),
+    right: &(&CompactKey, f64),
     reverse: bool,
 ) -> std::cmp::Ordering {
     let score_order = left.1.total_cmp(&right.1);

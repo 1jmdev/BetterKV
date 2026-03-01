@@ -3,7 +3,7 @@ use crate::engine::value::CompactKey;
 
 use super::super::helpers::{monotonic_now_ms, purge_if_expired};
 use super::super::pattern::wildcard_match;
-use super::{get_zset, sorted_by_score};
+use super::{get_zset, sorted_by_score_refs};
 
 impl Store {
     pub fn zscan(
@@ -24,7 +24,7 @@ impl Store {
             return Ok((0, Vec::new()));
         };
         let zset = get_zset(entry).ok_or(())?;
-        let ordered = sorted_by_score(zset, false);
+        let ordered = sorted_by_score_refs(zset, false);
         if ordered.is_empty() {
             return Ok((0, Vec::new()));
         }
@@ -37,7 +37,7 @@ impl Store {
         while index < ordered.len() && out.len() < target {
             let item = &ordered[index];
             if pattern.is_none_or(|matcher| wildcard_match(matcher, item.0.as_slice())) {
-                out.push(item.clone());
+                out.push((item.0.clone(), item.1));
             }
             index += 1;
         }

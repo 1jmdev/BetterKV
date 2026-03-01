@@ -110,7 +110,7 @@ impl Store {
             let expired_keys: Vec<_> = guard
                 .ttl
                 .iter()
-                .filter_map(|(key, &deadline)| (deadline <= now_ms).then(|| key.to_vec()))
+                .filter_map(|(key, &deadline)| (deadline <= now_ms).then_some(key.clone()))
                 .collect();
 
             for key in expired_keys {

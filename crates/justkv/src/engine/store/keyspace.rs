@@ -1,8 +1,8 @@
 use std::collections::VecDeque;
 
+use super::Store;
 use super::helpers::{monotonic_now_ms, purge_if_expired};
 use super::pattern::wildcard_match;
-use super::Store;
 use crate::engine::value::{CompactKey, CompactValue, Entry};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -247,7 +247,7 @@ impl Store {
         value_type: Option<&[u8]>,
     ) -> (u64, Vec<CompactKey>) {
         let now_ms = monotonic_now_ms();
-        let mut all = Vec::new();
+        let mut all: Vec<CompactKey> = Vec::new();
         for shard in self.shards.iter() {
             let guard = shard.read();
             for (key, entry) in guard.entries.iter() {
@@ -276,15 +276,12 @@ impl Store {
             return (0, Vec::new());
         }
 
-        let mut index = usize::try_from(cursor).unwrap_or(usize::MAX).min(all.len());
         let target = count.max(1);
-        let mut out = Vec::with_capacity(target);
-        while index < all.len() && out.len() < target {
-            out.push(all[index].clone());
-            index += 1;
-        }
-
-        let next = if index >= all.len() { 0 } else { index as u64 };
+        let total_len = all.len();
+        let index = usize::try_from(cursor).unwrap_or(usize::MAX).min(total_len);
+        let out: Vec<CompactKey> = all.into_iter().skip(index).take(target).collect();
+        let index = index.saturating_add(out.len());
+        let next = if index >= total_len { 0 } else { index as u64 };
         (next, out)
     }
 
@@ -400,16 +397,14 @@ impl Store {
     fn store_sorted_list(&self, destination: &[u8], values: Vec<Vec<u8>>) -> i64 {
         let idx = self.shard_index(destination);
         let mut shard = self.shards[idx].write();
-        let list: VecDeque<CompactValue> = values
-            .iter()
-            .map(|value| CompactValue::from_vec(value.clone()))
-            .collect();
+        let len = values.len() as i64;
+        let list: VecDeque<CompactValue> = values.into_iter().map(CompactValue::from_vec).collect();
         let key = CompactKey::from_slice(destination);
         shard
             .entries
             .insert(key.clone(), Entry::List(Box::new(list)));
         shard.ttl.remove(key.as_slice());
-        values.len() as i64
+        len
     }
 
     pub fn flushdb(&self) -> i64 {
@@ -486,7 +481,8 @@ fn deserialize_entry(payload: &[u8]) -> Option<Entry> {
         }
         1 => {
             let count = read_u32(&mut input)? as usize;
-            let mut map = hashbrown::HashMap::with_hasher(ahash::RandomState::new());
+            let mut map: hashbrown::HashMap<CompactKey, CompactValue, ahash::RandomState> =
+                hashbrown::HashMap::with_capacity_and_hasher(count, ahash::RandomState::new());
             for _ in 0..count {
                 let field = CompactKey::from_vec(read_bytes(&mut input)?);
                 let value = CompactValue::from_vec(read_bytes(&mut input)?);
@@ -510,7 +506,8 @@ fn deserialize_entry(payload: &[u8]) -> Option<Entry> {
         }
         3 => {
             let count = read_u32(&mut input)? as usize;
-            let mut set = hashbrown::HashSet::with_hasher(ahash::RandomState::new());
+            let mut set: hashbrown::HashSet<CompactKey, ahash::RandomState> =
+                hashbrown::HashSet::with_capacity_and_hasher(count, ahash::RandomState::new());
             for _ in 0..count {
                 set.insert(CompactKey::from_vec(read_bytes(&mut input)?));
             }
@@ -521,7 +518,8 @@ fn deserialize_entry(payload: &[u8]) -> Option<Entry> {
         }
         4 => {
             let count = read_u32(&mut input)? as usize;
-            let mut zset = hashbrown::HashMap::with_hasher(ahash::RandomState::new());
+            let mut zset: hashbrown::HashMap<CompactKey, f64, ahash::RandomState> =
+                hashbrown::HashMap::with_capacity_and_hasher(count, ahash::RandomState::new());
             for _ in 0..count {
                 let member = CompactKey::from_vec(read_bytes(&mut input)?);
                 if input.len() < 8 {
