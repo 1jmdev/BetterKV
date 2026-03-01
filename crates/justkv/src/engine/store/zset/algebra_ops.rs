@@ -4,7 +4,7 @@ use hashbrown::HashMap;
 use crate::engine::store::Store;
 use crate::engine::value::{CompactArg, CompactKey, ZSetValueMap};
 
-use super::super::helpers::{monotonic_now_ms, purge_if_expired};
+use super::super::helpers::{is_expired, monotonic_now_ms};
 use super::{get_zset, sorted_by_score};
 
 impl Store {
@@ -56,11 +56,11 @@ impl Store {
 
     fn zset_snapshots(&self, keys: &[CompactArg]) -> Result<Vec<ZSetValueMap>, ()> {
         let mut snapshots = Vec::with_capacity(keys.len());
+        let now_ms = monotonic_now_ms();
         for key in keys {
             let idx = self.shard_index(key.as_slice());
-            let mut shard = self.shards[idx].write();
-            let now_ms = monotonic_now_ms();
-            if purge_if_expired(&mut shard, key.as_slice(), now_ms) {
+            let shard = self.shards[idx].read();
+            if is_expired(&shard, key.as_slice(), now_ms) {
                 snapshots.push(HashMap::with_hasher(RandomState::new()));
                 continue;
             }

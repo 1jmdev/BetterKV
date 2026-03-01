@@ -1,7 +1,7 @@
 use crate::engine::store::Store;
 use crate::engine::value::{CompactArg, CompactKey, CompactValue, Entry};
 
-use super::super::helpers::{monotonic_now_ms, purge_if_expired};
+use super::super::helpers::{is_expired, monotonic_now_ms, purge_if_expired};
 use super::{collect_pairs, get_hash_map, get_hash_map_mut};
 
 impl Store {
@@ -52,9 +52,9 @@ impl Store {
 
     pub fn hget(&self, key: &[u8], field: &[u8]) -> Result<Option<CompactValue>, ()> {
         let idx = self.shard_index(key);
-        let mut shard = self.shards[idx].write();
+        let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
-        if purge_if_expired(&mut shard, key, now_ms) {
+        if is_expired(&shard, key, now_ms) {
             return Ok(None);
         }
 
@@ -71,9 +71,9 @@ impl Store {
         fields: &[CompactArg],
     ) -> Result<Vec<Option<CompactValue>>, ()> {
         let idx = self.shard_index(key);
-        let mut shard = self.shards[idx].write();
+        let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
-        if purge_if_expired(&mut shard, key, now_ms) {
+        if is_expired(&shard, key, now_ms) {
             return Ok(vec![None; fields.len()]);
         }
 
@@ -90,9 +90,9 @@ impl Store {
 
     pub fn hgetall(&self, key: &[u8]) -> Result<Vec<(CompactKey, CompactValue)>, ()> {
         let idx = self.shard_index(key);
-        let mut shard = self.shards[idx].write();
+        let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
-        if purge_if_expired(&mut shard, key, now_ms) {
+        if is_expired(&shard, key, now_ms) {
             return Ok(Vec::new());
         }
 
@@ -145,9 +145,9 @@ impl Store {
 
     pub fn hlen(&self, key: &[u8]) -> Result<i64, ()> {
         let idx = self.shard_index(key);
-        let mut shard = self.shards[idx].write();
+        let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
-        if purge_if_expired(&mut shard, key, now_ms) {
+        if is_expired(&shard, key, now_ms) {
             return Ok(0);
         }
 

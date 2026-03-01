@@ -4,7 +4,7 @@ use hashbrown::HashMap;
 use crate::engine::store::Store;
 use crate::engine::value::{CompactArg, CompactKey, Entry, ZSetValueMap};
 
-use super::super::helpers::{monotonic_now_ms, purge_if_expired};
+use super::super::helpers::{is_expired, monotonic_now_ms, purge_if_expired};
 use super::{get_zset, get_zset_mut, sorted_by_score};
 
 impl Store {
@@ -59,9 +59,9 @@ impl Store {
 
     pub fn zcard(&self, key: &[u8]) -> Result<i64, ()> {
         let idx = self.shard_index(key);
-        let mut shard = self.shards[idx].write();
+        let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
-        if purge_if_expired(&mut shard, key, now_ms) {
+        if is_expired(&shard, key, now_ms) {
             return Ok(0);
         }
 
@@ -77,9 +77,9 @@ impl Store {
             return Ok(0);
         }
         let idx = self.shard_index(key);
-        let mut shard = self.shards[idx].write();
+        let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
-        if purge_if_expired(&mut shard, key, now_ms) {
+        if is_expired(&shard, key, now_ms) {
             return Ok(0);
         }
 
@@ -95,9 +95,9 @@ impl Store {
 
     pub fn zscore(&self, key: &[u8], member: &[u8]) -> Result<Option<f64>, ()> {
         let idx = self.shard_index(key);
-        let mut shard = self.shards[idx].write();
+        let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
-        if purge_if_expired(&mut shard, key, now_ms) {
+        if is_expired(&shard, key, now_ms) {
             return Ok(None);
         }
 
@@ -130,9 +130,9 @@ impl Store {
 
     pub fn zmscore(&self, key: &[u8], members: &[CompactArg]) -> Result<Vec<Option<f64>>, ()> {
         let idx = self.shard_index(key);
-        let mut shard = self.shards[idx].write();
+        let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
-        if purge_if_expired(&mut shard, key, now_ms) {
+        if is_expired(&shard, key, now_ms) {
             return Ok(vec![None; members.len()]);
         }
 
@@ -148,9 +148,9 @@ impl Store {
 
     pub fn zrank(&self, key: &[u8], member: &[u8], reverse: bool) -> Result<Option<i64>, ()> {
         let idx = self.shard_index(key);
-        let mut shard = self.shards[idx].write();
+        let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
-        if purge_if_expired(&mut shard, key, now_ms) {
+        if is_expired(&shard, key, now_ms) {
             return Ok(None);
         }
 

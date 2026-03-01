@@ -1,7 +1,7 @@
 use crate::engine::store::Store;
-use crate::engine::value::CompactKey;
+use crate::engine::value::{CompactKey, Entry};
 
-use super::super::helpers::{monotonic_now_ms, purge_if_expired};
+use super::super::helpers::{is_expired, monotonic_now_ms, purge_if_expired};
 use super::{collect_members, get_set};
 
 impl Store {
@@ -13,10 +13,12 @@ impl Store {
             return Ok(None);
         }
 
-        let Some(entry) = shard.entries.get_mut(key) else {
+        let Some(entry) = shard.entries.get_mut::<[u8]>(key) else {
             return Ok(None);
         };
-        let set = entry.as_set_mut().ok_or(())?;
+        let Entry::Set(set) = entry else {
+            return Err(());
+        };
         if set.is_empty() {
             return Ok(None);
         }
@@ -37,7 +39,7 @@ impl Store {
         }
 
         if set.is_empty() {
-            shard.entries.remove(key);
+            shard.entries.remove::<[u8]>(key);
             shard.ttl.remove(key);
         }
         Ok(Some(out))
@@ -45,16 +47,18 @@ impl Store {
 
     pub fn srandmember(&self, key: &[u8], count: i64) -> Result<Option<Vec<CompactKey>>, ()> {
         let idx = self.shard_index(key);
-        let mut shard = self.shards[idx].write();
+        let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
-        if purge_if_expired(&mut shard, key, now_ms) {
+        if is_expired(&shard, key, now_ms) {
             return Ok(None);
         }
 
-        let Some(entry) = shard.entries.get(key) else {
+        let Some(entry) = shard.entries.get::<[u8]>(key) else {
             return Ok(None);
         };
-        let set = get_set(entry).ok_or(())?;
+        let Some(set) = get_set(entry) else {
+            return Err(());
+        };
         let members = collect_members(set);
         if members.is_empty() {
             return Ok(None);

@@ -1,8 +1,8 @@
 use std::collections::VecDeque;
 
-use super::Store;
-use super::helpers::{monotonic_now_ms, purge_if_expired};
+use super::helpers::{is_expired, monotonic_now_ms, purge_if_expired};
 use super::pattern::wildcard_match;
+use super::Store;
 use crate::engine::value::{CompactKey, CompactValue, Entry};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -287,9 +287,9 @@ impl Store {
 
     pub fn dump(&self, key: &[u8]) -> Option<Vec<u8>> {
         let idx = self.shard_index(key);
-        let mut shard = self.shards[idx].write();
+        let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
-        if purge_if_expired(&mut shard, key, now_ms) {
+        if is_expired(&shard, key, now_ms) {
             return None;
         }
         let entry = shard.entries.get(key)?;
@@ -330,11 +330,10 @@ impl Store {
 
     pub fn sort(&self, key: &[u8], options: &SortOptions) -> Result<SortResult, SortError> {
         let idx = self.shard_index(key);
-        let mut shard = self.shards[idx].write();
+        let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
-        if purge_if_expired(&mut shard, key, now_ms) {
+        if is_expired(&shard, key, now_ms) {
             if let Some(destination) = &options.store {
-                drop(shard);
                 return Ok(SortResult::Stored(
                     self.store_sorted_list(destination, Vec::new()),
                 ));
@@ -344,7 +343,6 @@ impl Store {
 
         let Some(entry) = shard.entries.get(key) else {
             if let Some(destination) = &options.store {
-                drop(shard);
                 return Ok(SortResult::Stored(
                     self.store_sorted_list(destination, Vec::new()),
                 ));
@@ -385,7 +383,6 @@ impl Store {
         }
 
         if let Some(destination) = &options.store {
-            drop(shard);
             return Ok(SortResult::Stored(
                 self.store_sorted_list(destination, values),
             ));

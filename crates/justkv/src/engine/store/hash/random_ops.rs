@@ -1,7 +1,7 @@
 use crate::engine::store::Store;
 use crate::engine::value::{CompactKey, CompactValue};
 
-use super::super::helpers::{monotonic_now_ms, purge_if_expired};
+use super::super::helpers::{is_expired, monotonic_now_ms};
 use super::{collect_pairs, get_hash_map};
 
 impl Store {
@@ -16,9 +16,9 @@ impl Store {
         count: i64,
     ) -> Result<Vec<(CompactKey, CompactValue)>, ()> {
         let idx = self.shard_index(key);
-        let mut shard = self.shards[idx].write();
+        let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
-        if purge_if_expired(&mut shard, key, now_ms) {
+        if is_expired(&shard, key, now_ms) {
             return Ok(Vec::new());
         }
 

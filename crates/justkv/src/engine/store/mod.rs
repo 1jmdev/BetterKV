@@ -123,6 +123,10 @@ impl Store {
         removed
     }
 
+    pub fn refresh_cached_time(&self) {
+        helpers::refresh_monotonic_now_ms();
+    }
+
     fn shard_index(&self, key: &[u8]) -> usize {
         let hash = self.hash_builder.hash_one(key);
         (hash as usize) & self.shard_mask

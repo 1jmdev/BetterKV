@@ -2,10 +2,11 @@ use std::time::Duration;
 
 use crate::engine::value::CompactKey;
 
-use super::Store;
 use super::helpers::{
-    deadline_from_ttl, monotonic_now_ms, purge_if_expired, remaining_ttl_ms, unix_time_ms,
+    deadline_from_ttl, is_expired, monotonic_now_ms, purge_if_expired, remaining_ttl_ms,
+    unix_time_ms,
 };
+use super::Store;
 
 impl Store {
     pub fn expire(&self, key: &[u8], seconds: u64) -> i64 {
@@ -65,14 +66,18 @@ impl Store {
 
     pub fn ttl(&self, key: &[u8]) -> i64 {
         let pttl = self.pttl(key);
-        if pttl < 0 { pttl } else { pttl / 1000 }
+        if pttl < 0 {
+            pttl
+        } else {
+            pttl / 1000
+        }
     }
 
     pub fn pttl(&self, key: &[u8]) -> i64 {
         let idx = self.shard_index(key);
-        let mut shard = self.shards[idx].write();
+        let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
-        if purge_if_expired(&mut shard, key, now_ms) {
+        if is_expired(&shard, key, now_ms) {
             return -2;
         }
 

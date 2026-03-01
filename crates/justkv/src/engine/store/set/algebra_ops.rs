@@ -1,7 +1,7 @@
 use crate::engine::store::Store;
 use crate::engine::value::{CompactArg, CompactKey, Entry, SetValue};
 
-use super::super::helpers::{monotonic_now_ms, purge_if_expired};
+use super::super::helpers::{is_expired, monotonic_now_ms, purge_if_expired};
 use super::{collect_members, get_set, new_set};
 
 impl Store {
@@ -63,19 +63,21 @@ impl Store {
 
     fn set_snapshots(&self, keys: &[CompactArg]) -> Result<Vec<SetValue>, ()> {
         let mut snapshots = Vec::with_capacity(keys.len());
+        let now_ms = monotonic_now_ms();
         for key in keys {
             let idx = self.shard_index(key.as_slice());
-            let mut shard = self.shards[idx].write();
-            let now_ms = monotonic_now_ms();
-            if purge_if_expired(&mut shard, key.as_slice(), now_ms) {
+            let shard = self.shards[idx].read();
+            if is_expired(&shard, key.as_slice(), now_ms) {
                 snapshots.push(new_set());
                 continue;
             }
 
-            match shard.entries.get(key.as_slice()) {
+            match shard.entries.get::<[u8]>(key.as_slice()) {
                 None => snapshots.push(new_set()),
                 Some(entry) => {
-                    let set = get_set(entry).ok_or(())?;
+                    let Some(set) = get_set(entry) else {
+                        return Err(());
+                    };
                     snapshots.push(set.clone());
                 }
             }
@@ -97,7 +99,7 @@ impl Store {
 
         if shard
             .entries
-            .get(destination)
+            .get::<[u8]>(destination)
             .is_some_and(|entry| entry.kind() != "set")
         {
             return Err(());
@@ -112,7 +114,7 @@ impl Store {
         shard.ttl.remove(destination);
         Ok(shard
             .entries
-            .get(destination)
+            .get::<[u8]>(destination)
             .and_then(|entry| entry.as_set())
             .map(|set| set.len() as i64)
             .unwrap_or(0))

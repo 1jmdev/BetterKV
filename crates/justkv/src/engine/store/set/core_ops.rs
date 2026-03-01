@@ -1,7 +1,7 @@
 use crate::engine::store::Store;
 use crate::engine::value::{CompactArg, CompactKey, Entry};
 
-use super::super::helpers::{monotonic_now_ms, purge_if_expired};
+use super::super::helpers::{is_expired, monotonic_now_ms, purge_if_expired};
 use super::{collect_members, get_set, get_set_mut, new_set};
 
 impl Store {
@@ -56,9 +56,9 @@ impl Store {
 
     pub fn smembers(&self, key: &[u8]) -> Result<Vec<CompactKey>, ()> {
         let idx = self.shard_index(key);
-        let mut shard = self.shards[idx].write();
+        let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
-        if purge_if_expired(&mut shard, key, now_ms) {
+        if is_expired(&shard, key, now_ms) {
             return Ok(Vec::new());
         }
 
@@ -71,9 +71,9 @@ impl Store {
 
     pub fn sismember(&self, key: &[u8], member: &[u8]) -> Result<i64, ()> {
         let idx = self.shard_index(key);
-        let mut shard = self.shards[idx].write();
+        let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
-        if purge_if_expired(&mut shard, key, now_ms) {
+        if is_expired(&shard, key, now_ms) {
             return Ok(0);
         }
 
@@ -86,9 +86,9 @@ impl Store {
 
     pub fn scard(&self, key: &[u8]) -> Result<i64, ()> {
         let idx = self.shard_index(key);
-        let mut shard = self.shards[idx].write();
+        let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
-        if purge_if_expired(&mut shard, key, now_ms) {
+        if is_expired(&shard, key, now_ms) {
             return Ok(0);
         }
 
