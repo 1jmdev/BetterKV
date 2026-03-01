@@ -235,8 +235,9 @@ impl Store {
 
         let entry = shard
             .entries
-            .entry(CompactKey::from_slice(key))
-            .or_insert_with(|| Entry::List(Box::new(std::collections::VecDeque::new())));
+            .get_or_insert_with(CompactKey::from_slice(key), || {
+                Entry::List(Box::new(std::collections::VecDeque::new()))
+            });
         let list = get_list_mut(entry).ok_or(())?;
 
         match side {

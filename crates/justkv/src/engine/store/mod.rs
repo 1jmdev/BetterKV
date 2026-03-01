@@ -3,6 +3,7 @@ mod helpers;
 mod keyspace;
 mod list;
 mod pattern;
+mod rehash;
 mod set;
 mod strings;
 mod ttl;
@@ -16,9 +17,10 @@ use ahash::RandomState;
 use hashbrown::HashMap;
 use parking_lot::RwLock;
 
+use self::rehash::RehashingMap;
 use crate::engine::value::{CompactKey, Entry};
 
-type StoreMap = HashMap<CompactKey, Entry, RandomState>;
+type StoreMap = RehashingMap<CompactKey, Entry>;
 type TtlMap = HashMap<CompactKey, u64, RandomState>;
 
 #[derive(Clone, Copy, Debug)]
@@ -71,7 +73,7 @@ pub(super) struct Shard {
 impl Shard {
     fn new() -> Self {
         Self {
-            entries: HashMap::with_hasher(RandomState::new()),
+            entries: RehashingMap::new(),
             ttl: HashMap::with_hasher(RandomState::new()),
         }
     }
@@ -88,6 +90,7 @@ impl Store {
     pub fn new(shards: usize) -> Self {
         let shard_count = shards.max(1).next_power_of_two();
         let mut shard_vec = Vec::with_capacity(shard_count);
+
         for _ in 0..shard_count {
             shard_vec.push(RwLock::new(Shard::new()));
         }

@@ -13,8 +13,7 @@ impl Store {
 
         let entry = shard
             .entries
-            .entry(CompactKey::from_slice(key))
-            .or_insert_with(Entry::empty_hash);
+            .get_or_insert_with(CompactKey::from_slice(key), Entry::empty_hash);
         let map = get_hash_map_mut(entry).ok_or(HashIntOpError::WrongType)?;
 
         let current = match map.get(field) {
@@ -48,8 +47,7 @@ impl Store {
 
         let entry = shard
             .entries
-            .entry(CompactKey::from_slice(key))
-            .or_insert_with(Entry::empty_hash);
+            .get_or_insert_with(CompactKey::from_slice(key), Entry::empty_hash);
         let map = get_hash_map_mut(entry).ok_or(HashFloatOpError::WrongType)?;
 
         let current = match map.get(field) {

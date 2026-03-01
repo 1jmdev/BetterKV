@@ -14,16 +14,16 @@ mod dispatch;
 mod notifications;
 mod util;
 
-const READ_BUFFER_CAPACITY: usize = 256 * 1024;
-const WRITE_BUFFER_CAPACITY: usize = 256 * 1024;
+const READ_BUFFER_INITIAL: usize = 4 * 1024;
+const WRITE_BUFFER_INITIAL: usize = 4 * 1024;
 
 pub async fn handle_connection(
     mut stream: TcpStream,
     store: Store,
     pubsub_hub: PubSubHub,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut read_buf = BytesMut::with_capacity(READ_BUFFER_CAPACITY);
-    let mut write_buf = BytesMut::with_capacity(WRITE_BUFFER_CAPACITY);
+    let mut read_buf = BytesMut::with_capacity(READ_BUFFER_INITIAL);
+    let mut write_buf = BytesMut::with_capacity(WRITE_BUFFER_INITIAL);
     let mut tx_state = TransactionState::default();
 
     let (push_tx, mut push_rx) = unbounded_channel::<RespFrame>();

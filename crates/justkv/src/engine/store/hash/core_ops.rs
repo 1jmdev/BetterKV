@@ -13,8 +13,7 @@ impl Store {
 
         let entry = shard
             .entries
-            .entry(CompactKey::from_slice(key))
-            .or_insert_with(Entry::empty_hash);
+            .get_or_insert_with(CompactKey::from_slice(key), Entry::empty_hash);
 
         let map = get_hash_map_mut(entry).ok_or(())?;
         let mut created = 0;
@@ -40,8 +39,7 @@ impl Store {
 
         let entry = shard
             .entries
-            .entry(CompactKey::from_slice(key))
-            .or_insert_with(Entry::empty_hash);
+            .get_or_insert_with(CompactKey::from_slice(key), Entry::empty_hash);
         let map = get_hash_map_mut(entry).ok_or(())?;
 
         let field_key = CompactKey::from_slice(field);
