@@ -12,6 +12,7 @@ parking_lot.workspace = true
 thiserror.workspace = true
 tikv-jemallocator.workspace = true
 tokio.workspace = true
+ryu.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

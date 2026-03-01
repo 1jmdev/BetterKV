@@ -1,4 +1,4 @@
-use crate::commands::util::{Args, eq_ascii, int_error, wrong_args, wrong_type};
+use crate::commands::util::{eq_ascii, f64_to_bytes, int_error, wrong_args, wrong_type, Args};
 use crate::engine::store::{HashFloatOpError, HashIntOpError, Store};
 use crate::protocol::types::{BulkData, RespFrame};
 
@@ -45,7 +45,7 @@ fn hincrbyfloat(store: &Store, args: &Args) -> RespFrame {
     };
 
     match store.hincrbyfloat(&args[1], &args[2], delta) {
-        Ok(value) => RespFrame::Bulk(Some(BulkData::from_vec(value.to_string().into_bytes()))),
+        Ok(value) => RespFrame::Bulk(Some(BulkData::from_vec(f64_to_bytes(value)))),
         Err(HashFloatOpError::WrongType) => wrong_type(),
         Err(HashFloatOpError::InvalidFloat) => {
             RespFrame::Error("ERR hash value is not a float".to_string())

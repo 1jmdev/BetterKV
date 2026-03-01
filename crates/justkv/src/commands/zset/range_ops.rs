@@ -1,4 +1,4 @@
-use crate::commands::util::{Args, eq_ascii, int_error, wrong_args, wrong_type};
+use crate::commands::util::{eq_ascii, f64_to_bytes, int_error, wrong_args, wrong_type, Args};
 use crate::engine::store::Store;
 use crate::protocol::types::{BulkData, RespFrame};
 
@@ -107,9 +107,9 @@ fn format_items(
         let mut out = Vec::with_capacity(items.len() * 2);
         for (member, score) in items {
             out.push(RespFrame::Bulk(Some(BulkData::Arg(member))));
-            out.push(RespFrame::Bulk(Some(BulkData::from_vec(
-                score.to_string().into_bytes(),
-            ))));
+            out.push(RespFrame::Bulk(Some(BulkData::from_vec(f64_to_bytes(
+                score,
+            )))));
         }
         out
     } else {

@@ -1,4 +1,6 @@
-use crate::commands::util::{Args, eq_ascii, int_error, wrong_args, wrong_type};
+use crate::commands::util::{
+    eq_ascii, f64_to_bytes, int_error, u64_to_bytes, wrong_args, wrong_type, Args,
+};
 use crate::engine::store::Store;
 use crate::protocol::types::{BulkData, RespFrame};
 
@@ -48,12 +50,12 @@ fn zscan(store: &Store, args: &Args) -> RespFrame {
             let mut payload = Vec::with_capacity(items.len() * 2);
             for (member, score) in items {
                 payload.push(RespFrame::Bulk(Some(BulkData::Arg(member))));
-                payload.push(RespFrame::Bulk(Some(BulkData::from_vec(
-                    score.to_string().into_bytes(),
-                ))));
+                payload.push(RespFrame::Bulk(Some(BulkData::from_vec(f64_to_bytes(
+                    score,
+                )))));
             }
             RespFrame::Array(Some(vec![
-                RespFrame::Bulk(Some(BulkData::from_vec(next.to_string().into_bytes()))),
+                RespFrame::Bulk(Some(BulkData::from_vec(u64_to_bytes(next)))),
                 RespFrame::Array(Some(payload)),
             ]))
         }

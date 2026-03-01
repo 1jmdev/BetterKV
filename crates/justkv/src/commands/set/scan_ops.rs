@@ -1,4 +1,4 @@
-use crate::commands::util::{Args, eq_ascii, int_error, wrong_args, wrong_type};
+use crate::commands::util::{eq_ascii, int_error, u64_to_bytes, wrong_args, wrong_type, Args};
 use crate::engine::store::Store;
 use crate::protocol::types::{BulkData, RespFrame};
 
@@ -45,7 +45,7 @@ fn sscan(store: &Store, args: &Args) -> RespFrame {
 
     match store.sscan(&args[1], cursor, pattern, count) {
         Ok((next, members)) => RespFrame::Array(Some(vec![
-            RespFrame::Bulk(Some(BulkData::from_vec(next.to_string().into_bytes()))),
+            RespFrame::Bulk(Some(BulkData::from_vec(u64_to_bytes(next)))),
             RespFrame::Array(Some(
                 members
                     .into_iter()

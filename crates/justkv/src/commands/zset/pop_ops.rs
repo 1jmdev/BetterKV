@@ -1,4 +1,4 @@
-use crate::commands::util::{Args, eq_ascii, int_error, wrong_args, wrong_type};
+use crate::commands::util::{eq_ascii, f64_to_bytes, int_error, wrong_args, wrong_type, Args};
 use crate::engine::store::Store;
 use crate::protocol::types::{BulkData, RespFrame};
 
@@ -60,7 +60,7 @@ fn bzpop(store: &Store, args: &Args, max: bool) -> RespFrame {
         Ok(Some((key, member, score))) => RespFrame::Array(Some(vec![
             RespFrame::Bulk(Some(BulkData::Arg(key))),
             RespFrame::Bulk(Some(BulkData::Arg(member))),
-            RespFrame::Bulk(Some(BulkData::from_vec(score.to_string().into_bytes()))),
+            RespFrame::Bulk(Some(BulkData::from_vec(f64_to_bytes(score)))),
         ])),
         Ok(None) => RespFrame::Bulk(None),
         Err(_) => wrong_type(),
@@ -182,9 +182,9 @@ fn flatten_member_scores(items: Vec<(crate::engine::value::CompactKey, f64)>) ->
     let mut out = Vec::with_capacity(items.len() * 2);
     for (member, score) in items {
         out.push(RespFrame::Bulk(Some(BulkData::Arg(member))));
-        out.push(RespFrame::Bulk(Some(BulkData::from_vec(
-            score.to_string().into_bytes(),
-        ))));
+        out.push(RespFrame::Bulk(Some(BulkData::from_vec(f64_to_bytes(
+            score,
+        )))));
     }
     out
 }
@@ -195,7 +195,7 @@ fn items_to_pairs(items: Vec<(crate::engine::value::CompactKey, f64)>) -> Vec<Re
         .map(|(member, score)| {
             RespFrame::Array(Some(vec![
                 RespFrame::Bulk(Some(BulkData::Arg(member))),
-                RespFrame::Bulk(Some(BulkData::from_vec(score.to_string().into_bytes()))),
+                RespFrame::Bulk(Some(BulkData::from_vec(f64_to_bytes(score)))),
             ]))
         })
         .collect()

@@ -1,4 +1,4 @@
-use crate::commands::util::{Args, eq_ascii, int_error, wrong_args, wrong_type};
+use crate::commands::util::{eq_ascii, f64_to_bytes, int_error, wrong_args, wrong_type, Args};
 use crate::engine::store::Store;
 use crate::protocol::types::{BulkData, RespFrame};
 
@@ -40,9 +40,7 @@ fn zrandmember(store: &Store, args: &Args) -> RespFrame {
                         .flat_map(|(member, score)| {
                             [
                                 RespFrame::Bulk(Some(BulkData::Arg(member))),
-                                RespFrame::Bulk(Some(BulkData::from_vec(
-                                    score.to_string().into_bytes(),
-                                ))),
+                                RespFrame::Bulk(Some(BulkData::from_vec(f64_to_bytes(score)))),
                             ]
                         })
                         .collect(),

@@ -1,4 +1,4 @@
-use crate::commands::util::{Args, eq_ascii, wrong_args, wrong_type};
+use crate::commands::util::{eq_ascii, f64_to_bytes, wrong_args, wrong_type, Args};
 use crate::engine::store::Store;
 use crate::protocol::types::{BulkData, RespFrame};
 
@@ -96,9 +96,7 @@ fn zscore(store: &Store, args: &Args) -> RespFrame {
         return wrong_args("ZSCORE");
     }
     match store.zscore(&args[1], &args[2]) {
-        Ok(Some(score)) => {
-            RespFrame::Bulk(Some(BulkData::from_vec(score.to_string().into_bytes())))
-        }
+        Ok(Some(score)) => RespFrame::Bulk(Some(BulkData::from_vec(f64_to_bytes(score)))),
         Ok(None) => RespFrame::Bulk(None),
         Err(_) => wrong_type(),
     }
@@ -124,7 +122,7 @@ fn zincrby(store: &Store, args: &Args) -> RespFrame {
         Err(response) => return response,
     };
     match store.zincrby(&args[1], increment, &args[3]) {
-        Ok(score) => RespFrame::Bulk(Some(BulkData::from_vec(score.to_string().into_bytes()))),
+        Ok(score) => RespFrame::Bulk(Some(BulkData::from_vec(f64_to_bytes(score)))),
         Err(_) => wrong_type(),
     }
 }
@@ -138,9 +136,7 @@ fn zmscore(store: &Store, args: &Args) -> RespFrame {
             scores
                 .into_iter()
                 .map(|score| {
-                    RespFrame::Bulk(
-                        score.map(|value| BulkData::from_vec(value.to_string().into_bytes())),
-                    )
+                    RespFrame::Bulk(score.map(|value| BulkData::from_vec(f64_to_bytes(value))))
                 })
                 .collect(),
         )),

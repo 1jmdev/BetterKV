@@ -1,4 +1,4 @@
-use crate::commands::util::{eq_ascii, int_error, wrong_args, wrong_type, Args};
+use crate::commands::util::{eq_ascii, int_error, u64_to_bytes, wrong_args, wrong_type, Args};
 use crate::engine::store::{RestoreError, SortError, SortOptions, SortOrder, SortResult, Store};
 use crate::protocol::types::{BulkData, RespFrame};
 
@@ -178,7 +178,7 @@ fn scan(store: &Store, args: &Args) -> RespFrame {
 
     let (next, keys) = store.scan(cursor, pattern, count, value_type);
     RespFrame::Array(Some(vec![
-        RespFrame::Bulk(Some(BulkData::from_vec(next.to_string().into_bytes()))),
+        RespFrame::Bulk(Some(BulkData::from_vec(u64_to_bytes(next)))),
         RespFrame::Array(Some(
             keys.into_iter()
                 .map(|key| RespFrame::Bulk(Some(BulkData::Arg(key))))
