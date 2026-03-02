@@ -2,139 +2,113 @@ use crate::commands::geo::parse::{
     parse_distance_unit, parse_f64, parse_search_options, SearchOptions, SortOrder,
 };
 use crate::commands::util::{f64_to_bytes, wrong_args, wrong_type, Args};
-use crate::engine::store::Store;
+use crate::engine::store::{GeoSearchMatch, Store};
 use crate::protocol::types::{BulkData, RespFrame};
 
 pub(crate) fn geosearch(store: &Store, args: &Args) -> RespFrame {
-    if args.len() < 8 {
+    if args.len() < 7 {
         return wrong_args("GEOSEARCH");
     }
-    if !args[2].eq_ignore_ascii_case(b"FROMLONLAT") {
-        return RespFrame::Error("ERR syntax error".to_string());
-    }
 
-    let lon = match parse_f64(&args[3]) {
+    let (center, shape_index) = if args[2].eq_ignore_ascii_case(b"FROMLONLAT") {
+        let lon = match parse_f64(&args[3]) {
+            Ok(value) => value,
+            Err(response) => return response,
+        };
+        let lat = match parse_f64(&args[4]) {
+            Ok(value) => value,
+            Err(response) => return response,
+        };
+        ((lon, lat), 5)
+    } else if args[2].eq_ignore_ascii_case(b"FROMMEMBER") {
+        let center = match super::parse::geosearch_center_from_member(store, &args[1], &args[3]) {
+            Ok(Some(value)) => value,
+            Ok(None) => return RespFrame::Array(Some(vec![])),
+            Err(response) => return response,
+        };
+        (center, 4)
+    } else {
+        return RespFrame::Error("ERR syntax error".to_string());
+    };
+
+    let (radius, box_size, index) = match parse_shape(args, shape_index) {
         Ok(value) => value,
         Err(response) => return response,
     };
-    let lat = match parse_f64(&args[4]) {
+    let options = match parse_search_options(args, index) {
         Ok(value) => value,
         Err(response) => return response,
     };
-    run_geosearch(store, &args[1], (lon, lat), &args[5..])
+
+    run_search(store, &args[1], center, radius, box_size, options)
 }
 
 pub(crate) fn geosearchstore(store: &Store, args: &Args) -> RespFrame {
-    if args.len() < 10 {
+    if args.len() < 9 {
         return wrong_args("GEOSEARCHSTORE");
     }
 
-    let destination = &args[1];
-    let source = &args[2];
-    if !args[3].eq_ignore_ascii_case(b"FROMLONLAT") {
+    let (center, shape_index) = if args[3].eq_ignore_ascii_case(b"FROMLONLAT") {
+        let lon = match parse_f64(&args[4]) {
+            Ok(value) => value,
+            Err(response) => return response,
+        };
+        let lat = match parse_f64(&args[5]) {
+            Ok(value) => value,
+            Err(response) => return response,
+        };
+        ((lon, lat), 6)
+    } else if args[3].eq_ignore_ascii_case(b"FROMMEMBER") {
+        let center = match super::parse::geosearch_center_from_member(store, &args[2], &args[4]) {
+            Ok(Some(value)) => value,
+            Ok(None) => return RespFrame::Integer(0),
+            Err(response) => return response,
+        };
+        (center, 5)
+    } else {
         return RespFrame::Error("ERR syntax error".to_string());
-    }
-
-    let lon = match parse_f64(&args[4]) {
-        Ok(value) => value,
-        Err(response) => return response,
     };
-    let lat = match parse_f64(&args[5]) {
+
+    let (radius, box_size, mut index) = match parse_shape(args, shape_index) {
         Ok(value) => value,
         Err(response) => return response,
     };
 
-    let mut options = match parse_geo_byargs(&args[6..]) {
-        Ok(value) => value,
-        Err(response) => return response,
-    };
-
-    let store_dist = options.storedist.take().is_some();
-    if options.store.is_none() && !store_dist {
-        options.store = Some(destination.to_vec());
+    let mut options = SearchOptions::new();
+    let mut store_dist = false;
+    while index < args.len() {
+        let token = args[index].as_slice();
+        if token.eq_ignore_ascii_case(b"ASC") {
+            options.sort = Some(SortOrder::Asc);
+            index += 1;
+        } else if token.eq_ignore_ascii_case(b"DESC") {
+            options.sort = Some(SortOrder::Desc);
+            index += 1;
+        } else if token.eq_ignore_ascii_case(b"COUNT") {
+            if index + 1 >= args.len() {
+                return RespFrame::Error("ERR syntax error".to_string());
+            }
+            options.count = match super::parse::parse_usize(&args[index + 1]) {
+                Ok(value) => Some(value),
+                Err(response) => return response,
+            };
+            index += 2;
+            if index < args.len() && args[index].eq_ignore_ascii_case(b"ANY") {
+                options.any = true;
+                index += 1;
+            }
+        } else if token.eq_ignore_ascii_case(b"STOREDIST") {
+            store_dist = true;
+            index += 1;
+        } else {
+            return RespFrame::Error("ERR syntax error".to_string());
+        }
     }
-
-    run_store_search(store, destination, source, (lon, lat), options, store_dist)
-}
-
-pub(crate) fn run_radius_search(
-    store: &Store,
-    key: &[u8],
-    center: (f64, f64),
-    radius_meters: f64,
-    options: SearchOptions,
-) -> RespFrame {
-    if let Some(destination) = options.store.clone().or(options.storedist.clone()) {
-        return run_store_search(
-            store,
-            &destination,
-            key,
-            center,
-            options,
-            destination == options.storedist.unwrap_or_default(),
-        );
-    }
-
-    let ascending = !matches!(options.sort, Some(SortOrder::Desc));
-    match store.geosearch(
-        key,
-        center,
-        Some(radius_meters),
-        None,
-        ascending,
-        options.count,
-    ) {
-        Ok(matches) => format_matches(matches, options),
-        Err(_) => wrong_type(),
-    }
-}
-
-fn run_geosearch(
-    store: &Store,
-    key: &[u8],
-    center: (f64, f64),
-    args: &[crate::engine::value::CompactArg],
-) -> RespFrame {
-    let (radius, box_size, options) = match parse_shape_and_options(args) {
-        Ok(value) => value,
-        Err(response) => return response,
-    };
-
-    if let Some(destination) = options.store.clone().or(options.storedist.clone()) {
-        return run_store_search(
-            store,
-            &destination,
-            key,
-            center,
-            options,
-            destination == options.storedist.unwrap_or_default(),
-        );
-    }
-
-    let ascending = !matches!(options.sort, Some(SortOrder::Desc));
-    match store.geosearch(key, center, radius, box_size, ascending, options.count) {
-        Ok(matches) => format_matches(matches, options),
-        Err(_) => wrong_type(),
-    }
-}
-
-fn run_store_search(
-    store: &Store,
-    destination: &[u8],
-    source: &[u8],
-    center: (f64, f64),
-    options: SearchOptions,
-    store_dist: bool,
-) -> RespFrame {
-    let (radius, box_size) = match shape_from_options(&options) {
-        Some(value) => value,
-        None => return RespFrame::Error("ERR syntax error".to_string()),
-    };
 
     let ascending = !matches!(options.sort, Some(SortOrder::Desc));
     match store.geosearchstore(
-        destination,
-        source,
+        &args[1],
+        &args[2],
         center,
         radius,
         box_size,
@@ -147,78 +121,117 @@ fn run_store_search(
     }
 }
 
-fn parse_geo_byargs(args: &[crate::engine::value::CompactArg]) -> Result<SearchOptions, RespFrame> {
-    let (_, _, mut options) = parse_shape_and_options(args)?;
-    options.withcoord = false;
-    options.withdist = false;
-    options.withhash = false;
-    Ok(options)
+pub(crate) fn run_radius_search(
+    store: &Store,
+    key: &[u8],
+    center: (f64, f64),
+    radius_meters: f64,
+    options: SearchOptions,
+) -> RespFrame {
+    run_search(store, key, center, Some(radius_meters), None, options)
 }
 
-fn parse_shape_and_options(
-    args: &[crate::engine::value::CompactArg],
-) -> Result<(Option<f64>, Option<(f64, f64)>, SearchOptions), RespFrame> {
-    if args.len() < 3 {
-        return Err(RespFrame::Error("ERR syntax error".to_string()));
+fn run_search(
+    store: &Store,
+    key: &[u8],
+    center: (f64, f64),
+    radius: Option<f64>,
+    box_size: Option<(f64, f64)>,
+    options: SearchOptions,
+) -> RespFrame {
+    if let Some(destination) = options.storedist.clone() {
+        let ascending = !matches!(options.sort, Some(SortOrder::Desc));
+        return match store.geosearchstore(
+            &destination,
+            key,
+            center,
+            radius,
+            box_size,
+            ascending,
+            options.count,
+            true,
+        ) {
+            Ok(value) => RespFrame::Integer(value),
+            Err(_) => wrong_type(),
+        };
+    }
+    if let Some(destination) = options.store.clone() {
+        let ascending = !matches!(options.sort, Some(SortOrder::Desc));
+        return match store.geosearchstore(
+            &destination,
+            key,
+            center,
+            radius,
+            box_size,
+            ascending,
+            options.count,
+            false,
+        ) {
+            Ok(value) => RespFrame::Integer(value),
+            Err(_) => wrong_type(),
+        };
     }
 
-    let mut radius = None;
-    let mut box_size = None;
-    let mut index = 0usize;
+    let ascending = !matches!(options.sort, Some(SortOrder::Desc));
+    match store.geosearch(key, center, radius, box_size, ascending, options.count) {
+        Ok(matches) => format_matches(matches, options),
+        Err(_) => wrong_type(),
+    }
+}
+
+fn parse_shape(
+    args: &Args,
+    index: usize,
+) -> Result<(Option<f64>, Option<(f64, f64)>, usize), RespFrame> {
+    if index >= args.len() {
+        return Err(RespFrame::Error("ERR syntax error".to_string()));
+    }
     if args[index].eq_ignore_ascii_case(b"BYRADIUS") {
+        if index + 2 >= args.len() {
+            return Err(RespFrame::Error("ERR syntax error".to_string()));
+        }
         let value = parse_f64(&args[index + 1])?;
         let unit = parse_distance_unit(&args[index + 2])?;
-        radius = Some(value * unit);
-        index += 3;
-    } else if args[index].eq_ignore_ascii_case(b"BYBOX") {
+        return Ok((Some(value * unit), None, index + 3));
+    }
+    if args[index].eq_ignore_ascii_case(b"BYBOX") {
+        if index + 3 >= args.len() {
+            return Err(RespFrame::Error("ERR syntax error".to_string()));
+        }
         let width = parse_f64(&args[index + 1])?;
         let height = parse_f64(&args[index + 2])?;
         let unit = parse_distance_unit(&args[index + 3])?;
-        box_size = Some((width * unit, height * unit));
-        index += 4;
-    } else {
-        return Err(RespFrame::Error("ERR syntax error".to_string()));
+        return Ok((None, Some((width * unit, height * unit)), index + 4));
     }
-
-    let options = parse_search_options(args, index)?;
-    Ok((radius, box_size, options))
+    Err(RespFrame::Error("ERR syntax error".to_string()))
 }
 
-fn shape_from_options(options: &SearchOptions) -> Option<(Option<f64>, Option<(f64, f64)>)> {
-    if options.withcoord || options.withdist || options.withhash || options.any {
-        return Some((None, None));
-    }
-    Some((None, None))
-}
+fn format_matches(matches: Vec<GeoSearchMatch>, options: SearchOptions) -> RespFrame {
+    RespFrame::Array(Some(
+        matches
+            .into_iter()
+            .map(|entry| {
+                if !options.withcoord && !options.withdist && !options.withhash {
+                    return RespFrame::Bulk(Some(BulkData::Arg(entry.member)));
+                }
 
-fn format_matches(
-    matches: Vec<crate::engine::store::geo::GeoSearchMatch>,
-    options: SearchOptions,
-) -> RespFrame {
-    let out = matches
-        .into_iter()
-        .map(|entry| {
-            if !options.withcoord && !options.withdist && !options.withhash {
-                return RespFrame::Bulk(Some(BulkData::Arg(entry.member)));
-            }
-
-            let mut item = vec![RespFrame::Bulk(Some(BulkData::Arg(entry.member)))];
-            if options.withdist {
-                item.push(RespFrame::Bulk(Some(BulkData::from_vec(f64_to_bytes(
-                    entry.distance_meters.unwrap_or(0.0),
-                )))));
-            }
-            if options.withhash {
-                item.push(RespFrame::Integer(0));
-            }
-            if options.withcoord {
-                item.push(RespFrame::Array(Some(vec![
-                    RespFrame::Bulk(Some(BulkData::from_vec(f64_to_bytes(entry.longitude)))),
-                    RespFrame::Bulk(Some(BulkData::from_vec(f64_to_bytes(entry.latitude)))),
-                ])));
-            }
-            RespFrame::Array(Some(item))
-        })
-        .collect();
-    RespFrame::Array(Some(out))
+                let mut item = vec![RespFrame::Bulk(Some(BulkData::Arg(entry.member)))];
+                if options.withdist {
+                    item.push(RespFrame::Bulk(Some(BulkData::from_vec(f64_to_bytes(
+                        entry.distance_meters.unwrap_or(0.0),
+                    )))));
+                }
+                if options.withhash {
+                    item.push(RespFrame::Integer(0));
+                }
+                if options.withcoord {
+                    item.push(RespFrame::Array(Some(vec![
+                        RespFrame::Bulk(Some(BulkData::from_vec(f64_to_bytes(entry.longitude)))),
+                        RespFrame::Bulk(Some(BulkData::from_vec(f64_to_bytes(entry.latitude)))),
+                    ])));
+                }
+                RespFrame::Array(Some(item))
+            })
+            .collect(),
+    ))
 }

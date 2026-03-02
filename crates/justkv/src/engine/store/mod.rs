@@ -12,6 +12,8 @@ mod ttl;
 mod zset;
 
 pub use keyspace::{RestoreError, SortError, SortOptions, SortOrder, SortResult};
+pub use geo::GeoSearchMatch;
+pub use stream::{StreamRangeItem, XPendingSummary};
 
 use std::collections::BTreeSet;
 use std::sync::Arc;

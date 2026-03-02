@@ -1,8 +1,7 @@
 use crate::commands::stream::parse::{parse_count, parse_stream_id, stream_id_to_bulk};
 use crate::commands::util::{wrong_args, wrong_type, Args};
-use crate::engine::store::stream::StreamRangeItem;
-use crate::engine::store::Store;
-use crate::engine::value::{CompactArg, StreamId};
+use crate::engine::store::{Store, StreamRangeItem};
+use crate::engine::value::StreamId;
 use crate::protocol::types::{BulkData, RespFrame};
 
 pub(crate) fn xrange(store: &Store, args: &Args) -> RespFrame {
@@ -81,7 +80,7 @@ pub(crate) fn xread(store: &Store, args: &Args) -> RespFrame {
     for offset in 0..stream_count {
         let key = args[index + offset].clone();
         let raw_id = &args[index + stream_count + offset];
-        let id = if raw_id == b"$" {
+        let id = if raw_id.as_slice() == b"$" {
             StreamId {
                 ms: u64::MAX,
                 seq: u64::MAX,

@@ -88,7 +88,7 @@ pub(crate) fn xtrim(store: &Store, args: &Args) -> RespFrame {
     };
 
     let mut index = 3;
-    if args[index] == b"~" || args[index] == b"=" {
+    if args[index].as_slice() == b"~" || args[index].as_slice() == b"=" {
         index += 1;
     }
     if index >= args.len() {

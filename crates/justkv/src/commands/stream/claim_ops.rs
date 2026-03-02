@@ -46,7 +46,7 @@ pub(crate) fn xreadgroup(store: &Store, args: &Args) -> RespFrame {
     for offset in 0..stream_count {
         let key = args[index + offset].clone();
         let raw = &args[index + stream_count + offset];
-        let id = if raw == b">" {
+        let id = if raw.as_slice() == b">" {
             StreamId {
                 ms: u64::MAX,
                 seq: u64::MAX,

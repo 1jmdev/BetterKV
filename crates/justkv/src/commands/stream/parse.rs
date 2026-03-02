@@ -73,7 +73,7 @@ pub(super) fn parse_xtrim_args(
     if index >= args.len() {
         return Err(RespFrame::Error("ERR syntax error".to_string()));
     }
-    if args[index] == b"~" || args[index] == b"=" {
+    if args[index].as_slice() == b"~" || args[index].as_slice() == b"=" {
         index += 1;
     }
     if index >= args.len() {

@@ -1,8 +1,8 @@
 use std::collections::VecDeque;
 
-use super::Store;
 use super::helpers::{is_expired, monotonic_now_ms, purge_if_expired};
 use super::pattern::wildcard_match;
+use super::Store;
 use crate::engine::value::{CompactKey, CompactValue, Entry};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -360,7 +360,10 @@ impl Store {
                 .iter_member_scores()
                 .map(|(member, _)| member.to_vec())
                 .collect::<Vec<_>>(),
-            Entry::String(_) | Entry::Hash(_) => return Err(SortError::WrongType),
+            Entry::Geo(geo) => geo.keys().map(CompactKey::to_vec).collect::<Vec<_>>(),
+            Entry::String(_) | Entry::Hash(_) | Entry::Stream(_) => {
+                return Err(SortError::WrongType)
+            }
         };
 
         if options.alpha {
@@ -465,6 +468,28 @@ fn serialize_entry(entry: &Entry) -> Vec<u8> {
                 out.extend_from_slice(&score.to_le_bytes());
             }
         }
+        Entry::Geo(map) => {
+            out.push(5);
+            write_u32(&mut out, map.len() as u32);
+            for (member, (lon, lat)) in map.iter() {
+                write_bytes(&mut out, member.as_slice());
+                out.extend_from_slice(&lon.to_le_bytes());
+                out.extend_from_slice(&lat.to_le_bytes());
+            }
+        }
+        Entry::Stream(stream) => {
+            out.push(6);
+            write_u32(&mut out, stream.entries.len() as u32);
+            for (id, fields) in &stream.entries {
+                out.extend_from_slice(&id.ms.to_le_bytes());
+                out.extend_from_slice(&id.seq.to_le_bytes());
+                write_u32(&mut out, fields.len() as u32);
+                for (field, value) in fields {
+                    write_bytes(&mut out, field.as_slice());
+                    write_bytes(&mut out, value.as_slice());
+                }
+            }
+        }
     }
     out
 }
@@ -537,6 +562,61 @@ fn deserialize_entry(payload: &[u8]) -> Option<Entry> {
                 return None;
             }
             Some(Entry::ZSet(Box::new(zset)))
+        }
+        5 => {
+            let count = read_u32(&mut input)? as usize;
+            let mut geo =
+                hashbrown::HashMap::with_capacity_and_hasher(count, ahash::RandomState::new());
+            for _ in 0..count {
+                let member = CompactKey::from_vec(read_bytes(&mut input)?);
+                if input.len() < 16 {
+                    return None;
+                }
+                let mut lon_bytes = [0u8; 8];
+                lon_bytes.copy_from_slice(&input[..8]);
+                let mut lat_bytes = [0u8; 8];
+                lat_bytes.copy_from_slice(&input[8..16]);
+                input = &input[16..];
+                geo.insert(
+                    member,
+                    (f64::from_le_bytes(lon_bytes), f64::from_le_bytes(lat_bytes)),
+                );
+            }
+            if !input.is_empty() {
+                return None;
+            }
+            Some(Entry::Geo(Box::new(geo)))
+        }
+        6 => {
+            let count = read_u32(&mut input)? as usize;
+            let mut stream = crate::engine::value::StreamValue::new();
+            for _ in 0..count {
+                if input.len() < 16 {
+                    return None;
+                }
+                let mut ms_bytes = [0u8; 8];
+                ms_bytes.copy_from_slice(&input[..8]);
+                let mut seq_bytes = [0u8; 8];
+                seq_bytes.copy_from_slice(&input[8..16]);
+                input = &input[16..];
+                let field_count = read_u32(&mut input)? as usize;
+                let mut fields = Vec::with_capacity(field_count);
+                for _ in 0..field_count {
+                    let field = CompactKey::from_vec(read_bytes(&mut input)?);
+                    let value = CompactValue::from_vec(read_bytes(&mut input)?);
+                    fields.push((field, value));
+                }
+                let id = crate::engine::value::StreamId {
+                    ms: u64::from_le_bytes(ms_bytes),
+                    seq: u64::from_le_bytes(seq_bytes),
+                };
+                stream.last_id = id;
+                stream.entries.insert(id, fields);
+            }
+            if !input.is_empty() {
+                return None;
+            }
+            Some(Entry::Stream(Box::new(stream)))
         }
         _ => None,
     }
