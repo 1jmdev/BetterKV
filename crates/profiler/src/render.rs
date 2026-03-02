@@ -211,6 +211,7 @@ fn render_node(
     let bar = pct_bar(pct);
     let pct_str = format!("{:.1}%", pct);
     let time_col = time_color(total_us);
+    let self_col = time_color(self_us);
 
     let name_visible = format!("{prefix}{connector}{module}::{func}");
     let name_len = name_visible.chars().count();
@@ -221,7 +222,7 @@ fn render_node(
     };
 
     eprintln!(
-        "{CYAN}║{RESET} {CYAN}{prefix}{connector}{RESET}{DIM}{module}::{RESET}{BOLD}{func}{RESET}{:gap$}  {CYAN}│{RESET} {time_col}{BOLD}{}{RESET} {CYAN}│{RESET} {DIM}{}{RESET} {CYAN}│{RESET} {DIM}{bar}{RESET} {CYAN}│{RESET} {DIM}{}{RESET} {CYAN}║{RESET}",
+        "{CYAN}║{RESET} {CYAN}{prefix}{connector}{RESET}{DIM}{module}::{RESET}{BOLD}{func}{RESET}{:gap$}  {CYAN}│{RESET} {time_col}{BOLD}{}{RESET} {CYAN}│{RESET} {self_col}{BOLD}{}{RESET} {CYAN}│{RESET} {DIM}{bar}{RESET} {CYAN}│{RESET} {DIM}{}{RESET} {CYAN}║{RESET}",
         "",
         pad_left(&total_str, COL_TOTAL),
         pad_left(&self_str, COL_SELF),
