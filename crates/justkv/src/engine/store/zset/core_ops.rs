@@ -160,6 +160,35 @@ impl Store {
             .position(|(current, _)| current.as_slice() == member)
             .map(|index| index as i64))
     }
+
+    pub fn zremrangebyrank(&self, key: &[u8], start: i64, stop: i64) -> Result<i64, ()> {
+        let idx = self.shard_index(key);
+        let mut shard = self.shards[idx].write();
+        let now_ms = monotonic_now_ms();
+        if purge_if_expired(&mut shard, key, now_ms) {
+            return Ok(0);
+        }
+
+        let Some(entry) = shard.entries.get_mut(key) else {
+            return Ok(0);
+        };
+        let zset = get_zset_mut(entry).ok_or(())?;
+        let ordered = sorted_by_score(zset, false);
+        let Some((from, to_exclusive)) = super::normalize_range(start, stop, ordered.len()) else {
+            return Ok(0);
+        };
+
+        let mut removed = 0i64;
+        for (member, _) in &ordered[from..to_exclusive] {
+            if zset.remove(member.as_slice()).is_some() {
+                removed += 1;
+            }
+        }
+        if zset.is_empty() {
+            let _ = shard.remove_key(key);
+        }
+        Ok(removed)
+    }
 }
 
 fn new_zset() -> ZSetValueMap {

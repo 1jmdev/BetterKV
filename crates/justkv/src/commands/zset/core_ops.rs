@@ -1,4 +1,4 @@
-use crate::commands::util::{Args, f64_to_bytes, wrong_args, wrong_type};
+use crate::commands::util::{f64_to_bytes, wrong_args, wrong_type, Args};
 use crate::engine::store::Store;
 use crate::protocol::types::{BulkData, RespFrame};
 
@@ -113,6 +113,24 @@ pub(crate) fn zmscore(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
+pub(crate) fn zremrangebyrank(store: &Store, args: &Args) -> RespFrame {
+    if args.len() != 4 {
+        return wrong_args("ZREMRANGEBYRANK");
+    }
+    let start = match parse_i64(&args[2]) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    let stop = match parse_i64(&args[3]) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    match store.zremrangebyrank(&args[1], start, stop) {
+        Ok(value) => RespFrame::Integer(value),
+        Err(_) => wrong_type(),
+    }
+}
+
 fn parse_f64(raw: &[u8]) -> Result<f64, RespFrame> {
     match std::str::from_utf8(raw) {
         Ok(value) => value
@@ -123,5 +141,14 @@ fn parse_f64(raw: &[u8]) -> Result<f64, RespFrame> {
         Err(_) => Err(RespFrame::Error(
             "ERR value is not a valid float".to_string(),
         )),
+    }
+}
+
+fn parse_i64(raw: &[u8]) -> Result<i64, RespFrame> {
+    match std::str::from_utf8(raw) {
+        Ok(value) => value
+            .parse::<i64>()
+            .map_err(|_| crate::commands::util::int_error()),
+        Err(_) => Err(crate::commands::util::int_error()),
     }
 }
