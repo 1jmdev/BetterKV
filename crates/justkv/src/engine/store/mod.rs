@@ -66,6 +66,46 @@ pub enum ListSetError {
     WrongType,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum BitOp {
+    And,
+    Or,
+    Xor,
+    Not,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum BitFieldEncoding {
+    Signed { bits: u8 },
+    Unsigned { bits: u8 },
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum BitFieldOverflow {
+    Wrap,
+    Sat,
+    Fail,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum BitFieldOp {
+    Get {
+        encoding: BitFieldEncoding,
+        offset: usize,
+    },
+    Set {
+        encoding: BitFieldEncoding,
+        offset: usize,
+        value: i64,
+    },
+    IncrBy {
+        encoding: BitFieldEncoding,
+        offset: usize,
+        increment: i64,
+        overflow: BitFieldOverflow,
+    },
+}
+
 pub(super) struct Shard {
     entries: StoreMap,
     ttl: TtlMap,

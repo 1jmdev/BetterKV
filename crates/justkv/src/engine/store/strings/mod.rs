@@ -1,6 +1,8 @@
+mod bitmap_ops;
 mod core_ops;
 mod counter_ops;
 mod expiry_ops;
+mod hyperlog_ops;
 mod multi_ops;
 mod range_ops;
 

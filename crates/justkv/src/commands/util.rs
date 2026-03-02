@@ -67,6 +67,18 @@ pub enum CommandId {
     Incrby,
     Decr,
     Decrby,
+    // String – bitmap
+    Setbit,
+    Getbit,
+    Bitcount,
+    Bitpos,
+    Bitop,
+    Bitfield,
+    BitfieldRo,
+    // String – hyperloglog
+    Pfadd,
+    Pfcount,
+    Pfmerge,
     // Hash
     Hset,
     Hmset,
@@ -327,6 +339,8 @@ pub fn parse_command_id(command: &[u8]) -> CommandId {
             b'B' => {
                 if command.eq_ignore_ascii_case(b"BLPOP") {
                     CommandId::Blpop
+                } else if command.eq_ignore_ascii_case(b"BITOP") {
+                    CommandId::Bitop
                 } else if command.eq_ignore_ascii_case(b"BRPOP") {
                     CommandId::Brpop
                 } else {
@@ -336,6 +350,13 @@ pub fn parse_command_id(command: &[u8]) -> CommandId {
             b'F' => {
                 if command.eq_ignore_ascii_case(b"FLUSH") {
                     CommandId::Flushall
+                } else {
+                    CommandId::Unknown
+                }
+            }
+            b'P' => {
+                if command.eq_ignore_ascii_case(b"PFADD") {
+                    CommandId::Pfadd
                 } else {
                     CommandId::Unknown
                 }
@@ -436,6 +457,8 @@ pub fn parse_command_id(command: &[u8]) -> CommandId {
             b'B' => {
                 if command.eq_ignore_ascii_case(b"BLMPOP") {
                     CommandId::Blmpop
+                } else if command.eq_ignore_ascii_case(b"BITPOS") {
+                    CommandId::Bitpos
                 } else if command.eq_ignore_ascii_case(b"BZMPOP") {
                     CommandId::Bzmpop
                 } else {
@@ -470,6 +493,8 @@ pub fn parse_command_id(command: &[u8]) -> CommandId {
             b'G' => {
                 if command.eq_ignore_ascii_case(b"GETDEL") {
                     CommandId::Getdel
+                } else if command.eq_ignore_ascii_case(b"GETBIT") {
+                    CommandId::Getbit
                 } else if command.eq_ignore_ascii_case(b"GETSET") {
                     CommandId::Getset
                 } else {
@@ -523,6 +548,8 @@ pub fn parse_command_id(command: &[u8]) -> CommandId {
             b'S' => {
                 if command.eq_ignore_ascii_case(b"SELECT") {
                     CommandId::Select
+                } else if command.eq_ignore_ascii_case(b"SETBIT") {
+                    CommandId::Setbit
                 } else if command.eq_ignore_ascii_case(b"SINTER") {
                     CommandId::Sinter
                 } else if command.eq_ignore_ascii_case(b"STRLEN") {
@@ -595,6 +622,10 @@ pub fn parse_command_id(command: &[u8]) -> CommandId {
             b'P' => {
                 if command.eq_ignore_ascii_case(b"PERSIST") {
                     CommandId::Persist
+                } else if command.eq_ignore_ascii_case(b"PFCOUNT") {
+                    CommandId::Pfcount
+                } else if command.eq_ignore_ascii_case(b"PFMERGE") {
+                    CommandId::Pfmerge
                 } else if command.eq_ignore_ascii_case(b"PEXPIRE") {
                     CommandId::Pexpire
                 } else {
@@ -625,7 +656,11 @@ pub fn parse_command_id(command: &[u8]) -> CommandId {
         },
         8 => match command[0].to_ascii_uppercase() {
             b'B' => {
-                if command.eq_ignore_ascii_case(b"BZPOPMAX") {
+                if command.eq_ignore_ascii_case(b"BITCOUNT") {
+                    CommandId::Bitcount
+                } else if command.eq_ignore_ascii_case(b"BITFIELD") {
+                    CommandId::Bitfield
+                } else if command.eq_ignore_ascii_case(b"BZPOPMAX") {
                     CommandId::Bzpopmax
                 } else if command.eq_ignore_ascii_case(b"BZPOPMIN") {
                     CommandId::Bzpopmin
@@ -730,6 +765,13 @@ pub fn parse_command_id(command: &[u8]) -> CommandId {
             _ => CommandId::Unknown,
         },
         11 => match command[0].to_ascii_uppercase() {
+            b'B' => {
+                if command.eq_ignore_ascii_case(b"BITFIELD_RO") {
+                    CommandId::BitfieldRo
+                } else {
+                    CommandId::Unknown
+                }
+            }
             b'S' => {
                 if command.eq_ignore_ascii_case(b"SINTERSTORE") {
                     CommandId::Sinterstore

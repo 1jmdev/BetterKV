@@ -130,3 +130,93 @@ async fn ttl_variants_work() {
 
     server.abort();
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn bitmap_variants_work() {
+    let (server, port) = spawn_server().await;
+    let mut conn = connect(port).await;
+
+    assert_eq!(
+        send_command(&mut conn, &[b"SETBIT", b"bits", b"1", b"1"]).await,
+        RespFrame::Integer(0)
+    );
+    assert_eq!(
+        send_command(&mut conn, &[b"GETBIT", b"bits", b"1"]).await,
+        RespFrame::Integer(1)
+    );
+    assert_eq!(
+        send_command(&mut conn, &[b"BITCOUNT", b"bits"]).await,
+        RespFrame::Integer(1)
+    );
+    assert_eq!(
+        send_command(&mut conn, &[b"BITPOS", b"bits", b"1"]).await,
+        RespFrame::Integer(1)
+    );
+
+    let _ = send_command(&mut conn, &[b"SET", b"left", b"\x0f"]).await;
+    let _ = send_command(&mut conn, &[b"SET", b"right", b"\xf0"]).await;
+    assert_eq!(
+        send_command(&mut conn, &[b"BITOP", b"OR", b"merged", b"left", b"right"]).await,
+        RespFrame::Integer(1)
+    );
+
+    assert_eq!(
+        send_command(
+            &mut conn,
+            &[
+                b"BITFIELD",
+                b"bf",
+                b"SET",
+                b"u4",
+                b"0",
+                b"9",
+                b"GET",
+                b"u4",
+                b"0"
+            ]
+        )
+        .await,
+        RespFrame::Array(Some(vec![RespFrame::Integer(0), RespFrame::Integer(9)]))
+    );
+    assert_eq!(
+        send_command(&mut conn, &[b"BITFIELD_RO", b"bf", b"GET", b"u4", b"0"]).await,
+        RespFrame::Array(Some(vec![RespFrame::Integer(9)]))
+    );
+
+    server.abort();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn hyperlog_variants_work() {
+    let (server, port) = spawn_server().await;
+    let mut conn = connect(port).await;
+
+    assert_eq!(
+        send_command(&mut conn, &[b"PFADD", b"h", b"a", b"b", b"c"]).await,
+        RespFrame::Integer(1)
+    );
+    assert_eq!(
+        send_command(&mut conn, &[b"PFADD", b"h", b"a", b"b"]).await,
+        RespFrame::Integer(0)
+    );
+    assert_eq!(
+        send_command(&mut conn, &[b"PFCOUNT", b"h"]).await,
+        RespFrame::Integer(3)
+    );
+
+    let _ = send_command(&mut conn, &[b"PFADD", b"h2", b"c", b"d"]).await;
+    assert_eq!(
+        send_command(&mut conn, &[b"PFMERGE", b"h3", b"h", b"h2"]).await,
+        RespFrame::Simple("OK".to_string())
+    );
+    assert_eq!(
+        send_command(&mut conn, &[b"PFCOUNT", b"h3"]).await,
+        RespFrame::Integer(4)
+    );
+    assert_eq!(
+        send_command(&mut conn, &[b"PFCOUNT", b"h", b"h2"]).await,
+        RespFrame::Integer(4)
+    );
+
+    server.abort();
+}
