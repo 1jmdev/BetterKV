@@ -23,42 +23,44 @@ impl TransactionState {
         let _trace = profiler::scope("server::transaction::handle_frame_with");
         let command = match command_name(&frame) {
             Ok(Some(value)) => value,
-            Ok(None) => return RespFrame::Error("ERR empty command".to_string()),
-            Err(err) => return RespFrame::Error(err),
+            Ok(None) => return RespFrame::error_static("ERR empty command"),
+            Err(err) => return RespFrame::error_static(err),
         };
 
-        if command.eq_ignore_ascii_case(b"MULTI") {
+        let command = classify_transaction_command(command);
+
+        if command == TransactionCommand::Multi {
             let args = match parse_args(&frame) {
                 Ok(value) => value,
-                Err(err) => return RespFrame::Error(err),
+                Err(err) => return RespFrame::error_static(err),
             };
             return self.multi(&args);
         }
-        if command.eq_ignore_ascii_case(b"EXEC") {
+        if command == TransactionCommand::Exec {
             let args = match parse_args(&frame) {
                 Ok(value) => value,
-                Err(err) => return RespFrame::Error(err),
+                Err(err) => return RespFrame::error_static(err),
             };
             return self.exec_with(store, &args, execute);
         }
-        if command.eq_ignore_ascii_case(b"DISCARD") {
+        if command == TransactionCommand::Discard {
             let args = match parse_args(&frame) {
                 Ok(value) => value,
-                Err(err) => return RespFrame::Error(err),
+                Err(err) => return RespFrame::error_static(err),
             };
             return self.discard(&args);
         }
-        if command.eq_ignore_ascii_case(b"WATCH") {
+        if command == TransactionCommand::Watch {
             let args = match parse_args(&frame) {
                 Ok(value) => value,
-                Err(err) => return RespFrame::Error(err),
+                Err(err) => return RespFrame::error_static(err),
             };
             return self.watch(store, &args);
         }
-        if command.eq_ignore_ascii_case(b"UNWATCH") {
+        if command == TransactionCommand::Unwatch {
             let args = match parse_args(&frame) {
                 Ok(value) => value,
-                Err(err) => return RespFrame::Error(err),
+                Err(err) => return RespFrame::error_static(err),
             };
             return self.unwatch(&args);
         }
@@ -160,10 +162,10 @@ impl TransactionState {
     }
 }
 
-fn command_name<'a>(frame: &'a RespFrame) -> Result<Option<&'a [u8]>, String> {
+fn command_name<'a>(frame: &'a RespFrame) -> Result<Option<&'a [u8]>, &'static str> {
     let _trace = profiler::scope("server::transaction::command_name");
     let RespFrame::Array(Some(items)) = frame else {
-        return Err("ERR protocol error".to_string());
+        return Err("ERR protocol error");
     };
     let Some(first) = items.first() else {
         return Ok(None);
@@ -172,14 +174,50 @@ fn command_name<'a>(frame: &'a RespFrame) -> Result<Option<&'a [u8]>, String> {
     match first {
         RespFrame::Bulk(Some(value)) => Ok(Some(value.as_slice())),
         RespFrame::Simple(value) => Ok(Some(value.as_bytes())),
-        _ => Err("ERR invalid argument type".to_string()),
+        _ => Err("ERR invalid argument type"),
     }
 }
 
-fn parse_args<'a>(frame: &'a RespFrame) -> Result<Vec<&'a [u8]>, String> {
+#[derive(PartialEq, Eq)]
+enum TransactionCommand {
+    Multi,
+    Exec,
+    Discard,
+    Watch,
+    Unwatch,
+    Other,
+}
+
+#[inline]
+fn classify_transaction_command(command: &[u8]) -> TransactionCommand {
+    match command.len() {
+        4 if command.eq_ignore_ascii_case(b"EXEC") => TransactionCommand::Exec,
+        5 => {
+            if command.eq_ignore_ascii_case(b"MULTI") {
+                TransactionCommand::Multi
+            } else if command.eq_ignore_ascii_case(b"WATCH") {
+                TransactionCommand::Watch
+            } else {
+                TransactionCommand::Other
+            }
+        }
+        7 => {
+            if command.eq_ignore_ascii_case(b"DISCARD") {
+                TransactionCommand::Discard
+            } else if command.eq_ignore_ascii_case(b"UNWATCH") {
+                TransactionCommand::Unwatch
+            } else {
+                TransactionCommand::Other
+            }
+        }
+        _ => TransactionCommand::Other,
+    }
+}
+
+fn parse_args<'a>(frame: &'a RespFrame) -> Result<Vec<&'a [u8]>, &'static str> {
     let _trace = profiler::scope("server::transaction::parse_args");
     let RespFrame::Array(Some(items)) = frame else {
-        return Err("ERR protocol error".to_string());
+        return Err("ERR protocol error");
     };
 
     let mut args = Vec::with_capacity(items.len());
@@ -187,7 +225,7 @@ fn parse_args<'a>(frame: &'a RespFrame) -> Result<Vec<&'a [u8]>, String> {
         match item {
             RespFrame::Bulk(Some(value)) => args.push(value.as_slice()),
             RespFrame::Simple(value) => args.push(value.as_bytes()),
-            _ => return Err("ERR invalid argument type".to_string()),
+            _ => return Err("ERR invalid argument type"),
         }
     }
 
