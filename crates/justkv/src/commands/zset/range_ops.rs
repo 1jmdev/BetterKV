@@ -3,11 +3,21 @@ use crate::engine::store::Store;
 use crate::protocol::types::{BulkData, RespFrame};
 
 pub(crate) fn zrange(store: &Store, args: &Args, reverse: bool) -> RespFrame {
-    if args.len() != 4 && args.len() != 5 {
+    if args.len() < 4 {
         return wrong_args(if reverse { "ZREVRANGE" } else { "ZRANGE" });
     }
-    let withscores = args.len() == 5 && eq_ascii(&args[4], b"WITHSCORES");
-    if args.len() == 5 && !withscores {
+
+    let mut withscores = false;
+    let mut rev_option = false;
+    for option in &args[4..] {
+        if eq_ascii(option, b"WITHSCORES") {
+            withscores = true;
+            continue;
+        }
+        if eq_ascii(option, b"REV") {
+            rev_option = true;
+            continue;
+        }
         return RespFrame::Error("ERR syntax error".to_string());
     }
 
@@ -20,7 +30,7 @@ pub(crate) fn zrange(store: &Store, args: &Args, reverse: bool) -> RespFrame {
         Err(response) => return response,
     };
 
-    match store.zrange(&args[1], start, stop, reverse) {
+    match store.zrange(&args[1], start, stop, reverse || rev_option) {
         Ok(items) => RespFrame::Array(Some(format_items(items, withscores))),
         Err(_) => wrong_type(),
     }

@@ -101,7 +101,9 @@ pub(super) fn apply_trim(
 
     let mut removed = 0usize;
     for id in ids {
-        if let Some(max) = limit && removed >= max {
+        if let Some(max) = limit
+            && removed >= max
+        {
             break;
         }
         if stream.entries.remove(&id).is_some() {
@@ -128,24 +130,23 @@ pub(super) fn push_items(
     count: Option<usize>,
 ) -> Vec<StreamRangeItem> {
     let iter = stream.entries.range(start..=end);
-    let mut out: Vec<_> = if reverse {
+    let limit = count.unwrap_or(usize::MAX);
+    if reverse {
         iter.rev()
+            .take(limit)
             .map(|(id, fields)| StreamRangeItem {
                 id: *id,
                 fields: fields.clone(),
             })
             .collect()
     } else {
-        iter.map(|(id, fields)| StreamRangeItem {
-            id: *id,
-            fields: fields.clone(),
-        })
-        .collect()
-    };
-    if let Some(limit) = count {
-        out.truncate(limit);
+        iter.take(limit)
+            .map(|(id, fields)| StreamRangeItem {
+                id: *id,
+                fields: fields.clone(),
+            })
+            .collect()
     }
-    out
 }
 
 pub(super) fn ensure_pending_entry(
