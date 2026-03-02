@@ -2,6 +2,7 @@
 pub struct Config {
     pub bind: String,
     pub port: u16,
+    pub io_threads: usize,
     pub shards: usize,
     pub sweep_interval_ms: u64,
 }
@@ -11,6 +12,7 @@ impl Default for Config {
         Self {
             bind: "127.0.0.1".to_string(),
             port: 6379,
+            io_threads: default_threads(),
             shards: default_shards(),
             sweep_interval_ms: 250,
         }
@@ -24,8 +26,12 @@ impl Config {
 }
 
 fn default_shards() -> usize {
+    default_threads().next_power_of_two()
+}
+
+fn default_threads() -> usize {
     match std::thread::available_parallelism() {
-        Ok(value) => value.get().next_power_of_two(),
+        Ok(value) => value.get().max(1),
         Err(_) => 4,
     }
 }

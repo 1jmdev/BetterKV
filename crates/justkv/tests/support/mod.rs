@@ -19,6 +19,7 @@ pub async fn spawn_server() -> (JoinHandle<()>, u16) {
     let config = Config {
         bind: "127.0.0.1".to_string(),
         port,
+        io_threads: default_threads(),
         shards: 8,
         sweep_interval_ms: 50,
     };
@@ -74,5 +75,12 @@ pub async fn read_frame(stream: &mut TcpStream) -> RespFrame {
 
         let read = stream.read_buf(&mut buf).await.expect("read frame bytes");
         assert!(read > 0, "server closed before sending a response");
+    }
+}
+
+fn default_threads() -> usize {
+    match std::thread::available_parallelism() {
+        Ok(value) => value.get().max(1),
+        Err(_) => 4,
     }
 }

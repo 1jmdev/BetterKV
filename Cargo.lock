@@ -311,6 +311,7 @@ dependencies = [
  "parking_lot",
  "proptest",
  "ryu",
+ "socket2",
  "thiserror",
  "tikv-jemallocator",
  "tokio",

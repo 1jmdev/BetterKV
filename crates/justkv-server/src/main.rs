@@ -195,6 +195,7 @@ fn run(runtime: RuntimeArgs) -> Result<(), String> {
     }
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(config.io_threads)
         .enable_all()
         .build()
         .map_err(|err| format!("failed to create runtime: {err}"))?;
@@ -309,7 +310,14 @@ fn apply_directive(
                 config.sweep_interval_ms = (1000 / hz).max(1);
             }
         }
-        "io-threads" | "shards" => {
+        "io-threads" => {
+            let value = first_value(name, values)?;
+            let io_threads = value
+                .parse::<usize>()
+                .map_err(|_| format!("invalid {name} value '{value}'"))?;
+            config.io_threads = io_threads.max(1);
+        }
+        "shards" => {
             let value = first_value(name, values)?;
             let shards = value
                 .parse::<usize>()
@@ -322,7 +330,7 @@ fn apply_directive(
                 .parse::<u64>()
                 .map_err(|_| format!("invalid sweep-interval-ms value '{value}'"))?;
         }
-        "appendonly" | "daemonize" | "protected-mode" => {
+        "appendonly" | "daemonize" | "protected-mode" | "io-threads-do-reads" => {
             let value = first_value(name, values)?;
             parse_yes_no(name, value)?;
             ignored.insert(name.to_string());

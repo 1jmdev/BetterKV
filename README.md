@@ -30,6 +30,7 @@ cargo run -p justkv-server -- --help
 
 Optional tuning:
 
+- `--io-threads <N>`: TCP accept/runtime worker threads.
 - `--shards <N>`: shard count (defaults to CPU-based power-of-two).
 - `--sweep-interval-ms <N>`: expiration sweep interval in milliseconds.
 

@@ -17,8 +17,8 @@ mod dispatch;
 mod notifications;
 mod util;
 
-const READ_BUFFER_INITIAL: usize = 4 * 1024;
-const WRITE_BUFFER_INITIAL: usize = 4 * 1024;
+const READ_BUFFER_INITIAL: usize = 16 * 1024;
+const WRITE_BUFFER_INITIAL: usize = 16 * 1024;
 
 pub async fn handle_connection(
     mut stream: TcpStream,
@@ -29,6 +29,7 @@ pub async fn handle_connection(
     let mut read_buf = BytesMut::with_capacity(READ_BUFFER_INITIAL);
     let mut write_buf = BytesMut::with_capacity(WRITE_BUFFER_INITIAL);
     let mut tx_state = TransactionState::default();
+    let profiling_enabled = profiler.is_some();
 
     let (push_tx, mut push_rx) = unbounded_channel::<RespFrame>();
     let mut pubsub_state = ConnectionPubSub::new(pubsub_hub.next_connection_id());
@@ -60,12 +61,16 @@ pub async fn handle_connection(
                     break Ok(());
                 }
 
-                while let Some(parsed) = parse_next_frame(&mut read_buf)? {
+                while let Some(parsed) = parse_next_frame(&mut read_buf, profiling_enabled)? {
                     if let Some(profiler) = profiler.as_ref() {
                         profiler.record_parse(parsed.parse_elapsed);
                     }
-                    let command_name = command_name_from_frame(&parsed.frame);
-                    let execute_started = Instant::now();
+                    let command_name = if profiling_enabled {
+                        command_name_from_frame(&parsed.frame)
+                    } else {
+                        None
+                    };
+                    let execute_started = profiling_enabled.then(Instant::now);
                     let response = tx_state.handle_frame_with(&store, parsed.frame, |store, frame| {
                         dispatch::execute_regular_command(
                             store,
@@ -76,13 +81,17 @@ pub async fn handle_connection(
                             frame,
                         )
                     });
-                    let execute_elapsed = execute_started.elapsed();
+                    let execute_elapsed = execute_started
+                        .map(|started| started.elapsed())
+                        .unwrap_or_default();
                     if let Some(profiler) = profiler.as_ref() {
                         profiler.record_execute(execute_elapsed);
                     }
-                    let encode_started = Instant::now();
+                    let encode_started = profiling_enabled.then(Instant::now);
                     encode(&response, &mut write_buf);
-                    let encode_elapsed = encode_started.elapsed();
+                    let encode_elapsed = encode_started
+                        .map(|started| started.elapsed())
+                        .unwrap_or_default();
                     if let Some(profiler) = profiler.as_ref() {
                         profiler.record_encode(encode_elapsed);
                         if let Some(ref command_name) = command_name {
@@ -121,12 +130,14 @@ struct ParsedFrame {
     parse_elapsed: std::time::Duration,
 }
 
-fn parse_next_frame(src: &mut BytesMut) -> Result<Option<ParsedFrame>, ParseError> {
-    let parse_started = Instant::now();
+fn parse_next_frame(src: &mut BytesMut, measure_latency: bool) -> Result<Option<ParsedFrame>, ParseError> {
+    let parse_started = measure_latency.then(Instant::now);
     match parse_frame(src) {
         Ok(Some(frame)) => Ok(Some(ParsedFrame {
             frame,
-            parse_elapsed: parse_started.elapsed(),
+            parse_elapsed: parse_started
+                .map(|started| started.elapsed())
+                .unwrap_or_default(),
         })),
         Ok(None) => Ok(None),
         Err(ParseError::Incomplete) => Ok(None),

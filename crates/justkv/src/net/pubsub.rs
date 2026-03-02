@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
 
 use parking_lot::RwLock;
 use tokio::sync::mpsc::UnboundedSender;
@@ -11,7 +11,7 @@ use crate::protocol::types::{BulkData, RespFrame};
 pub struct PubSubHub {
     inner: Arc<RwLock<PubSubInner>>,
     next_id: Arc<AtomicU64>,
-    notify_flags: Arc<RwLock<Vec<u8>>>,
+    notify_mask: Arc<AtomicU16>,
 }
 
 struct PubSubInner {
@@ -27,7 +27,7 @@ impl PubSubHub {
                 patterns: HashMap::new(),
             })),
             next_id: Arc::new(AtomicU64::new(1)),
-            notify_flags: Arc::new(RwLock::new(b"KEA".to_vec())),
+            notify_mask: Arc::new(AtomicU16::new(0)),
         }
     }
 
@@ -139,29 +139,35 @@ impl PubSubHub {
     }
 
     pub fn set_notify_flags(&self, flags: &[u8]) -> Result<(), ()> {
-        if !flags.iter().all(|flag| is_valid_notify_flag(*flag)) {
-            return Err(());
-        }
-        let mut current = self.notify_flags.write();
-        *current = flags.to_vec();
+        let mask = flags_to_mask(flags)?;
+        self.notify_mask.store(mask, Ordering::Relaxed);
         Ok(())
     }
 
     pub fn get_notify_flags(&self) -> Vec<u8> {
-        self.notify_flags.read().clone()
+        mask_to_flags(self.notify_mask.load(Ordering::Relaxed))
+    }
+
+    pub fn keyspace_notifications_enabled(&self) -> bool {
+        let mask = self.notify_mask.load(Ordering::Relaxed);
+        let has_output_target = (mask & (FLAG_KEYSPACE | FLAG_KEYEVENT)) != 0;
+        let has_event_classes = (mask
+            & (FLAG_A | FLAG_G | FLAG_S | FLAG_H | FLAG_Z | FLAG_L | FLAG_DOLLAR | FLAG_X))
+            != 0;
+        has_output_target && has_event_classes
     }
 
     pub fn emit_keyspace_event(&self, event: &[u8], key: &[u8], class: u8) {
-        let flags = self.notify_flags.read().clone();
-        if !notifications_enabled(&flags, class) {
+        let mask = self.notify_mask.load(Ordering::Relaxed);
+        if !notifications_enabled(mask, class) {
             return;
         }
 
-        if notifications_enabled_keyspace(&flags) {
+        if notifications_enabled_keyspace(mask) {
             let channel = format!("__keyspace@0__:{}", String::from_utf8_lossy(key));
             let _ = self.publish(channel.as_bytes(), event);
         }
-        if notifications_enabled_keyevent(&flags) {
+        if notifications_enabled_keyevent(mask) {
             let channel = format!("__keyevent@0__:{}", String::from_utf8_lossy(event));
             let _ = self.publish(channel.as_bytes(), key);
         }
@@ -306,21 +312,86 @@ fn wildcard_match(pattern: &[u8], text: &[u8]) -> bool {
     pi == pattern.len()
 }
 
-fn is_valid_notify_flag(flag: u8) -> bool {
-    matches!(
-        flag,
-        b'g' | b'$' | b'l' | b's' | b'h' | b'z' | b'x' | b'e' | b'K' | b'E' | b'A'
-    )
+const FLAG_G: u16 = 1 << 0;
+const FLAG_DOLLAR: u16 = 1 << 1;
+const FLAG_L: u16 = 1 << 2;
+const FLAG_S: u16 = 1 << 3;
+const FLAG_H: u16 = 1 << 4;
+const FLAG_Z: u16 = 1 << 5;
+const FLAG_X: u16 = 1 << 6;
+const FLAG_KEYEVENT: u16 = 1 << 7;
+const FLAG_KEYSPACE: u16 = 1 << 8;
+const FLAG_A: u16 = 1 << 9;
+
+fn flag_to_mask(flag: u8) -> Option<u16> {
+    match flag {
+        b'g' => Some(FLAG_G),
+        b'$' => Some(FLAG_DOLLAR),
+        b'l' => Some(FLAG_L),
+        b's' => Some(FLAG_S),
+        b'h' => Some(FLAG_H),
+        b'z' => Some(FLAG_Z),
+        b'x' => Some(FLAG_X),
+        b'e' => Some(FLAG_KEYEVENT),
+        b'K' => Some(FLAG_KEYSPACE),
+        b'E' => Some(FLAG_KEYEVENT),
+        b'A' => Some(FLAG_A),
+        _ => None,
+    }
 }
 
-fn notifications_enabled(flags: &[u8], class: u8) -> bool {
-    flags.contains(&b'A') || flags.contains(&class)
+fn flags_to_mask(flags: &[u8]) -> Result<u16, ()> {
+    let mut mask = 0u16;
+    for &flag in flags {
+        let bit = flag_to_mask(flag).ok_or(())?;
+        mask |= bit;
+    }
+    Ok(mask)
 }
 
-fn notifications_enabled_keyspace(flags: &[u8]) -> bool {
-    flags.contains(&b'A') || flags.contains(&b'K')
+fn mask_to_flags(mask: u16) -> Vec<u8> {
+    let mut out = Vec::new();
+    if mask & FLAG_A != 0 {
+        out.push(b'A');
+    }
+    if mask & FLAG_G != 0 {
+        out.push(b'g');
+    }
+    if mask & FLAG_DOLLAR != 0 {
+        out.push(b'$');
+    }
+    if mask & FLAG_L != 0 {
+        out.push(b'l');
+    }
+    if mask & FLAG_S != 0 {
+        out.push(b's');
+    }
+    if mask & FLAG_H != 0 {
+        out.push(b'h');
+    }
+    if mask & FLAG_Z != 0 {
+        out.push(b'z');
+    }
+    if mask & FLAG_X != 0 {
+        out.push(b'x');
+    }
+    if mask & FLAG_KEYSPACE != 0 {
+        out.push(b'K');
+    }
+    if mask & FLAG_KEYEVENT != 0 {
+        out.push(b'E');
+    }
+    out
 }
 
-fn notifications_enabled_keyevent(flags: &[u8]) -> bool {
-    flags.contains(&b'A') || flags.contains(&b'E')
+fn notifications_enabled(mask: u16, class: u8) -> bool {
+    (mask & FLAG_A) != 0 || (flag_to_mask(class).is_some_and(|bit| (mask & bit) != 0))
+}
+
+fn notifications_enabled_keyspace(mask: u16) -> bool {
+    (mask & FLAG_KEYSPACE) != 0
+}
+
+fn notifications_enabled_keyevent(mask: u16) -> bool {
+    (mask & FLAG_KEYEVENT) != 0
 }

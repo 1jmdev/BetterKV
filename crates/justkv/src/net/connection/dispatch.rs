@@ -36,7 +36,9 @@ pub(super) fn execute_regular_command(
 
     let command = args[0].as_slice();
     let response = dispatch_args(store, &args);
-    emit_command_notifications(hub, command, &args, &response);
+    if hub.keyspace_notifications_enabled() {
+        emit_command_notifications(hub, command, &args, &response);
+    }
     if let Some(profiler) = profiler {
         profiler.record_command(command, started.elapsed());
     }
