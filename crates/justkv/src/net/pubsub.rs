@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
 
+use ahash::RandomState;
 use parking_lot::RwLock;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -9,23 +10,40 @@ use crate::protocol::types::{BulkData, RespFrame};
 
 #[derive(Clone)]
 pub struct PubSubHub {
-    inner: Arc<RwLock<PubSubInner>>,
+    shards: Arc<Vec<RwLock<PubSubShard>>>,
+    shard_mask: usize,
+    hash_builder: RandomState,
     next_id: Arc<AtomicU64>,
     notify_mask: Arc<AtomicU16>,
 }
 
-struct PubSubInner {
+struct PubSubShard {
     channels: HashMap<Vec<u8>, HashMap<u64, UnboundedSender<RespFrame>>>,
-    patterns: HashMap<Vec<u8>, HashMap<u64, UnboundedSender<RespFrame>>>,
+    patterns_by_prefix:
+        HashMap<Vec<u8>, HashMap<Vec<u8>, HashMap<u64, UnboundedSender<RespFrame>>>>,
 }
 
 impl PubSubHub {
     pub fn new() -> Self {
-        Self {
-            inner: Arc::new(RwLock::new(PubSubInner {
+        let shard_count = std::thread::available_parallelism()
+            .map(|value| value.get())
+            .unwrap_or(1)
+            .saturating_mul(4)
+            .max(1)
+            .next_power_of_two();
+
+        let mut shards = Vec::with_capacity(shard_count);
+        for _ in 0..shard_count {
+            shards.push(RwLock::new(PubSubShard {
                 channels: HashMap::new(),
-                patterns: HashMap::new(),
-            })),
+                patterns_by_prefix: HashMap::new(),
+            }));
+        }
+
+        Self {
+            shards: Arc::new(shards),
+            shard_mask: shard_count - 1,
+            hash_builder: RandomState::new(),
             next_id: Arc::new(AtomicU64::new(1)),
             notify_mask: Arc::new(AtomicU16::new(0)),
         }
@@ -36,57 +54,83 @@ impl PubSubHub {
     }
 
     pub fn subscribe(&self, id: u64, channel: &[u8], tx: &UnboundedSender<RespFrame>) -> bool {
-        let mut inner = self.inner.write();
-        let subscribers = inner.channels.entry(channel.to_vec()).or_default();
+        let idx = self.shard_index(channel);
+        let mut shard = self.shards[idx].write();
+        let subscribers = shard.channels.entry(channel.to_vec()).or_default();
         subscribers.insert(id, tx.clone()).is_none()
     }
 
     pub fn unsubscribe(&self, id: u64, channel: &[u8]) -> bool {
-        let mut inner = self.inner.write();
-        let Some(subscribers) = inner.channels.get_mut(channel) else {
+        let idx = self.shard_index(channel);
+        let mut shard = self.shards[idx].write();
+        let Some(subscribers) = shard.channels.get_mut(channel) else {
             return false;
         };
+
         let removed = subscribers.remove(&id).is_some();
         if subscribers.is_empty() {
-            inner.channels.remove(channel);
+            shard.channels.remove(channel);
         }
         removed
     }
 
     pub fn psubscribe(&self, id: u64, pattern: &[u8], tx: &UnboundedSender<RespFrame>) -> bool {
-        let mut inner = self.inner.write();
-        let subscribers = inner.patterns.entry(pattern.to_vec()).or_default();
+        let prefix = pattern_prefix(pattern);
+        let idx = self.shard_index(prefix.as_slice());
+        let mut shard = self.shards[idx].write();
+        let subscribers = shard
+            .patterns_by_prefix
+            .entry(prefix)
+            .or_default()
+            .entry(pattern.to_vec())
+            .or_default();
+
         subscribers.insert(id, tx.clone()).is_none()
     }
 
     pub fn punsubscribe(&self, id: u64, pattern: &[u8]) -> bool {
-        let mut inner = self.inner.write();
-        let Some(subscribers) = inner.patterns.get_mut(pattern) else {
+        let prefix = pattern_prefix(pattern);
+        let idx = self.shard_index(prefix.as_slice());
+        let mut shard = self.shards[idx].write();
+        let Some(patterns) = shard.patterns_by_prefix.get_mut(prefix.as_slice()) else {
             return false;
         };
+        let Some(subscribers) = patterns.get_mut(pattern) else {
+            return false;
+        };
+
         let removed = subscribers.remove(&id).is_some();
         if subscribers.is_empty() {
-            inner.patterns.remove(pattern);
+            patterns.remove(pattern);
+        }
+        if patterns.is_empty() {
+            shard.patterns_by_prefix.remove(prefix.as_slice());
         }
         removed
     }
 
     pub fn cleanup_connection(&self, id: u64) {
-        let mut inner = self.inner.write();
-        inner.channels.retain(|_, subscribers| {
-            subscribers.remove(&id);
-            !subscribers.is_empty()
-        });
-        inner.patterns.retain(|_, subscribers| {
-            subscribers.remove(&id);
-            !subscribers.is_empty()
-        });
+        for shard in self.shards.iter() {
+            let mut shard = shard.write();
+            shard.channels.retain(|_, subscribers| {
+                subscribers.remove(&id);
+                !subscribers.is_empty()
+            });
+            shard.patterns_by_prefix.retain(|_, patterns| {
+                patterns.retain(|_, subscribers| {
+                    subscribers.remove(&id);
+                    !subscribers.is_empty()
+                });
+                !patterns.is_empty()
+            });
+        }
     }
 
     pub fn publish(&self, channel: &[u8], payload: &[u8]) -> i64 {
-        let (channel_subscribers, pattern_subscribers) = {
-            let inner = self.inner.read();
-            let channel_subscribers = inner
+        let channel_subscribers = {
+            let idx = self.shard_index(channel);
+            let shard = self.shards[idx].read();
+            shard
                 .channels
                 .get(channel)
                 .map(|subs| {
@@ -94,20 +138,29 @@ impl PubSubHub {
                         .map(|(&id, tx)| (id, tx.clone()))
                         .collect::<Vec<_>>()
                 })
-                .unwrap_or_default();
-            let pattern_subscribers = inner
-                .patterns
-                .iter()
-                .filter(|(pattern, _)| wildcard_match(pattern, channel))
-                .flat_map(|(pattern, subscribers)| {
+                .unwrap_or_default()
+        };
+
+        let mut pattern_subscribers = Vec::new();
+        for prefix_len in 0..=channel.len() {
+            let prefix = &channel[..prefix_len];
+            let idx = self.shard_index(prefix);
+            let shard = self.shards[idx].read();
+            let Some(patterns) = shard.patterns_by_prefix.get(prefix) else {
+                continue;
+            };
+
+            for (pattern, subscribers) in patterns {
+                if !wildcard_match(pattern, channel) {
+                    continue;
+                }
+                pattern_subscribers.extend(
                     subscribers
                         .iter()
-                        .map(|(&id, tx)| (id, pattern.clone(), tx.clone()))
-                        .collect::<Vec<_>>()
-                })
-                .collect::<Vec<_>>();
-            (channel_subscribers, pattern_subscribers)
-        };
+                        .map(|(&id, tx)| (id, pattern.clone(), tx.clone())),
+                );
+            }
+        }
 
         let mut delivered = 0_i64;
         for (id, tx) in channel_subscribers {
@@ -174,23 +227,30 @@ impl PubSubHub {
     }
 
     pub fn pubsub_channels(&self, pattern: Option<&[u8]>) -> Vec<Vec<u8>> {
-        let inner = self.inner.read();
-        let mut channels = inner
-            .channels
-            .keys()
-            .filter(|channel| pattern.is_none_or(|matcher| wildcard_match(matcher, channel)))
-            .cloned()
-            .collect::<Vec<_>>();
+        let mut channels = Vec::new();
+        for shard in self.shards.iter() {
+            let shard = shard.read();
+            channels.extend(
+                shard
+                    .channels
+                    .keys()
+                    .filter(|channel| {
+                        pattern.is_none_or(|matcher| wildcard_match(matcher, channel))
+                    })
+                    .cloned(),
+            );
+        }
         channels.sort_unstable();
         channels
     }
 
     pub fn pubsub_numsub(&self, channels: &[Vec<u8>]) -> Vec<(Vec<u8>, i64)> {
-        let inner = self.inner.read();
         channels
             .iter()
             .map(|channel| {
-                let count = inner
+                let idx = self.shard_index(channel);
+                let shard = self.shards[idx].read();
+                let count = shard
                     .channels
                     .get(channel.as_slice())
                     .map_or(0_i64, |subscribers| subscribers.len() as i64);
@@ -200,12 +260,27 @@ impl PubSubHub {
     }
 
     pub fn pubsub_numpat(&self) -> i64 {
-        let inner = self.inner.read();
-        inner
-            .patterns
-            .values()
-            .map(|subscribers| subscribers.len() as i64)
+        self.shards
+            .iter()
+            .map(|shard| {
+                let shard = shard.read();
+                shard
+                    .patterns_by_prefix
+                    .values()
+                    .map(|patterns| {
+                        patterns
+                            .values()
+                            .map(|subscribers| subscribers.len() as i64)
+                            .sum::<i64>()
+                    })
+                    .sum::<i64>()
+            })
             .sum()
+    }
+
+    fn shard_index(&self, key: &[u8]) -> usize {
+        let hash = self.hash_builder.hash_one(key);
+        (hash as usize) & self.shard_mask
     }
 }
 
@@ -273,6 +348,14 @@ impl ConnectionPubSub {
     pub fn subscription_count(&self) -> i64 {
         (self.channels.len() + self.patterns.len()) as i64
     }
+}
+
+fn pattern_prefix(pattern: &[u8]) -> Vec<u8> {
+    let prefix_len = pattern
+        .iter()
+        .position(|&byte| byte == b'*' || byte == b'?')
+        .unwrap_or(pattern.len());
+    pattern[..prefix_len].to_vec()
 }
 
 fn wildcard_match(pattern: &[u8], text: &[u8]) -> bool {
