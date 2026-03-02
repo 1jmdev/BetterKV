@@ -17,7 +17,7 @@ pub(super) fn execute_regular_command(
     args_buf: &mut Vec<CompactArg>,
     frame: RespFrame,
 ) -> RespFrame {
-    let _trace = profiler::scope("server::connection::execute_regular_command");
+    let _trace = profiler::scope("server::connection::dispatch::execute_regular_command");
     if let Err(err) = parse_command_into(frame, args_buf) {
         return RespFrame::error_static(err);
     }
@@ -47,7 +47,7 @@ fn handle_pubsub_or_config_command(
     pubsub_state: &mut ConnectionPubSub,
     args: &[CompactArg],
 ) -> Option<RespFrame> {
-    let _trace = profiler::scope("server::connection::handle_pubsub_or_config_command");
+    let _trace = profiler::scope("server::connection::dispatch::handle_pubsub_or_config_command");
     let command = args[0].as_slice();
 
     if command == b"PUBLISH" {
