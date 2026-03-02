@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use engine::store::Store;
-use protocol::types::RespFrame;
+use protocol::types::{BulkData, RespFrame};
 
 #[derive(Default)]
 pub struct TransactionState {
@@ -173,7 +173,8 @@ fn command_name<'a>(frame: &'a RespFrame) -> Result<Option<&'a [u8]>, &'static s
     };
 
     match first {
-        RespFrame::Bulk(Some(value)) => Ok(Some(value.as_slice())),
+        RespFrame::Bulk(Some(BulkData::Arg(value))) => Ok(Some(value.as_slice())),
+        RespFrame::Bulk(Some(BulkData::Value(value))) => Ok(Some(value.as_slice())),
         RespFrame::Simple(value) => Ok(Some(value.as_bytes())),
         _ => Err("ERR invalid argument type"),
     }
@@ -224,7 +225,8 @@ fn parse_args<'a>(frame: &'a RespFrame) -> Result<Vec<&'a [u8]>, &'static str> {
     let mut args = Vec::with_capacity(items.len());
     for item in items {
         match item {
-            RespFrame::Bulk(Some(value)) => args.push(value.as_slice()),
+            RespFrame::Bulk(Some(BulkData::Arg(value))) => args.push(value.as_slice()),
+            RespFrame::Bulk(Some(BulkData::Value(value))) => args.push(value.as_slice()),
             RespFrame::Simple(value) => args.push(value.as_bytes()),
             _ => return Err("ERR invalid argument type"),
         }

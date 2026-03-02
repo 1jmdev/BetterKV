@@ -1,7 +1,7 @@
 use crate::util::{cmd, pack_runtime};
 use crate::{connection, geo, hash, keyspace, list, set, stream, string, ttl, zset};
 use engine::store::Store;
-use engine::value::CompactArg;
+use engine::value::{CompactArg, CompactBytes};
 use protocol::types::{BulkData, RespFrame};
 
 pub fn dispatch(store: &Store, frame: RespFrame) -> RespFrame {
@@ -296,23 +296,35 @@ pub fn parse_command_into(
         args.reserve(items.len() - args.capacity());
     }
 
-    for item in items {
-        match item {
-            RespFrame::Bulk(Some(BulkData::Arg(bytes))) => args.push(bytes),
-            RespFrame::Bulk(Some(BulkData::Value(bytes))) => {
-                args.push(CompactArg::from_vec(bytes.into_vec()))
-            }
-            RespFrame::Simple(value) => args.push(CompactArg::from_vec(value.into_bytes())),
-            RespFrame::SimpleStatic(value) => {
-                args.push(CompactArg::from_slice(value.as_bytes()));
-            }
-            _ => return Err("ERR invalid argument type"),
+    let mut items = items.into_iter();
+    if let Some(first_item) = items.next() {
+        let mut first = parse_arg(first_item)?;
+        uppercase_compact_arg_in_place(&mut first);
+        args.push(first);
+
+        for item in items {
+            args.push(parse_arg(item)?);
         }
     }
 
-    if let Some(first) = args.first_mut() {
-        first.make_ascii_uppercase();
-    }
-
     Ok(())
+}
+
+#[inline]
+fn parse_arg(item: RespFrame) -> Result<CompactArg, &'static str> {
+    match item {
+        RespFrame::Bulk(Some(BulkData::Arg(bytes))) => Ok(bytes),
+        RespFrame::Bulk(Some(BulkData::Value(bytes))) => Ok(CompactArg::from_vec(bytes.into_vec())),
+        RespFrame::Simple(value) => Ok(CompactArg::from_vec(value.into_bytes())),
+        RespFrame::SimpleStatic(value) => Ok(CompactArg::from_slice(value.as_bytes())),
+        _ => Err("ERR invalid argument type"),
+    }
+}
+
+#[inline]
+fn uppercase_compact_arg_in_place(arg: &mut CompactArg) {
+    match arg {
+        CompactBytes::Inline { len, data } => data[..*len as usize].make_ascii_uppercase(),
+        CompactBytes::Heap(value) => value.make_ascii_uppercase(),
+    }
 }
