@@ -8,11 +8,7 @@
 - Multi-threaded Tokio TCP server.
 - Sharded in-memory key/value store for concurrent access.
 - Background key expiration sweeper.
-- Redis-compatible command subset:
-  - `PING`, `ECHO`
-  - `GET`, `SET`, `DEL`, `EXISTS`
-  - `INCR`, `MGET`, `MSET`
-  - `EXPIRE`, `TTL`
+- Redis-compatible for common commands
 
 ## Workspace
 
