@@ -1,5 +1,5 @@
-use crate::commands::util::{CommandId, parse_command_id};
-use crate::commands::{connection, hash, keyspace, list, set, string, ttl, zset};
+use crate::commands::util::{parse_command_id, CommandId};
+use crate::commands::{connection, geo, hash, keyspace, list, set, stream, string, ttl, zset};
 use crate::engine::store::Store;
 use crate::engine::value::CompactArg;
 use crate::protocol::types::{BulkData, RespFrame};
@@ -154,6 +154,34 @@ fn dispatch_cold(store: &Store, cmd: CommandId, args: &[CompactArg]) -> RespFram
         CommandId::Zunion => zset::zop(store, args, "ZUNION"),
         CommandId::Zdiff => zset::zop(store, args, "ZDIFF"),
         CommandId::Zscan => zset::zscan(store, args),
+        CommandId::Zremrangebyrank => zset::zremrangebyrank(store, args),
+
+        // ── GEO ───────────────────────────────────────────────────────────
+        CommandId::Geoadd => geo::geoadd(store, args),
+        CommandId::Geopos => geo::geopos(store, args),
+        CommandId::Geodist => geo::geodist(store, args),
+        CommandId::Geohash => geo::geohash(store, args),
+        CommandId::Georadius => geo::georadius(store, args),
+        CommandId::GeoradiusRo => geo::georadius_ro(store, args),
+        CommandId::Georadiusbymember => geo::georadiusbymember(store, args),
+        CommandId::GeoradiusbymemberRo => geo::georadiusbymember_ro(store, args),
+        CommandId::Geosearch => geo::geosearch(store, args),
+        CommandId::Geosearchstore => geo::geosearchstore(store, args),
+
+        // ── Streams ───────────────────────────────────────────────────────
+        CommandId::Xadd => stream::xadd(store, args),
+        CommandId::Xlen => stream::xlen(store, args),
+        CommandId::Xdel => stream::xdel(store, args),
+        CommandId::Xrange => stream::xrange(store, args),
+        CommandId::Xrevrange => stream::xrevrange(store, args),
+        CommandId::Xtrim => stream::xtrim(store, args),
+        CommandId::Xread => stream::xread(store, args),
+        CommandId::Xgroup => stream::xgroup(store, args),
+        CommandId::Xreadgroup => stream::xreadgroup(store, args),
+        CommandId::Xack => stream::xack(store, args),
+        CommandId::Xpending => stream::xpending(store, args),
+        CommandId::Xclaim => stream::xclaim(store, args),
+        CommandId::Xautoclaim => stream::xautoclaim(store, args),
 
         // ── Keyspace ──────────────────────────────────────────────────────
         CommandId::Exists => keyspace::exists(store, args),

@@ -1,5 +1,6 @@
 use std::borrow::Borrow;
 use std::cmp::Ordering;
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::VecDeque;
 use std::hash::{Hash, Hasher};
@@ -134,6 +135,42 @@ pub type CompactArg = CompactBytes<INLINE_BYTES_CAPACITY>;
 pub type HashValueMap = HashMap<CompactKey, CompactValue, RandomState>;
 pub type ListValue = VecDeque<CompactValue>;
 pub type SetValue = HashSet<CompactKey, RandomState>;
+pub type GeoValue = HashMap<CompactKey, (f64, f64), RandomState>;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct StreamId {
+    pub ms: u64,
+    pub seq: u64,
+}
+
+#[derive(Clone, Debug)]
+pub struct StreamPendingEntry {
+    pub consumer: CompactKey,
+    pub deliveries: u64,
+}
+
+#[derive(Clone, Debug)]
+pub struct StreamGroup {
+    pub last_delivered: StreamId,
+    pub pending: HashMap<StreamId, StreamPendingEntry, RandomState>,
+}
+
+#[derive(Clone, Debug)]
+pub struct StreamValue {
+    pub entries: BTreeMap<StreamId, Vec<(CompactKey, CompactValue)>>,
+    pub groups: HashMap<CompactKey, StreamGroup, RandomState>,
+    pub last_id: StreamId,
+}
+
+impl StreamValue {
+    pub fn new() -> Self {
+        Self {
+            entries: BTreeMap::new(),
+            groups: HashMap::with_hasher(RandomState::new()),
+            last_id: StreamId { ms: 0, seq: 0 },
+        }
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct ZSetOrderEntry {
@@ -268,6 +305,8 @@ pub enum Entry {
     List(Box<ListValue>),
     Set(Box<SetValue>),
     ZSet(Box<ZSetValueMap>),
+    Geo(Box<GeoValue>),
+    Stream(Box<StreamValue>),
 }
 
 impl Entry {
@@ -286,21 +325,36 @@ impl Entry {
     pub fn as_string(&self) -> Option<&CompactValue> {
         match self {
             Self::String(value) => Some(value),
-            Self::Hash(_) | Self::List(_) | Self::Set(_) | Self::ZSet(_) => None,
+            Self::Hash(_)
+            | Self::List(_)
+            | Self::Set(_)
+            | Self::ZSet(_)
+            | Self::Geo(_)
+            | Self::Stream(_) => None,
         }
     }
 
     pub fn into_string(self) -> Option<CompactValue> {
         match self {
             Self::String(value) => Some(value),
-            Self::Hash(_) | Self::List(_) | Self::Set(_) | Self::ZSet(_) => None,
+            Self::Hash(_)
+            | Self::List(_)
+            | Self::Set(_)
+            | Self::ZSet(_)
+            | Self::Geo(_)
+            | Self::Stream(_) => None,
         }
     }
 
     pub fn as_hash(&self) -> Option<&HashValueMap> {
         match self {
             Self::Hash(value) => Some(value),
-            Self::String(_) | Self::List(_) | Self::Set(_) | Self::ZSet(_) => None,
+            Self::String(_)
+            | Self::List(_)
+            | Self::Set(_)
+            | Self::ZSet(_)
+            | Self::Geo(_)
+            | Self::Stream(_) => None,
         }
     }
 
@@ -311,48 +365,128 @@ impl Entry {
             Self::List(_) => None,
             Self::Set(_) => None,
             Self::ZSet(_) => None,
+            Self::Geo(_) => None,
+            Self::Stream(_) => None,
         }
     }
 
     pub fn as_list(&self) -> Option<&ListValue> {
         match self {
             Self::List(value) => Some(value),
-            Self::String(_) | Self::Hash(_) | Self::Set(_) | Self::ZSet(_) => None,
+            Self::String(_)
+            | Self::Hash(_)
+            | Self::Set(_)
+            | Self::ZSet(_)
+            | Self::Geo(_)
+            | Self::Stream(_) => None,
         }
     }
 
     pub fn as_list_mut(&mut self) -> Option<&mut ListValue> {
         match self {
             Self::List(value) => Some(value),
-            Self::String(_) | Self::Hash(_) | Self::Set(_) | Self::ZSet(_) => None,
+            Self::String(_)
+            | Self::Hash(_)
+            | Self::Set(_)
+            | Self::ZSet(_)
+            | Self::Geo(_)
+            | Self::Stream(_) => None,
         }
     }
 
     pub fn as_set(&self) -> Option<&SetValue> {
         match self {
             Self::Set(value) => Some(value),
-            Self::String(_) | Self::Hash(_) | Self::List(_) | Self::ZSet(_) => None,
+            Self::String(_)
+            | Self::Hash(_)
+            | Self::List(_)
+            | Self::ZSet(_)
+            | Self::Geo(_)
+            | Self::Stream(_) => None,
         }
     }
 
     pub fn as_set_mut(&mut self) -> Option<&mut SetValue> {
         match self {
             Self::Set(value) => Some(value),
-            Self::String(_) | Self::Hash(_) | Self::List(_) | Self::ZSet(_) => None,
+            Self::String(_)
+            | Self::Hash(_)
+            | Self::List(_)
+            | Self::ZSet(_)
+            | Self::Geo(_)
+            | Self::Stream(_) => None,
         }
     }
 
     pub fn as_zset(&self) -> Option<&ZSetValueMap> {
         match self {
             Self::ZSet(value) => Some(value),
-            Self::String(_) | Self::Hash(_) | Self::List(_) | Self::Set(_) => None,
+            Self::String(_)
+            | Self::Hash(_)
+            | Self::List(_)
+            | Self::Set(_)
+            | Self::Geo(_)
+            | Self::Stream(_) => None,
         }
     }
 
     pub fn as_zset_mut(&mut self) -> Option<&mut ZSetValueMap> {
         match self {
             Self::ZSet(value) => Some(value),
-            Self::String(_) | Self::Hash(_) | Self::List(_) | Self::Set(_) => None,
+            Self::String(_)
+            | Self::Hash(_)
+            | Self::List(_)
+            | Self::Set(_)
+            | Self::Geo(_)
+            | Self::Stream(_) => None,
+        }
+    }
+
+    pub fn as_geo(&self) -> Option<&GeoValue> {
+        match self {
+            Self::Geo(value) => Some(value),
+            Self::String(_)
+            | Self::Hash(_)
+            | Self::List(_)
+            | Self::Set(_)
+            | Self::ZSet(_)
+            | Self::Stream(_) => None,
+        }
+    }
+
+    pub fn as_geo_mut(&mut self) -> Option<&mut GeoValue> {
+        match self {
+            Self::Geo(value) => Some(value),
+            Self::String(_)
+            | Self::Hash(_)
+            | Self::List(_)
+            | Self::Set(_)
+            | Self::ZSet(_)
+            | Self::Stream(_) => None,
+        }
+    }
+
+    pub fn as_stream(&self) -> Option<&StreamValue> {
+        match self {
+            Self::Stream(value) => Some(value),
+            Self::String(_)
+            | Self::Hash(_)
+            | Self::List(_)
+            | Self::Set(_)
+            | Self::ZSet(_)
+            | Self::Geo(_) => None,
+        }
+    }
+
+    pub fn as_stream_mut(&mut self) -> Option<&mut StreamValue> {
+        match self {
+            Self::Stream(value) => Some(value),
+            Self::String(_)
+            | Self::Hash(_)
+            | Self::List(_)
+            | Self::Set(_)
+            | Self::ZSet(_)
+            | Self::Geo(_) => None,
         }
     }
 
@@ -363,6 +497,8 @@ impl Entry {
             Self::List(_) => "list",
             Self::Set(_) => "set",
             Self::ZSet(_) => "zset",
+            Self::Geo(_) => "zset",
+            Self::Stream(_) => "stream",
         }
     }
 }

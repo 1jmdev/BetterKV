@@ -156,6 +156,32 @@ pub enum CommandId {
     Zunion,
     Zdiff,
     Zscan,
+    Zremrangebyrank,
+    // Geo
+    Geoadd,
+    Geopos,
+    Geodist,
+    Geohash,
+    Georadius,
+    GeoradiusRo,
+    Georadiusbymember,
+    GeoradiusbymemberRo,
+    Geosearch,
+    Geosearchstore,
+    // Stream
+    Xadd,
+    Xlen,
+    Xdel,
+    Xrange,
+    Xrevrange,
+    Xtrim,
+    Xread,
+    Xgroup,
+    Xreadgroup,
+    Xack,
+    Xpending,
+    Xclaim,
+    Xautoclaim,
     // Unknown
     Unknown,
 }
@@ -333,6 +359,19 @@ pub fn parse_command_id(command: &[u8]) -> CommandId {
                     CommandId::Unknown
                 }
             }
+            b'X' => {
+                if command.eq_ignore_ascii_case(b"XACK") {
+                    CommandId::Xack
+                } else if command.eq_ignore_ascii_case(b"XADD") {
+                    CommandId::Xadd
+                } else if command.eq_ignore_ascii_case(b"XDEL") {
+                    CommandId::Xdel
+                } else if command.eq_ignore_ascii_case(b"XLEN") {
+                    CommandId::Xlen
+                } else {
+                    CommandId::Unknown
+                }
+            }
             _ => CommandId::Unknown,
         },
         5 => match command[0].to_ascii_uppercase() {
@@ -444,6 +483,15 @@ pub fn parse_command_id(command: &[u8]) -> CommandId {
                     CommandId::Unknown
                 }
             }
+            b'X' => {
+                if command.eq_ignore_ascii_case(b"XREAD") {
+                    CommandId::Xread
+                } else if command.eq_ignore_ascii_case(b"XTRIM") {
+                    CommandId::Xtrim
+                } else {
+                    CommandId::Unknown
+                }
+            }
             _ => CommandId::Unknown,
         },
         6 => match command[0].to_ascii_uppercase() {
@@ -491,7 +539,11 @@ pub fn parse_command_id(command: &[u8]) -> CommandId {
                 }
             }
             b'G' => {
-                if command.eq_ignore_ascii_case(b"GETDEL") {
+                if command.eq_ignore_ascii_case(b"GEOADD") {
+                    CommandId::Geoadd
+                } else if command.eq_ignore_ascii_case(b"GEOPOS") {
+                    CommandId::Geopos
+                } else if command.eq_ignore_ascii_case(b"GETDEL") {
                     CommandId::Getdel
                 } else if command.eq_ignore_ascii_case(b"GETBIT") {
                     CommandId::Getbit
@@ -582,6 +634,17 @@ pub fn parse_command_id(command: &[u8]) -> CommandId {
                     CommandId::Unknown
                 }
             }
+            b'X' => {
+                if command.eq_ignore_ascii_case(b"XCLAIM") {
+                    CommandId::Xclaim
+                } else if command.eq_ignore_ascii_case(b"XGROUP") {
+                    CommandId::Xgroup
+                } else if command.eq_ignore_ascii_case(b"XRANGE") {
+                    CommandId::Xrange
+                } else {
+                    CommandId::Unknown
+                }
+            }
             _ => CommandId::Unknown,
         },
         7 => match command[0].to_ascii_uppercase() {
@@ -608,6 +671,15 @@ pub fn parse_command_id(command: &[u8]) -> CommandId {
                     CommandId::Hincrby
                 } else if command.eq_ignore_ascii_case(b"HSTRLEN") {
                     CommandId::Hstrlen
+                } else {
+                    CommandId::Unknown
+                }
+            }
+            b'G' => {
+                if command.eq_ignore_ascii_case(b"GEODIST") {
+                    CommandId::Geodist
+                } else if command.eq_ignore_ascii_case(b"GEOHASH") {
+                    CommandId::Geohash
                 } else {
                     CommandId::Unknown
                 }
@@ -683,7 +755,9 @@ pub fn parse_command_id(command: &[u8]) -> CommandId {
                 }
             }
             b'G' => {
-                if command.eq_ignore_ascii_case(b"GETRANGE") {
+                if command.eq_ignore_ascii_case(b"GEOSEARCH") {
+                    CommandId::Geosearch
+                } else if command.eq_ignore_ascii_case(b"GETRANGE") {
                     CommandId::Getrange
                 } else {
                     CommandId::Unknown
@@ -712,6 +786,13 @@ pub fn parse_command_id(command: &[u8]) -> CommandId {
                     CommandId::Unknown
                 }
             }
+            b'X' => {
+                if command.eq_ignore_ascii_case(b"XPENDING") {
+                    CommandId::Xpending
+                } else {
+                    CommandId::Unknown
+                }
+            }
             _ => CommandId::Unknown,
         },
         9 => match command[0].to_ascii_uppercase() {
@@ -722,9 +803,23 @@ pub fn parse_command_id(command: &[u8]) -> CommandId {
                     CommandId::Unknown
                 }
             }
+            b'G' => {
+                if command.eq_ignore_ascii_case(b"GEORADIUS") {
+                    CommandId::Georadius
+                } else {
+                    CommandId::Unknown
+                }
+            }
             b'S' => {
                 if command.eq_ignore_ascii_case(b"SISMEMBER") {
                     CommandId::Sismember
+                } else {
+                    CommandId::Unknown
+                }
+            }
+            b'X' => {
+                if command.eq_ignore_ascii_case(b"XREVRANGE") {
+                    CommandId::Xrevrange
                 } else {
                     CommandId::Unknown
                 }
@@ -762,12 +857,28 @@ pub fn parse_command_id(command: &[u8]) -> CommandId {
                     CommandId::Unknown
                 }
             }
+            b'X' => {
+                if command.eq_ignore_ascii_case(b"XAUTOCLAIM") {
+                    CommandId::Xautoclaim
+                } else if command.eq_ignore_ascii_case(b"XREADGROUP") {
+                    CommandId::Xreadgroup
+                } else {
+                    CommandId::Unknown
+                }
+            }
             _ => CommandId::Unknown,
         },
         11 => match command[0].to_ascii_uppercase() {
             b'B' => {
                 if command.eq_ignore_ascii_case(b"BITFIELD_RO") {
                     CommandId::BitfieldRo
+                } else {
+                    CommandId::Unknown
+                }
+            }
+            b'G' => {
+                if command.eq_ignore_ascii_case(b"GEORADIUS_RO") {
+                    CommandId::GeoradiusRo
                 } else {
                     CommandId::Unknown
                 }
@@ -806,9 +917,32 @@ pub fn parse_command_id(command: &[u8]) -> CommandId {
                 CommandId::Unknown
             }
         }
+        14 => {
+            if command.eq_ignore_ascii_case(b"GEOSEARCHSTORE") {
+                CommandId::Geosearchstore
+            } else {
+                CommandId::Unknown
+            }
+        }
+        15 => {
+            if command.eq_ignore_ascii_case(b"GEORADIUSBYMEMBER") {
+                CommandId::Georadiusbymember
+            } else if command.eq_ignore_ascii_case(b"ZREMRANGEBYRANK") {
+                CommandId::Zremrangebyrank
+            } else {
+                CommandId::Unknown
+            }
+        }
         16 => {
             if command.eq_ignore_ascii_case(b"ZREVRANGEBYSCORE") {
                 CommandId::Zrevrangebyscore
+            } else {
+                CommandId::Unknown
+            }
+        }
+        18 => {
+            if command.eq_ignore_ascii_case(b"GEORADIUSBYMEMBER_RO") {
+                CommandId::GeoradiusbymemberRo
             } else {
                 CommandId::Unknown
             }

@@ -1,10 +1,12 @@
 pub mod connection;
 pub mod dispatcher;
+pub mod geo;
 pub mod hash;
 pub mod keyspace;
 pub mod list;
 pub mod set;
 pub mod string;
+pub mod stream;
 pub mod ttl;
 pub mod util;
 pub mod zset;
