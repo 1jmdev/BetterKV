@@ -27,50 +27,51 @@ impl TransactionState {
             Err(err) => return RespFrame::error_static(err),
         };
 
-        let command = classify_transaction_command(command);
-
-        if command == TransactionCommand::Multi {
-            let args = match parse_args(&frame) {
-                Ok(value) => value,
-                Err(err) => return RespFrame::error_static(err),
-            };
-            return self.multi(&args);
+        match classify_transaction_command(command) {
+            TransactionCommand::Multi => {
+                let args = match parse_args(&frame) {
+                    Ok(value) => value,
+                    Err(err) => return RespFrame::error_static(err),
+                };
+                self.multi(&args)
+            }
+            TransactionCommand::Exec => {
+                let args = match parse_args(&frame) {
+                    Ok(value) => value,
+                    Err(err) => return RespFrame::error_static(err),
+                };
+                self.exec_with(store, &args, execute)
+            }
+            TransactionCommand::Discard => {
+                let args = match parse_args(&frame) {
+                    Ok(value) => value,
+                    Err(err) => return RespFrame::error_static(err),
+                };
+                self.discard(&args)
+            }
+            TransactionCommand::Watch => {
+                let args = match parse_args(&frame) {
+                    Ok(value) => value,
+                    Err(err) => return RespFrame::error_static(err),
+                };
+                self.watch(store, &args)
+            }
+            TransactionCommand::Unwatch => {
+                let args = match parse_args(&frame) {
+                    Ok(value) => value,
+                    Err(err) => return RespFrame::error_static(err),
+                };
+                self.unwatch(&args)
+            }
+            TransactionCommand::Other => {
+                if self.in_multi {
+                    self.queued.push(frame);
+                    RespFrame::Simple("QUEUED".to_string())
+                } else {
+                    execute(store, frame)
+                }
+            }
         }
-        if command == TransactionCommand::Exec {
-            let args = match parse_args(&frame) {
-                Ok(value) => value,
-                Err(err) => return RespFrame::error_static(err),
-            };
-            return self.exec_with(store, &args, execute);
-        }
-        if command == TransactionCommand::Discard {
-            let args = match parse_args(&frame) {
-                Ok(value) => value,
-                Err(err) => return RespFrame::error_static(err),
-            };
-            return self.discard(&args);
-        }
-        if command == TransactionCommand::Watch {
-            let args = match parse_args(&frame) {
-                Ok(value) => value,
-                Err(err) => return RespFrame::error_static(err),
-            };
-            return self.watch(store, &args);
-        }
-        if command == TransactionCommand::Unwatch {
-            let args = match parse_args(&frame) {
-                Ok(value) => value,
-                Err(err) => return RespFrame::error_static(err),
-            };
-            return self.unwatch(&args);
-        }
-
-        if self.in_multi {
-            self.queued.push(frame);
-            return RespFrame::Simple("QUEUED".to_string());
-        }
-
-        execute(store, frame)
     }
 
     fn multi(&mut self, args: &[&[u8]]) -> RespFrame {
