@@ -25,9 +25,8 @@ pub async fn run_listener(config: Config) -> Result<(), Box<dyn std::error::Erro
     for listener in listeners {
         let shared_store = store.clone();
         let shared_pubsub = pubsub.clone();
-        accept_tasks.spawn(async move {
-            run_accept_loop(listener, shared_store, shared_pubsub).await
-        });
+        accept_tasks
+            .spawn(async move { run_accept_loop(listener, shared_store, shared_pubsub).await });
     }
 
     loop {

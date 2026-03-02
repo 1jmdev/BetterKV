@@ -126,7 +126,10 @@ impl CommandName {
         let mut data = [0u8; CMD_NAME_MAX];
         data[..len].copy_from_slice(&src[..len]);
         data[..len].make_ascii_uppercase();
-        Self { len: len as u8, data }
+        Self {
+            len: len as u8,
+            data,
+        }
     }
 
     fn as_bytes(&self) -> &[u8] {
