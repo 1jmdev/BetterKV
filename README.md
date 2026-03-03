@@ -76,3 +76,13 @@ bun run profile.ts
 ```
 
 This script builds `justkv-server`, runs isolated workloads (`SET`, `GET`, `INCR`, `HSET`, `SADD`, `LPUSH`, `LRANGE`, `EXPIRE`) plus a mixed burst workload, then writes stage timings and long-request breakdowns to `profile-results.json`.
+
+## License
+
+Licensed under the [Elastic License 2.0](./LICENSE).
+
+You're free to use, modify, and distribute this software.
+The only restriction is you cannot provide it as a managed/hosted
+service to others.
+
+For a hosting/service license, contact: license@1jm.dev
