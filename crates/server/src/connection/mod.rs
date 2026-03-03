@@ -1,5 +1,4 @@
 use bytes::BytesMut;
-use commands::dispatcher::parse_command_into;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc::error::TryRecvError;
@@ -9,7 +8,7 @@ use crate::pubsub::{ConnectionPubSub, PubSubHub};
 use crate::transaction::TransactionState;
 use engine::store::Store;
 use protocol::encoder::encode;
-use protocol::parser::{ParseError, parse_frame};
+use protocol::parser::parse_command_into;
 use protocol::types::RespFrame;
 
 mod dispatch;
@@ -67,11 +66,7 @@ pub async fn handle_connection(
                     break Ok(());
                 }
 
-                while let Some(parsed) = parse_next_frame(&mut read_buf)? {
-                    if let Err(err) = parse_command_into(parsed, &mut command_args_buf) {
-                        encode(&RespFrame::error_static(err), &mut write_buf);
-                        continue;
-                    }
+                while parse_command_into(&mut read_buf, &mut command_args_buf)?.is_some() {
 
                     let _trace = command_args_buf
                         .first()
@@ -110,13 +105,4 @@ async fn flush_write_buf(stream: &mut TcpStream, write_buf: &mut BytesMut) -> st
     stream.write_all(write_buf).await?;
     write_buf.clear();
     Ok(())
-}
-
-fn parse_next_frame(src: &mut BytesMut) -> Result<Option<RespFrame>, ParseError> {
-    let _trace = profiler::scope("server::connection::parse_next_frame");
-    match parse_frame(src) {
-        Ok(Some(frame)) => Ok(Some(frame)),
-        Ok(None) | Err(ParseError::Incomplete) => Ok(None),
-        Err(err) => Err(err),
-    }
 }

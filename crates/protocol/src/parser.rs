@@ -1,4 +1,6 @@
 use bytes::{Buf, BytesMut};
+use memchr::memchr;
+use smallvec::SmallVec;
 use thiserror::Error;
 
 use crate::types::{BulkData, RespFrame};
@@ -28,6 +30,130 @@ pub fn parse_frame(src: &mut BytesMut) -> Result<Option<RespFrame>, ParseError> 
     }
 }
 
+pub fn parse_command_into(
+    src: &mut BytesMut,
+    args: &mut Vec<CompactArg>,
+) -> Result<Option<()>, ParseError> {
+    let _trace = profiler::scope("protocol::parser::parse_command_into");
+    if src.is_empty() {
+        return Ok(None);
+    }
+
+    if src[0] == b'*' {
+        return parse_command_array_into(src, args);
+    }
+
+    parse_inline_command_into(src, args)
+}
+
+fn parse_inline_command_into(
+    src: &mut BytesMut,
+    args: &mut Vec<CompactArg>,
+) -> Result<Option<()>, ParseError> {
+    let _trace = profiler::scope("protocol::parser::parse_inline_command_into");
+    let (line, consumed) = match parse_line_bytes(src, 0) {
+        Ok(value) => value,
+        Err(ParseError::Incomplete) => return Ok(None),
+        Err(err) => return Err(err),
+    };
+
+    args.clear();
+    for part in line
+        .split(|byte| byte.is_ascii_whitespace())
+        .filter(|part| !part.is_empty())
+    {
+        args.push(CompactArg::from_slice(part));
+    }
+
+    if args.is_empty() {
+        return Err(ParseError::Protocol("empty inline command".to_string()));
+    }
+
+    args[0].make_ascii_uppercase();
+    src.advance(consumed);
+    Ok(Some(()))
+}
+
+fn parse_command_array_into(
+    src: &mut BytesMut,
+    args: &mut Vec<CompactArg>,
+) -> Result<Option<()>, ParseError> {
+    let _trace = profiler::scope("protocol::parser::parse_command_array_into");
+    let (line, mut cursor) = match parse_line_bytes(src, 1) {
+        Ok(value) => value,
+        Err(ParseError::Incomplete) => return Ok(None),
+        Err(err) => return Err(err),
+    };
+
+    let length =
+        parse_decimal(line).ok_or(ParseError::Protocol("invalid array length".to_string()))?;
+    if length < 0 {
+        return Err(ParseError::Protocol("invalid command array".to_string()));
+    }
+
+    let argc = length as usize;
+    args.clear();
+    if args.capacity() < argc {
+        args.reserve(argc - args.capacity());
+    }
+
+    for _ in 0..argc {
+        if cursor >= src.len() {
+            return Ok(None);
+        }
+
+        match src[cursor] {
+            b'$' => {
+                let (bulk_len_raw, bulk_header_end) = match parse_line_bytes(src, cursor + 1) {
+                    Ok(value) => value,
+                    Err(ParseError::Incomplete) => return Ok(None),
+                    Err(err) => return Err(err),
+                };
+
+                let bulk_len = parse_decimal(bulk_len_raw)
+                    .ok_or(ParseError::Protocol("invalid bulk length".to_string()))?;
+                if bulk_len < 0 {
+                    return Err(ParseError::Protocol("invalid argument type".to_string()));
+                }
+
+                let size = bulk_len as usize;
+                if src.len() < bulk_header_end + size + 2 {
+                    return Ok(None);
+                }
+
+                let end = bulk_header_end + size;
+                if src.get(end) != Some(&b'\r') || src.get(end + 1) != Some(&b'\n') {
+                    return Err(ParseError::Protocol("missing bulk terminator".to_string()));
+                }
+
+                args.push(CompactArg::from_slice(&src[bulk_header_end..end]));
+                cursor = end + 2;
+            }
+            b'+' => {
+                let (simple, next) = match parse_line_bytes(src, cursor + 1) {
+                    Ok(value) => value,
+                    Err(ParseError::Incomplete) => return Ok(None),
+                    Err(err) => return Err(err),
+                };
+                if std::str::from_utf8(simple).is_err() {
+                    return Err(ParseError::Protocol("invalid utf8 line".to_string()));
+                }
+                args.push(CompactArg::from_slice(simple));
+                cursor = next;
+            }
+            _ => {
+                return Err(ParseError::Protocol("invalid argument type".to_string()));
+            }
+        }
+    }
+
+    if let Some(first) = args.first_mut() {
+        first.make_ascii_uppercase();
+    }
+    src.advance(cursor);
+    Ok(Some(()))
+}
+
 fn parse_value(src: &[u8], offset: usize) -> Result<(RespFrame, usize), ParseError> {
     let _trace = profiler::scope("protocol::parser::parse_value");
     if offset >= src.len() {
@@ -47,7 +173,7 @@ fn parse_value(src: &[u8], offset: usize) -> Result<(RespFrame, usize), ParseErr
 fn parse_inline(src: &[u8], offset: usize) -> Result<(RespFrame, usize), ParseError> {
     let _trace = profiler::scope("protocol::parser::parse_inline");
     let (line, consumed) = parse_line_bytes(src, offset)?;
-    let parts: Vec<RespFrame> = line
+    let parts: SmallVec<[RespFrame; 8]> = line
         .split(|byte| byte.is_ascii_whitespace())
         .filter(|part| !part.is_empty())
         .map(|part| RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(part)))))
@@ -57,7 +183,7 @@ fn parse_inline(src: &[u8], offset: usize) -> Result<(RespFrame, usize), ParseEr
         return Err(ParseError::Protocol("empty inline command".to_string()));
     }
 
-    Ok((RespFrame::Array(Some(parts)), consumed))
+    Ok((RespFrame::Array(Some(parts.into_vec())), consumed))
 }
 
 fn parse_simple(src: &[u8], offset: usize) -> Result<(RespFrame, usize), ParseError> {
@@ -122,14 +248,14 @@ fn parse_array(src: &[u8], offset: usize) -> Result<(RespFrame, usize), ParseErr
         return Ok((RespFrame::Array(None), cursor));
     }
 
-    let mut items = Vec::with_capacity(length as usize);
+    let mut items = SmallVec::<[RespFrame; 8]>::with_capacity(length as usize);
     for _ in 0..length {
         let (item, consumed) = parse_value(src, cursor)?;
         cursor = consumed;
         items.push(item);
     }
 
-    Ok((RespFrame::Array(Some(items)), cursor))
+    Ok((RespFrame::Array(Some(items.into_vec())), cursor))
 }
 
 fn parse_line_bytes(src: &[u8], from: usize) -> Result<(&[u8], usize), ParseError> {
@@ -138,14 +264,18 @@ fn parse_line_bytes(src: &[u8], from: usize) -> Result<(&[u8], usize), ParseErro
     Ok((&src[from..end], end + 2))
 }
 
+#[inline(always)]
 fn find_crlf(src: &[u8], from: usize) -> Option<usize> {
     let _trace = profiler::scope("protocol::parser::find_crlf");
-    let mut index = from;
-    while index + 1 < src.len() {
-        if src[index] == b'\r' && src[index + 1] == b'\n' {
-            return Some(index);
+    let haystack = &src[from..];
+    let mut offset = 0;
+    while offset < haystack.len() {
+        let pos = memchr(b'\r', &haystack[offset..])?;
+        let abs = offset + pos;
+        if abs + 1 < haystack.len() && haystack[abs + 1] == b'\n' {
+            return Some(from + abs);
         }
-        index += 1;
+        offset = abs + 1;
     }
     None
 }

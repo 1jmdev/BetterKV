@@ -552,8 +552,10 @@ dependencies = [
  "bytes",
  "engine",
  "itoa",
+ "memchr",
  "profiler",
  "ryu",
+ "smallvec",
  "thiserror",
 ]
 
