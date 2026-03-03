@@ -3,8 +3,10 @@ use crate::util::{Args, int_error, wrong_args};
 use engine::store::Store;
 use engine::value::{CompactArg, CompactBytes};
 use mlua::{HookTriggers, Lua, Table, Value, Variadic, VmState};
-use parking_lot::Mutex;
+use parking_lot::{Condvar, Mutex};
 use protocol::types::{BulkData, RespFrame};
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 
@@ -25,28 +27,78 @@ struct ScriptRuntime {
     running: Option<RunningScript>,
 }
 
+struct ScriptRuntimeSync {
+    state: Mutex<ScriptRuntime>,
+    condvar: Condvar,
+}
+
 struct ScriptExecutionGuard {
     kill_requested: Arc<AtomicBool>,
     performed_write: Arc<AtomicBool>,
     debug_mode: ScriptDebugMode,
 }
 
-static SCRIPT_RUNTIME: OnceLock<Mutex<ScriptRuntime>> = OnceLock::new();
+#[derive(Clone)]
+struct LuaCallContext {
+    store: Store,
+    readonly: bool,
+    wrote: Arc<AtomicBool>,
+}
 
-fn script_runtime() -> &'static Mutex<ScriptRuntime> {
-    SCRIPT_RUNTIME.get_or_init(|| {
-        Mutex::new(ScriptRuntime {
+struct LuaRuntime {
+    lua: Lua,
+    compiled_scripts: HashMap<Vec<u8>, mlua::RegistryKey>,
+}
+
+impl LuaRuntime {
+    fn new() -> Result<Self, String> {
+        let lua = Lua::new();
+
+        let redis = lua.create_table().map_err(lua_error_to_string)?;
+        let call_fn = create_redis_lua_function(&lua, false).map_err(lua_error_to_string)?;
+        redis.set("call", call_fn).map_err(lua_error_to_string)?;
+
+        let pcall_fn = create_redis_lua_function(&lua, true).map_err(lua_error_to_string)?;
+        redis.set("pcall", pcall_fn).map_err(lua_error_to_string)?;
+
+        lua.globals()
+            .set("redis", redis)
+            .map_err(lua_error_to_string)?;
+
+        Ok(Self {
+            lua,
+            compiled_scripts: HashMap::new(),
+        })
+    }
+
+    fn clear_cache(&mut self) {
+        self.compiled_scripts.clear();
+    }
+}
+
+thread_local! {
+    static LUA_RUNTIME: RefCell<Result<LuaRuntime, String>> = RefCell::new(LuaRuntime::new());
+}
+
+static SCRIPT_RUNTIME: OnceLock<ScriptRuntimeSync> = OnceLock::new();
+
+fn script_runtime() -> &'static ScriptRuntimeSync {
+    SCRIPT_RUNTIME.get_or_init(|| ScriptRuntimeSync {
+        state: Mutex::new(ScriptRuntime {
             debug_mode: ScriptDebugMode::No,
             running: None,
-        })
+        }),
+        condvar: Condvar::new(),
     })
 }
 
 impl Drop for ScriptExecutionGuard {
     fn drop(&mut self) {
         let _trace = profiler::scope("commands::scripting::ScriptExecutionGuard::drop");
-        let mut runtime = script_runtime().lock();
-        runtime.running = None;
+        let runtime = script_runtime();
+        let mut state = runtime.state.lock();
+        state.running = None;
+        runtime.condvar.notify_one();
     }
 }
 
@@ -158,6 +210,7 @@ pub(crate) fn script(store: &Store, args: &Args) -> RespFrame {
             return RespFrame::Error("ERR syntax error".to_string());
         }
         let _ = store.script_flush();
+        clear_lua_cache_current_thread();
         return RespFrame::ok();
     }
 
@@ -183,8 +236,9 @@ pub(crate) fn script(store: &Store, args: &Args) -> RespFrame {
             return RespFrame::Error("ERR syntax error".to_string());
         };
 
-        let mut runtime = script_runtime().lock();
-        runtime.debug_mode = mode;
+        let runtime = script_runtime();
+        let mut state = runtime.state.lock();
+        state.debug_mode = mode;
         return RespFrame::ok();
     }
 
@@ -233,17 +287,15 @@ fn parse_numkeys(raw: &[u8]) -> Result<usize, RespFrame> {
 
 fn begin_script_execution() -> Result<ScriptExecutionGuard, RespFrame> {
     let _trace = profiler::scope("commands::scripting::begin_script_execution");
-    let mut runtime = script_runtime().lock();
-    if runtime.running.is_some() {
-        return Err(RespFrame::Error(
-            "BUSY Redis is busy running a script. You can only call SCRIPT KILL or SHUTDOWN NOSAVE."
-                .to_string(),
-        ));
+    let runtime = script_runtime();
+    let mut state = runtime.state.lock();
+    while state.running.is_some() {
+        runtime.condvar.wait(&mut state);
     }
 
     let kill_requested = Arc::new(AtomicBool::new(false));
     let performed_write = Arc::new(AtomicBool::new(false));
-    runtime.running = Some(RunningScript {
+    state.running = Some(RunningScript {
         kill_requested: kill_requested.clone(),
         performed_write: performed_write.clone(),
     });
@@ -251,14 +303,15 @@ fn begin_script_execution() -> Result<ScriptExecutionGuard, RespFrame> {
     Ok(ScriptExecutionGuard {
         kill_requested,
         performed_write,
-        debug_mode: runtime.debug_mode,
+        debug_mode: state.debug_mode,
     })
 }
 
 fn script_kill() -> RespFrame {
     let _trace = profiler::scope("commands::scripting::script_kill");
-    let runtime = script_runtime().lock();
-    let Some(running) = runtime.running.as_ref() else {
+    let runtime = script_runtime();
+    let state = runtime.state.lock();
+    let Some(running) = state.running.as_ref() else {
         return RespFrame::Error("NOTBUSY No scripts in execution right now.".to_string());
     };
 
@@ -287,7 +340,7 @@ fn run_lua_script(
         Err(response) => return response,
     };
 
-    match execute_lua(store, script, keys, argv, readonly, &execution) {
+    match execute_lua(store, script, keys, argv, digest, readonly, &execution) {
         Ok(response) => response,
         Err(message) => RespFrame::Error(format!(
             "ERR Error running script (call to f_{}): {message}",
@@ -301,70 +354,94 @@ fn execute_lua(
     script: &[u8],
     keys: &[CompactArg],
     argv: &[CompactArg],
+    digest: &[u8],
     readonly: bool,
     execution: &ScriptExecutionGuard,
 ) -> Result<RespFrame, String> {
     let _trace = profiler::scope("commands::scripting::execute_lua");
-    let lua = Lua::new();
+    LUA_RUNTIME.with(|runtime| {
+        let mut runtime = runtime.borrow_mut();
+        let runtime = runtime.as_mut().map_err(|error| error.clone())?;
 
-    let kill_requested = execution.kill_requested.clone();
-    if execution.debug_mode != ScriptDebugMode::Sync {
-        lua.set_hook(
-            HookTriggers {
-                every_nth_instruction: Some(1000),
-                ..HookTriggers::default()
-            },
-            move |_lua, _debug| {
-                if kill_requested.load(Ordering::Relaxed) {
-                    Err(mlua::Error::RuntimeError(
-                        "Script killed by user with SCRIPT KILL...".to_string(),
-                    ))
-                } else {
-                    Ok(VmState::Continue)
-                }
-            },
+        let kill_requested = execution.kill_requested.clone();
+        if execution.debug_mode != ScriptDebugMode::Sync {
+            runtime
+                .lua
+                .set_hook(
+                    HookTriggers {
+                        every_nth_instruction: Some(1000),
+                        ..HookTriggers::default()
+                    },
+                    move |_lua, _debug| {
+                        if kill_requested.load(Ordering::Relaxed) {
+                            Err(mlua::Error::RuntimeError(
+                                "Script killed by user with SCRIPT KILL...".to_string(),
+                            ))
+                        } else {
+                            Ok(VmState::Continue)
+                        }
+                    },
+                )
+                .map_err(lua_error_to_string)?;
+        } else {
+            runtime.lua.remove_hook();
+        }
+
+        runtime.lua.set_app_data(LuaCallContext {
+            store: store.clone(),
+            readonly,
+            wrote: execution.performed_write.clone(),
+        });
+
+        let globals = runtime.lua.globals();
+        let keys_table = build_lua_args_table(&runtime.lua, keys).map_err(lua_error_to_string)?;
+        let argv_table = build_lua_args_table(&runtime.lua, argv).map_err(lua_error_to_string)?;
+        globals
+            .set("KEYS", keys_table)
+            .map_err(lua_error_to_string)?;
+        globals
+            .set("ARGV", argv_table)
+            .map_err(lua_error_to_string)?;
+
+        let compiled = if let Some(key) = runtime.compiled_scripts.get(digest) {
+            runtime
+                .lua
+                .registry_value::<mlua::Function>(key)
+                .map_err(lua_error_to_string)?
+        } else {
+            let function = runtime
+                .lua
+                .load(script)
+                .into_function()
+                .map_err(lua_error_to_string)?;
+            let key = runtime
+                .lua
+                .create_registry_value(function.clone())
+                .map_err(lua_error_to_string)?;
+            runtime.compiled_scripts.insert(digest.to_vec(), key);
+            function
+        };
+
+        let value = compiled.call::<Value>(()).map_err(lua_error_to_string)?;
+        let _ = runtime.lua.remove_app_data::<LuaCallContext>();
+        lua_value_to_resp(value)
+    })
+}
+
+fn create_redis_lua_function(lua: &Lua, protected: bool) -> mlua::Result<mlua::Function> {
+    lua.create_function(move |lua, values: Variadic<Value>| {
+        let context = lua.app_data_ref::<LuaCallContext>().ok_or_else(|| {
+            mlua::Error::RuntimeError("ERR Internal scripting context is missing".to_string())
+        })?;
+        execute_redis_call(
+            lua,
+            &context.store,
+            values,
+            protected,
+            context.readonly,
+            &context.wrote,
         )
-        .map_err(lua_error_to_string)?;
-    }
-
-    let globals = lua.globals();
-    let keys_table = build_lua_args_table(&lua, keys).map_err(lua_error_to_string)?;
-    let argv_table = build_lua_args_table(&lua, argv).map_err(lua_error_to_string)?;
-    globals
-        .set("KEYS", keys_table)
-        .map_err(lua_error_to_string)?;
-    globals
-        .set("ARGV", argv_table)
-        .map_err(lua_error_to_string)?;
-
-    let redis = lua.create_table().map_err(lua_error_to_string)?;
-
-    let call_store = store.clone();
-    let call_wrote = execution.performed_write.clone();
-    let call_fn = lua
-        .create_function(move |lua, values: Variadic<Value>| {
-            execute_redis_call(lua, &call_store, values, false, readonly, &call_wrote)
-        })
-        .map_err(lua_error_to_string)?;
-    redis.set("call", call_fn).map_err(lua_error_to_string)?;
-
-    let pcall_store = store.clone();
-    let pcall_wrote = execution.performed_write.clone();
-    let pcall_fn = lua
-        .create_function(move |lua, values: Variadic<Value>| {
-            execute_redis_call(lua, &pcall_store, values, true, readonly, &pcall_wrote)
-        })
-        .map_err(lua_error_to_string)?;
-    redis.set("pcall", pcall_fn).map_err(lua_error_to_string)?;
-
-    globals.set("redis", redis).map_err(lua_error_to_string)?;
-
-    let value = lua
-        .load(script)
-        .eval::<Value>()
-        .map_err(lua_error_to_string)?;
-
-    lua_value_to_resp(value)
+    })
 }
 
 fn build_lua_args_table(lua: &Lua, args: &[CompactArg]) -> mlua::Result<Table> {
@@ -676,4 +753,12 @@ fn lua_value_to_resp(value: Value) -> Result<RespFrame, String> {
 fn lua_error_to_string(error: mlua::Error) -> String {
     let _trace = profiler::scope("commands::scripting::lua_error_to_string");
     error.to_string()
+}
+
+fn clear_lua_cache_current_thread() {
+    LUA_RUNTIME.with(|runtime| {
+        if let Ok(runtime) = &mut *runtime.borrow_mut() {
+            runtime.clear_cache();
+        }
+    });
 }
