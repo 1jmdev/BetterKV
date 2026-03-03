@@ -40,6 +40,10 @@ pub enum BenchKind {
     Zscore,
     Zrank,
     Zrevrank,
+    Eval,
+    EvalRo,
+    EvalSha,
+    EvalShaRo,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -217,9 +221,25 @@ pub fn parse_specs(input: &[String]) -> Result<Vec<BenchSpec>, String> {
                 name: "ZREVRANK",
                 kind: BenchKind::Zrevrank,
             },
+            "eval" => BenchSpec {
+                name: "EVAL",
+                kind: BenchKind::Eval,
+            },
+            "evalro" => BenchSpec {
+                name: "EVAL_RO",
+                kind: BenchKind::EvalRo,
+            },
+            "evalsha" => BenchSpec {
+                name: "EVALSHA",
+                kind: BenchKind::EvalSha,
+            },
+            "evalsharo" => BenchSpec {
+                name: "EVALSHA_RO",
+                kind: BenchKind::EvalShaRo,
+            },
             _ => {
                 return Err(format!(
-                    "unknown test '{raw}', supported tests include: ping_inline,ping_mbulk,echo,set,setnx,get,getset,mset,mget,del,exists,expire,ttl,incr,incrby,decr,decrby,strlen,setrange,getrange,lpush,rpush,lpop,rpop,llen,lrange,sadd,srem,scard,sismember,hset,hget,hgetall,hincrby,zadd,zrem,zcard,zscore,zrank,zrevrank"
+                    "unknown test '{raw}', supported tests include: ping_inline,ping_mbulk,echo,set,setnx,get,getset,mset,mget,del,exists,expire,ttl,incr,incrby,decr,decrby,strlen,setrange,getrange,lpush,rpush,lpop,rpop,llen,lrange,sadd,srem,scard,sismember,hset,hget,hgetall,hincrby,zadd,zrem,zcard,zscore,zrank,zrevrank,eval,eval_ro,evalsha,evalsha_ro"
                 ));
             }
         };
@@ -389,6 +409,22 @@ fn default_specs() -> Vec<BenchSpec> {
         BenchSpec {
             name: "ZREVRANK",
             kind: BenchKind::Zrevrank,
+        },
+        BenchSpec {
+            name: "EVAL",
+            kind: BenchKind::Eval,
+        },
+        BenchSpec {
+            name: "EVAL_RO",
+            kind: BenchKind::EvalRo,
+        },
+        BenchSpec {
+            name: "EVALSHA",
+            kind: BenchKind::EvalSha,
+        },
+        BenchSpec {
+            name: "EVALSHA_RO",
+            kind: BenchKind::EvalShaRo,
         },
     ]
 }

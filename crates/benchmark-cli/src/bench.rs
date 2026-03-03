@@ -2,12 +2,18 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use bytes::BytesMut;
+use protocol::parser::{self, ParseError};
+use protocol::types::{BulkData, RespFrame};
+use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
 
 use crate::args::Args;
 use crate::resp::{encode_resp_parts, make_key, read_n_responses, repeat_payload};
 use crate::spec::{BenchKind, BenchSpec};
+
+const SCRIPT_SET_BODY: &[u8] = b"redis.call('SET', KEYS[1], ARGV[1]); return ARGV[1]";
+const SCRIPT_GET_BODY: &[u8] = b"return redis.call('GET', KEYS[1])";
 
 #[derive(Default)]
 struct WorkerStats {
@@ -126,19 +132,26 @@ async fn run_worker(client_id: u64, quota: u64, cfg: Arc<Shared>) -> Result<Work
         cfg.spec.name.to_ascii_lowercase()
     );
 
-    if let Some(setup) = build_setup_command(cfg.spec.kind, key_fixed.as_bytes(), &value) {
-        stream
-            .write_all(&setup)
-            .await
-            .map_err(|err| format!("setup write failed: {err}"))?;
-        read_n_responses(&mut stream, &mut parse_buf, 1).await?;
-    }
+    let script_sha = setup_worker_state(
+        &mut stream,
+        &mut parse_buf,
+        cfg.spec.kind,
+        key_fixed.as_bytes(),
+        &value,
+    )
+    .await?;
 
     let mut stats = WorkerStats::default();
     let mut sequence = 0u64;
 
     if !cfg.random_keys {
-        let one = build_command(cfg.spec.kind, key_fixed.as_bytes(), &value, 0);
+        let one = build_command(
+            cfg.spec.kind,
+            key_fixed.as_bytes(),
+            &value,
+            0,
+            script_sha.as_deref(),
+        );
         let full_batch = repeat_payload(&one, cfg.pipeline);
         let mut remaining = quota;
 
@@ -173,7 +186,13 @@ async fn run_worker(client_id: u64, quota: u64, cfg: Arc<Shared>) -> Result<Work
         let batch = remaining.min(cfg.pipeline as u64) as usize;
         let mut payload = Vec::with_capacity(batch * (cfg.data_size + 96));
         for _ in 0..batch {
-            let command = build_command(cfg.spec.kind, key_fixed.as_bytes(), &value, sequence);
+            let command = build_command(
+                cfg.spec.kind,
+                key_fixed.as_bytes(),
+                &value,
+                sequence,
+                script_sha.as_deref(),
+            );
             payload.extend_from_slice(&command);
             sequence = sequence.wrapping_add(1);
         }
@@ -194,6 +213,69 @@ async fn run_worker(client_id: u64, quota: u64, cfg: Arc<Shared>) -> Result<Work
     Ok(stats)
 }
 
+async fn setup_worker_state(
+    stream: &mut TcpStream,
+    parse_buf: &mut BytesMut,
+    kind: BenchKind,
+    key: &[u8],
+    value: &[u8],
+) -> Result<Option<Vec<u8>>, String> {
+    if let Some(setup) = build_setup_command(kind, key, value) {
+        stream
+            .write_all(&setup)
+            .await
+            .map_err(|err| format!("setup write failed: {err}"))?;
+        read_n_responses(stream, parse_buf, 1).await?;
+    }
+
+    let script = match kind {
+        BenchKind::EvalSha => Some(SCRIPT_SET_BODY),
+        BenchKind::EvalShaRo => Some(SCRIPT_GET_BODY),
+        _ => None,
+    };
+
+    let Some(script) = script else {
+        return Ok(None);
+    };
+
+    let load = encode_resp_parts(&[b"SCRIPT", b"LOAD", script]);
+    stream
+        .write_all(&load)
+        .await
+        .map_err(|err| format!("script load write failed: {err}"))?;
+    let frame = read_one_response(stream, parse_buf).await?;
+    match frame {
+        RespFrame::Bulk(Some(BulkData::Arg(value))) => Ok(Some(value.to_vec())),
+        RespFrame::Bulk(Some(BulkData::Value(value))) => Ok(Some(value.to_vec())),
+        RespFrame::Error(message) => Err(format!("script load failed: {message}")),
+        RespFrame::ErrorStatic(message) => Err(format!("script load failed: {message}")),
+        other => Err(format!("unexpected SCRIPT LOAD response: {other:?}")),
+    }
+}
+
+async fn read_one_response(
+    stream: &mut TcpStream,
+    parse_buf: &mut BytesMut,
+) -> Result<RespFrame, String> {
+    let mut chunk = [0u8; 8192];
+    loop {
+        match parser::parse_frame(parse_buf) {
+            Ok(Some(frame)) => return Ok(frame),
+            Ok(None) | Err(ParseError::Incomplete) => {}
+            Err(ParseError::Protocol(err)) => return Err(format!("protocol error: {err}")),
+        }
+
+        let read = stream
+            .read(&mut chunk)
+            .await
+            .map_err(|err| format!("read failed: {err}"))?;
+        if read == 0 {
+            return Err("connection closed by server".to_string());
+        }
+        parse_buf.extend_from_slice(&chunk[..read]);
+    }
+}
+
 fn build_setup_command(kind: BenchKind, key: &[u8], value: &[u8]) -> Option<Vec<u8>> {
     match kind {
         BenchKind::Get
@@ -204,7 +286,9 @@ fn build_setup_command(kind: BenchKind, key: &[u8], value: &[u8]) -> Option<Vec<
         | BenchKind::Ttl
         | BenchKind::Strlen
         | BenchKind::SetRange
-        | BenchKind::GetRange => Some(encode_resp_parts(&[b"SET", key, value])),
+        | BenchKind::GetRange
+        | BenchKind::EvalRo
+        | BenchKind::EvalShaRo => Some(encode_resp_parts(&[b"SET", key, value])),
         BenchKind::Mset => Some(encode_resp_parts(&[b"DEL", key, b"bench:m2"])),
         BenchKind::Lpop | BenchKind::Rpop | BenchKind::Llen | BenchKind::Lrange => {
             Some(encode_resp_parts(&[b"LPUSH", key, value]))
@@ -225,7 +309,13 @@ fn build_setup_command(kind: BenchKind, key: &[u8], value: &[u8]) -> Option<Vec<
     }
 }
 
-fn build_command(kind: BenchKind, key_base: &[u8], value: &[u8], sequence: u64) -> Vec<u8> {
+fn build_command(
+    kind: BenchKind,
+    key_base: &[u8],
+    value: &[u8],
+    sequence: u64,
+    script_sha: Option<&[u8]>,
+) -> Vec<u8> {
     match kind {
         BenchKind::PingInline => b"PING\r\n".to_vec(),
         BenchKind::PingMbulk => encode_resp_parts(&[b"PING"]),
@@ -381,6 +471,24 @@ fn build_command(kind: BenchKind, key_base: &[u8], value: &[u8], sequence: u64) 
         BenchKind::Zrevrank => {
             let key = make_key(key_base, sequence);
             encode_resp_parts(&[b"ZREVRANK", key.as_slice(), value])
+        }
+        BenchKind::Eval => {
+            let key = make_key(key_base, sequence);
+            encode_resp_parts(&[b"EVAL", SCRIPT_SET_BODY, b"1", key.as_slice(), value])
+        }
+        BenchKind::EvalRo => {
+            let key = make_key(key_base, sequence);
+            encode_resp_parts(&[b"EVAL_RO", SCRIPT_GET_BODY, b"1", key.as_slice()])
+        }
+        BenchKind::EvalSha => {
+            let key = make_key(key_base, sequence);
+            let sha = script_sha.expect("missing script sha for EVALSHA benchmark");
+            encode_resp_parts(&[b"EVALSHA", sha, b"1", key.as_slice(), value])
+        }
+        BenchKind::EvalShaRo => {
+            let key = make_key(key_base, sequence);
+            let sha = script_sha.expect("missing script sha for EVALSHA_RO benchmark");
+            encode_resp_parts(&[b"EVALSHA_RO", sha, b"1", key.as_slice()])
         }
     }
 }
