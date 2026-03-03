@@ -9,25 +9,28 @@ impl<K, V> RehashingMap<K, V>
 where
     K: Eq + Hash,
 {
+    pub fn insert_batch<I>(&mut self, entries: I)
+    where
+        I: IntoIterator<Item = (K, V)>,
+    {
+        let _trace = profiler::scope("rehash::insert::insert_batch");
+        self.rehash_step(REHASH_STEPS_PER_WRITE);
+        let mut writes = 0usize;
+
+        for (key, value) in entries {
+            self.insert_inner_no_rehash_step(key, value);
+            writes += 1;
+        }
+
+        if writes > 1 {
+            self.rehash_step(REHASH_STEPS_PER_WRITE.saturating_mul(writes - 1));
+        }
+    }
+
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
         let _trace = profiler::scope("rehash::insert::insert");
         self.rehash_step(REHASH_STEPS_PER_WRITE);
-
-        let hash = hash_key(&self.hash_builder, &key);
-        if let Some(idx) = self.find_index_hashed(&key, hash) {
-            let node = self.nodes[idx as usize].as_mut().unwrap();
-            return Some(std::mem::replace(&mut node.value, value));
-        }
-
-        let target = if self.rehash_table.is_some() {
-            TargetTable::New
-        } else {
-            TargetTable::Old
-        };
-        self.insert_new(target, hash, key, value);
-        self.len += 1;
-        self.maybe_start_rehash();
-        None
+        self.insert_inner_no_rehash_step(key, value)
     }
 
     pub fn get_or_insert_with<F>(&mut self, key: K, default: F) -> &mut V
@@ -51,6 +54,26 @@ where
         self.len += 1;
         self.maybe_start_rehash();
         &mut self.nodes[idx as usize].as_mut().unwrap().value
+    }
+
+    #[inline(always)]
+    fn insert_inner_no_rehash_step(&mut self, key: K, value: V) -> Option<V> {
+        let _trace = profiler::scope("rehash::insert::insert_inner_no_rehash_step");
+        let hash = hash_key(&self.hash_builder, &key);
+        if let Some(idx) = self.find_index_hashed(&key, hash) {
+            let node = self.nodes[idx as usize].as_mut().unwrap();
+            return Some(std::mem::replace(&mut node.value, value));
+        }
+
+        let target = if self.rehash_table.is_some() {
+            TargetTable::New
+        } else {
+            TargetTable::Old
+        };
+        self.insert_new(target, hash, key, value);
+        self.len += 1;
+        self.maybe_start_rehash();
+        None
     }
 
     #[inline(always)]

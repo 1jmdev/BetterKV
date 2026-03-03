@@ -12,6 +12,23 @@ impl Store {
     pub fn mset_args(&self, pairs: &[CompactArg]) {
         let _trace = profiler::scope("engine::strings::multi::mset_args");
         let shard_count = self.shards.len();
+        let pair_count = pairs.len() / 2;
+
+        if pair_count <= 2 {
+            for chunk in pairs.chunks_exact(2) {
+                let key = chunk[0].as_slice();
+                let value = chunk[1].as_slice();
+                let idx = self.shard_index(key);
+                let mut shard = self.shards[idx].write();
+                if !shard.ttl.is_empty() {
+                    let _ = shard.clear_ttl(key);
+                }
+                shard
+                    .entries
+                    .insert(CompactKey::from_slice(key), Entry::from_slice(value));
+            }
+            return;
+        }
 
         // Pre-size per-shard buffers to avoid repeated growth when MSET carries
         // many keys.
@@ -44,12 +61,13 @@ impl Store {
             let mut shard = self.shards[idx].write();
             let has_ttl = !shard.ttl.is_empty();
 
-            for (key, entry) in entries {
-                if has_ttl {
+            if has_ttl {
+                for (key, _) in &entries {
                     let _ = shard.clear_ttl(key.as_slice());
                 }
-                shard.entries.insert(key, entry);
             }
+
+            shard.entries.insert_batch(entries);
         }
     }
 
@@ -70,12 +88,14 @@ impl Store {
 
             let mut shard = self.shards[idx].write();
             let has_ttl = !shard.ttl.is_empty();
-            for (key, entry) in entries {
-                if has_ttl {
+
+            if has_ttl {
+                for (key, _) in &entries {
                     let _ = shard.clear_ttl(key.as_slice());
                 }
-                shard.entries.insert(key, entry);
             }
+
+            shard.entries.insert_batch(entries);
         }
     }
 
