@@ -1,8 +1,8 @@
 use std::borrow::Borrow;
 use std::hash::Hash;
 
-use super::constants::REHASH_STEPS_PER_WRITE;
-use super::index::{bucket_index_from_hash, find_in_chain, hash_key};
+use super::constants::NIL;
+use super::index::{bucket_index_from_hash, hash_key};
 use super::types::RehashingMap;
 
 impl<K, V> RehashingMap<K, V>
@@ -25,7 +25,7 @@ where
     {
         let _trace = profiler::scope("rehash::lookup::get");
         let idx = self.find_index(key)?;
-        Some(&self.nodes[idx as usize].as_ref().unwrap().value)
+        Some(&self.nodes[idx as usize].value)
     }
 
     pub fn get_mut<Q>(&mut self, key: &Q) -> Option<&mut V>
@@ -34,9 +34,8 @@ where
         Q: Hash + Eq + ?Sized,
     {
         let _trace = profiler::scope("rehash::lookup::get_mut");
-        self.rehash_step(REHASH_STEPS_PER_WRITE);
         let idx = self.find_index(key)?;
-        Some(&mut self.nodes[idx as usize].as_mut().unwrap().value)
+        Some(&mut self.nodes[idx as usize].value)
     }
 
     #[inline(always)]
@@ -57,14 +56,15 @@ where
         Q: Eq + ?Sized,
     {
         let _trace = profiler::scope("rehash::lookup::find_index_hashed");
-        if let Some(table) = self.rehash_table.as_ref() {
-            let bucket = bucket_index_from_hash(hash, table.mask);
-            if let Some(idx) = find_in_chain(&self.nodes, table.heads[bucket], hash, key) {
+        let bucket = bucket_index_from_hash(hash, self.table.len());
+        let mut idx = self.table.heads[bucket];
+        while idx != NIL {
+            let node = &self.nodes[idx as usize];
+            if node.hash == hash && node.key.borrow() == key {
                 return Some(idx);
             }
+            idx = node.next;
         }
-
-        let bucket = bucket_index_from_hash(hash, self.table.mask);
-        find_in_chain(&self.nodes, self.table.heads[bucket], hash, key)
+        None
     }
 }

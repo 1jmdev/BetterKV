@@ -1,8 +1,15 @@
 use super::node::Node;
 
 pub struct Iter<'a, K, V> {
-    pub(super) nodes: &'a [Option<Node<K, V>>],
+    pub(super) nodes: &'a [Node<K, V>],
     pub(super) index: usize,
+}
+
+impl<'a, K, V> Iter<'a, K, V> {
+    pub(super) fn new(nodes: &'a [Node<K, V>]) -> Self {
+        let _trace = profiler::scope("rehash::iter::new");
+        Self { nodes, index: 0 }
+    }
 }
 
 impl<'a, K, V> Iterator for Iter<'a, K, V> {
@@ -10,13 +17,12 @@ impl<'a, K, V> Iterator for Iter<'a, K, V> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let _trace = profiler::scope("rehash::iter::next");
-        while self.index < self.nodes.len() {
-            let idx = self.index;
-            self.index += 1;
-            if let Some(node) = self.nodes[idx].as_ref() {
-                return Some((&node.key, &node.value));
-            }
+        if self.index >= self.nodes.len() {
+            return None;
         }
-        None
+        let idx = self.index;
+        self.index += 1;
+        let node = &self.nodes[idx];
+        Some((&node.key, &node.value))
     }
 }

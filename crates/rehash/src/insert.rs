@@ -1,9 +1,9 @@
 use std::hash::Hash;
 
-use super::constants::{NIL, REHASH_STEPS_PER_WRITE};
+use super::constants::BULK_RESERVE_CAP;
 use super::index::{bucket_index_from_hash, hash_key};
 use super::node::Node;
-use super::types::{RehashingMap, TargetTable};
+use super::types::RehashingMap;
 
 impl<K, V> RehashingMap<K, V>
 where
@@ -14,23 +14,35 @@ where
         I: IntoIterator<Item = (K, V)>,
     {
         let _trace = profiler::scope("rehash::insert::insert_batch");
-        self.rehash_step(REHASH_STEPS_PER_WRITE);
-        let mut writes = 0usize;
+        let iter = entries.into_iter();
+        let (lower_bound, _) = iter.size_hint();
+        self.reserve_for_batch(lower_bound.min(BULK_RESERVE_CAP));
 
-        for (key, value) in entries {
-            self.insert_inner_no_rehash_step(key, value);
-            writes += 1;
-        }
-
-        if writes > 1 {
-            self.rehash_step(REHASH_STEPS_PER_WRITE.saturating_mul(writes - 1));
+        for (key, value) in iter {
+            self.insert(key, value);
         }
     }
 
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
         let _trace = profiler::scope("rehash::insert::insert");
-        self.rehash_step(REHASH_STEPS_PER_WRITE);
-        self.insert_inner_no_rehash_step(key, value)
+        let hash = hash_key(&self.hash_builder, &key);
+        if let Some(idx) = self.find_index_hashed(&key, hash) {
+            let node = &mut self.nodes[idx as usize];
+            return Some(std::mem::replace(&mut node.value, value));
+        }
+
+        self.maybe_resize_for_insert();
+        let bucket = bucket_index_from_hash(hash, self.table.len());
+        let head = self.table.heads[bucket];
+        let idx = self.nodes.len() as u32;
+        self.nodes.push(Node {
+            hash,
+            next: head,
+            key,
+            value,
+        });
+        self.table.heads[bucket] = idx;
+        None
     }
 
     pub fn get_or_insert_with<F>(&mut self, key: K, default: F) -> &mut V
@@ -38,83 +50,22 @@ where
         F: FnOnce() -> V,
     {
         let _trace = profiler::scope("rehash::insert::get_or_insert_with");
-        self.rehash_step(REHASH_STEPS_PER_WRITE);
-
         let hash = hash_key(&self.hash_builder, &key);
         if let Some(idx) = self.find_index_hashed(&key, hash) {
-            return &mut self.nodes[idx as usize].as_mut().unwrap().value;
+            return &mut self.nodes[idx as usize].value;
         }
 
-        let target = if self.rehash_table.is_some() {
-            TargetTable::New
-        } else {
-            TargetTable::Old
-        };
-        let idx = self.insert_new(target, hash, key, default());
-        self.len += 1;
-        self.maybe_start_rehash();
-        &mut self.nodes[idx as usize].as_mut().unwrap().value
-    }
-
-    #[inline(always)]
-    fn insert_inner_no_rehash_step(&mut self, key: K, value: V) -> Option<V> {
-        let _trace = profiler::scope("rehash::insert::insert_inner_no_rehash_step");
-        let hash = hash_key(&self.hash_builder, &key);
-        if let Some(idx) = self.find_index_hashed(&key, hash) {
-            let node = self.nodes[idx as usize].as_mut().unwrap();
-            return Some(std::mem::replace(&mut node.value, value));
-        }
-
-        let target = if self.rehash_table.is_some() {
-            TargetTable::New
-        } else {
-            TargetTable::Old
-        };
-        self.insert_new(target, hash, key, value);
-        self.len += 1;
-        self.maybe_start_rehash();
-        None
-    }
-
-    #[inline(always)]
-    pub(super) fn insert_new(&mut self, target: TargetTable, hash: u64, key: K, value: V) -> u32 {
-        let _trace = profiler::scope("rehash::insert::insert_new");
-        let idx = self.alloc_node(Node {
+        self.maybe_resize_for_insert();
+        let bucket = bucket_index_from_hash(hash, self.table.len());
+        let head = self.table.heads[bucket];
+        let idx = self.nodes.len() as u32;
+        self.nodes.push(Node {
             hash,
+            next: head,
             key,
-            value,
-            next: NIL,
+            value: default(),
         });
-
-        match target {
-            TargetTable::Old => {
-                let bucket = bucket_index_from_hash(hash, self.table.mask);
-                let head = self.table.heads[bucket];
-                self.nodes[idx as usize].as_mut().unwrap().next = head;
-                self.table.heads[bucket] = idx;
-            }
-            TargetTable::New => {
-                let table = self.rehash_table.as_mut().expect("rehash table missing");
-                let bucket = bucket_index_from_hash(hash, table.mask);
-                let head = table.heads[bucket];
-                self.nodes[idx as usize].as_mut().unwrap().next = head;
-                table.heads[bucket] = idx;
-            }
-        }
-
-        idx
-    }
-
-    #[inline(always)]
-    pub(super) fn alloc_node(&mut self, node: Node<K, V>) -> u32 {
-        let _trace = profiler::scope("rehash::insert::alloc_node");
-        if let Some(idx) = self.free.pop() {
-            self.nodes[idx as usize] = Some(node);
-            idx
-        } else {
-            let idx = self.nodes.len() as u32;
-            self.nodes.push(Some(node));
-            idx
-        }
+        self.table.heads[bucket] = idx;
+        &mut self.nodes[idx as usize].value
     }
 }

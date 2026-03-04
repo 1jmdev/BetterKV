@@ -4,7 +4,6 @@ mod insert;
 mod iter;
 mod lookup;
 mod node;
-mod rehash;
 mod remove;
 mod table;
 mod types;
