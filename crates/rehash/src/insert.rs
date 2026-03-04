@@ -1,13 +1,11 @@
-use std::hash::Hash;
-
 use super::constants::BULK_RESERVE_CAP;
-use super::index::{bucket_index_from_hash, hash_key};
+use super::index::hash_key;
 use super::node::Node;
 use super::types::RehashingMap;
 
 impl<K, V> RehashingMap<K, V>
 where
-    K: Eq + Hash,
+    K: Eq + AsRef<[u8]>,
 {
     pub fn insert_batch<I>(&mut self, entries: I)
     where
@@ -25,16 +23,25 @@ where
 
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
         let _trace = profiler::scope("rehash::insert::insert");
-        let hash = hash_key(&self.hash_builder, &key);
-        if let Some(idx) = self.find_index_hashed(&key, hash) {
+        let key_bytes = key.as_ref();
+        let hash = hash_key(self.seed, key_bytes);
+        let mut bucket = (hash as usize) & self.table.mask;
+        let mut idx = self.table.heads[bucket];
+
+        while idx != super::constants::NIL {
             let node = &mut self.nodes[idx as usize];
-            return Some(std::mem::replace(&mut node.value, value));
+            if node.hash == hash && node.key.as_ref() == key_bytes {
+                return Some(std::mem::replace(&mut node.value, value));
+            }
+            idx = node.next;
         }
 
-        self.maybe_resize_for_insert();
-        let bucket = bucket_index_from_hash(hash, self.table.len());
+        self.maybe_grow();
+        bucket = (hash as usize) & self.table.mask;
         let head = self.table.heads[bucket];
+        assert!(self.nodes.len() < super::constants::NIL as usize, "Max capacity exceeded");
         let idx = self.nodes.len() as u32;
+
         self.nodes.push(Node {
             hash,
             next: head,
@@ -50,15 +57,25 @@ where
         F: FnOnce() -> V,
     {
         let _trace = profiler::scope("rehash::insert::get_or_insert_with");
-        let hash = hash_key(&self.hash_builder, &key);
-        if let Some(idx) = self.find_index_hashed(&key, hash) {
-            return &mut self.nodes[idx as usize].value;
+        let key_bytes = key.as_ref();
+        let hash = hash_key(self.seed, key_bytes);
+        let mut bucket = (hash as usize) & self.table.mask;
+        let mut idx = self.table.heads[bucket];
+
+        while idx != super::constants::NIL {
+            let node = &self.nodes[idx as usize];
+            if node.hash == hash && node.key.as_ref() == key_bytes {
+                return &mut self.nodes[idx as usize].value;
+            }
+            idx = node.next;
         }
 
-        self.maybe_resize_for_insert();
-        let bucket = bucket_index_from_hash(hash, self.table.len());
+        self.maybe_grow();
+        bucket = (hash as usize) & self.table.mask;
         let head = self.table.heads[bucket];
+        assert!(self.nodes.len() < super::constants::NIL as usize, "Max capacity exceeded");
         let idx = self.nodes.len() as u32;
+
         self.nodes.push(Node {
             hash,
             next: head,

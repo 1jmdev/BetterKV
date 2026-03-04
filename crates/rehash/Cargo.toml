@@ -7,5 +7,4 @@ edition.workspace = true
 profiling = ["profiler/enabled"]
 
 [dependencies]
-ahash.workspace = true
 profiler.workspace = true

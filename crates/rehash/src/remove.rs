@@ -1,30 +1,44 @@
-use std::borrow::Borrow;
-use std::hash::Hash;
-
-use super::index::{bucket_index_from_hash, hash_key};
+use super::index::hash_key;
 use super::types::RehashingMap;
 
 impl<K, V> RehashingMap<K, V>
 where
-    K: Eq + Hash,
+    K: Eq + AsRef<[u8]>,
 {
     pub fn remove<Q>(&mut self, key: &Q) -> Option<V>
     where
-        K: Borrow<Q>,
-        Q: Hash + Eq + ?Sized,
+        Q: AsRef<[u8]> + ?Sized,
     {
         let _trace = profiler::scope("rehash::remove::remove");
-        let hash = hash_key(&self.hash_builder, key);
-        let idx = self.find_index_hashed(key, hash)?;
-        let bucket = bucket_index_from_hash(hash, self.table.len());
-        let _ = self.unlink_index_from_bucket(bucket, idx);
+        let key_bytes = key.as_ref();
+        let hash = hash_key(self.seed, key_bytes);
+        let bucket = (hash as usize) & self.table.mask;
 
-        let removed = self.nodes.swap_remove(idx as usize);
-        if (idx as usize) < self.nodes.len() {
-            let old_last_idx = self.nodes.len() as u32;
-            self.patch_moved_index(old_last_idx, idx);
+        let mut cur = self.table.heads[bucket];
+        let mut prev = super::constants::NIL;
+
+        // Single pass: Find AND unlink in one go
+        while cur != super::constants::NIL {
+            let node = &self.nodes[cur as usize];
+            if node.hash == hash && node.key.as_ref() == key_bytes {
+                let next = node.next;
+                if prev == super::constants::NIL {
+                    self.table.heads[bucket] = next;
+                } else {
+                    self.nodes[prev as usize].next = next;
+                }
+
+                let removed = self.nodes.swap_remove(cur as usize);
+                if (cur as usize) < self.nodes.len() {
+                    let old_last_idx = self.nodes.len() as u32;
+                    self.patch_swapped(old_last_idx, cur);
+                }
+
+                return Some(removed.value);
+            }
+            prev = cur;
+            cur = node.next;
         }
-
-        Some(removed.value)
+        None
     }
 }
