@@ -12,6 +12,7 @@
     "@rspress/core": "^2.0.4"
   },
   "devDependencies": {
+    "@rspress/plugin-sitemap": "^2.0.4",
     "@types/node": "^25.3.3",
     "typescript": "^5.0.0",
     "wrangler": "^4.70.0"

@@ -1,8 +1,14 @@
 import * as path from 'node:path';
 import { defineConfig } from '@rspress/core';
+import { pluginSitemap } from '@rspress/plugin-sitemap';
 
 export default defineConfig({
   root: path.join(import.meta.dirname, 'docs'),
+  plugins: [
+    pluginSitemap({
+      siteUrl: 'https://docs.betterkv.dev',
+    }),
+  ],
   title: 'BetterKV',
   description:
     'The high-performance Redis-compatible key-value store. Lightning-fast, reliable, open-source.',
