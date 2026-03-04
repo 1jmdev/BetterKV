@@ -1,0 +1,110 @@
+import * as path from 'node:path';
+import { defineConfig } from '@rspress/core';
+
+export default defineConfig({
+  root: path.join(import.meta.dirname, 'docs'),
+  title: 'BetterKV',
+  description:
+    'The high-performance Redis-compatible key-value store. Lightning-fast, reliable, open-source.',
+  icon: '/icon.svg',
+  logo: {
+    light: '/logo-light.svg',
+    dark: '/logo-dark.svg',
+  },
+  globalStyles: path.join(import.meta.dirname, 'styles', 'global.css'),
+  themeConfig: {
+    footer: {
+      message:
+        '© 2026 BetterKV — Open-source, high-performance key-value store built in rust.',
+    },
+    socialLinks: [
+      {
+        icon: 'github',
+        mode: 'link',
+        content: 'https://github.com/1jmdev/BetterKV',
+      },
+    ],
+    nav: [
+      { text: 'Docs', link: '/', activeMatch: '^/$|^/(quick-start|installation|configuration|data-types|persistence|replication|cluster|lua-scripting|pubsub|transactions|security)' },
+      { text: 'Commands', link: '/commands/', activeMatch: '/commands/' },
+      { text: 'API', link: '/api/', activeMatch: '/api/' },
+    ],
+    sidebar: {
+      '/': [
+        {
+          text: 'Getting Started',
+          items: [
+            { text: 'Introduction', link: '/' },
+            { text: 'Quick Start', link: '/quick-start' },
+            { text: 'Installation', link: '/installation' },
+            { text: 'Configuration', link: '/configuration' },
+          ],
+        },
+        {
+          text: 'Core Concepts',
+          items: [
+            { text: 'Data Types', link: '/data-types' },
+            { text: 'Persistence', link: '/persistence' },
+            { text: 'Replication', link: '/replication' },
+            { text: 'Cluster Mode', link: '/cluster' },
+          ],
+        },
+        {
+          text: 'Advanced',
+          items: [
+            { text: 'Lua Scripting', link: '/lua-scripting' },
+            { text: 'Pub/Sub', link: '/pubsub' },
+            { text: 'Transactions', link: '/transactions' },
+            { text: 'Security', link: '/security' },
+          ],
+        },
+      ],
+      '/commands/': [
+        {
+          text: 'String Commands',
+          items: [
+            { text: 'Overview', link: '/commands/' },
+            { text: 'GET / SET', link: '/commands/string' },
+            { text: 'INCR / DECR', link: '/commands/numeric' },
+          ],
+        },
+        {
+          text: 'Data Structure Commands',
+          items: [
+            { text: 'Lists', link: '/commands/list' },
+            { text: 'Hashes', link: '/commands/hash' },
+            { text: 'Sets', link: '/commands/set' },
+            { text: 'Sorted Sets', link: '/commands/sorted-set' },
+          ],
+        },
+        {
+          text: 'Server Commands',
+          items: [
+            { text: 'Keys & Expiry', link: '/commands/keys' },
+            { text: 'Server Info', link: '/commands/server' },
+          ],
+        },
+      ],
+      '/api/': [
+        {
+          text: 'REST API',
+          items: [
+            { text: 'Overview', link: '/api/' },
+            { text: 'Authentication', link: '/api/auth' },
+            { text: 'Endpoints', link: '/api/endpoints' },
+          ],
+        },
+      ],
+    },
+    editLink: {
+      docRepoBaseUrl: 'https://github.com/1jmdev/BetterKV/tree/main/docs',
+      text: 'Edit this page on GitHub',
+    },
+    lastUpdated: true,
+    prevPageText: 'Previous',
+    nextPageText: 'Next',
+  },
+  markdown: {
+    showLineNumbers: true,
+  },
+});

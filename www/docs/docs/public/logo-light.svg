@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 36" fill="none">
+  <rect width="36" height="36" rx="9" fill="#e5373a"/>
+  <path d="M9 10h6l3 8 3-8h6L18 26 9 10z" fill="white" opacity="0.95"/>
+  <circle cx="18" cy="27.5" r="2.5" fill="white" opacity="0.7"/>
+  <text x="46" y="25" font-family="system-ui, -apple-system, sans-serif" font-size="18" font-weight="800" letter-spacing="-0.5" fill="#18181b">BetterKV</text>
+</svg>
