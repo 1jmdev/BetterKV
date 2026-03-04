@@ -2,9 +2,9 @@ use std::collections::BTreeSet;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-use justkv_server::auth::parse_user_directive;
-use justkv_server::config::Config;
-use justkv_server::logging::init_logging;
+use betterkv_server::auth::parse_user_directive;
+use betterkv_server::config::Config;
+use betterkv_server::logging::init_logging;
 
 fn main() {
     let _trace = profiler::scope("server::main::main");
@@ -24,7 +24,7 @@ fn main() {
             print_usage();
         }
         Action::Version => {
-            println!("justkv-server v{}", env!("CARGO_PKG_VERSION"));
+            println!("betterkv-server v{}", env!("CARGO_PKG_VERSION"));
         }
         Action::CheckSystem => {
             println!("[ok] system check passed");
@@ -196,7 +196,7 @@ fn run(runtime: RuntimeArgs) -> Result<(), String> {
 
     if !ignored.is_empty() {
         let names = ignored.into_iter().collect::<Vec<_>>().join(", ");
-        eprintln!("justkv-server: accepted but ignored directives: {names}");
+        eprintln!("jusbetterkvtkv-server: accepted but ignored directives: {names}");
     }
 
     let logging_guard = init_logging(&config)?;
@@ -210,7 +210,7 @@ fn run(runtime: RuntimeArgs) -> Result<(), String> {
         acl_users = config.user_directives.len(),
         snapshot_path = %config.snapshot_path().display(),
         snapshot_interval_secs = config.snapshot_interval_secs,
-        "starting justkv server"
+        "starting betterkv server"
     );
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -220,7 +220,7 @@ fn run(runtime: RuntimeArgs) -> Result<(), String> {
         .map_err(|err| format!("failed to create runtime: {err}"))?;
 
     let result = runtime
-        .block_on(justkv_server::run(config))
+        .block_on(betterkv_server::run(config))
         .map_err(|err| format!("server error: {err}"));
     if let Err(err) = &result {
         tracing::error!(error = %err, "server exited with error");
@@ -470,9 +470,9 @@ fn print_usage() {
                 .file_name()
                 .map(|v| v.to_string_lossy().to_string())
         })
-        .unwrap_or_else(|| "justkv-server".to_string());
+        .unwrap_or_else(|| "betterkv-server".to_string());
 
-    println!("Usage: {bin} [/path/to/justkv.conf] [options] [-]");
+    println!("Usage: {bin} [/path/to/betterkv.conf] [options] [-]");
     println!("       {bin} - (read config from stdin)");
     println!("       {bin} -v or --version");
     println!("       {bin} -h or --help");
@@ -491,7 +491,7 @@ fn print_usage() {
     println!("Examples:");
     println!("       {bin}");
     println!("       echo 'port 6380' | {bin} -");
-    println!("       {bin} ./justkv.conf --port 6379");
+    println!("       {bin} ./betterkv.conf --port 6379");
     println!("       {bin} --port 7777 --bind 127.0.0.1");
 }
 
@@ -503,7 +503,7 @@ mod tests {
     fn parses_config_file_and_cli_overrides() {
         let _trace = profiler::scope("server::main::parses_config_file_and_cli_overrides");
         let args = vec![
-            "justkv-server".to_string(),
+            "betterkv-server".to_string(),
             "./conf/redis.conf".to_string(),
             "--port".to_string(),
             "6380".to_string(),
@@ -527,7 +527,7 @@ mod tests {
     fn parses_test_memory() {
         let _trace = profiler::scope("server::main::parses_test_memory");
         let args = vec![
-            "justkv-server".to_string(),
+            "betterkv-server".to_string(),
             "--test-memory".to_string(),
             "256".to_string(),
         ];
@@ -542,7 +542,7 @@ mod tests {
     #[test]
     fn parses_help_short_flag() {
         let _trace = profiler::scope("server::main::parses_help_short_flag");
-        let args = vec!["justkv-server".to_string(), "-h".to_string()];
+        let args = vec!["betterkv-server".to_string(), "-h".to_string()];
         let action = parse_cli_args(&args).expect("parse args");
         assert!(matches!(action, Action::Help));
     }

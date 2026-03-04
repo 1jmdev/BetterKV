@@ -78,6 +78,52 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
+name = "betterkv-benchmark"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "clap",
+ "itoa",
+ "protocol",
+ "tikv-jemallocator",
+ "tokio",
+]
+
+[[package]]
+name = "betterkv-cli"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "clap",
+ "profiler",
+ "protocol",
+ "rustyline",
+ "shlex",
+ "tokio",
+]
+
+[[package]]
+name = "betterkv-server"
+version = "0.1.0"
+dependencies = [
+ "ahash",
+ "bytes",
+ "commands",
+ "engine",
+ "hashbrown",
+ "indexmap",
+ "parking_lot",
+ "profiler",
+ "protocol",
+ "socket2",
+ "tikv-jemallocator",
+ "tokio",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "bit-set"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -433,52 +479,6 @@ name = "itoa"
 version = "1.0.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92ecc6618181def0457392ccd0ee51198e065e016d1d527a7ac1b6dc7c1f09d2"
-
-[[package]]
-name = "justkv-benchmark"
-version = "0.1.0"
-dependencies = [
- "bytes",
- "clap",
- "itoa",
- "protocol",
- "tikv-jemallocator",
- "tokio",
-]
-
-[[package]]
-name = "justkv-cli"
-version = "0.1.0"
-dependencies = [
- "bytes",
- "clap",
- "profiler",
- "protocol",
- "rustyline",
- "shlex",
- "tokio",
-]
-
-[[package]]
-name = "justkv-server"
-version = "0.1.0"
-dependencies = [
- "ahash",
- "bytes",
- "commands",
- "engine",
- "hashbrown",
- "indexmap",
- "parking_lot",
- "profiler",
- "protocol",
- "socket2",
- "tikv-jemallocator",
- "tokio",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
-]
 
 [[package]]
 name = "lazy_static"

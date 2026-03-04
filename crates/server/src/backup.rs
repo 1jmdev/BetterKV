@@ -20,7 +20,7 @@ const TYPE_LIST: u8 = 1;
 const TYPE_SET: u8 = 2;
 const TYPE_ZSET: u8 = 3;
 const TYPE_HASH: u8 = 4;
-const EMBEDDED_PREFIX: &[u8] = b"__JUSTKV_EMBEDDED__";
+const EMBEDDED_PREFIX: &[u8] = b"__BETTERKV_EMBEDDED__";
 
 #[derive(Debug, Clone, Copy)]
 pub struct SnapshotStats {

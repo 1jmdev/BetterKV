@@ -128,7 +128,7 @@ async fn run_worker(client_id: u64, quota: u64, cfg: Arc<Shared>) -> Result<Work
 
     let value = vec![b'x'; cfg.data_size];
     let key_fixed = format!(
-        "justkv:bench:{}:{client_id}",
+        "betterkv:bench:{}:{client_id}",
         cfg.spec.name.to_ascii_lowercase()
     );
 

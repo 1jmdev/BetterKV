@@ -2,9 +2,9 @@ use clap::{ArgAction, Parser};
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "justkv-cli",
+    name = "betterkv-cli",
     version,
-    about = "justkv command line interface",
+    about = "betterkv command line interface",
     disable_help_flag = true
 )]
 pub struct Cli {

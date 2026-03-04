@@ -1,10 +1,10 @@
 [package]
-name = "justkv-server"
+name = "betterkv-server"
 version.workspace = true
 edition.workspace = true
 
 [[bin]]
-name = "justkv-server"
+name = "betterkv-server"
 path = "src/main.rs"
 
 [features]

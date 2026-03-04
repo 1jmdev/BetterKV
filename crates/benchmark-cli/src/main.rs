@@ -19,7 +19,7 @@ static GLOBAL_ALLOCATOR: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemall
 fn main() -> ExitCode {
     let args = Args::parse();
     if let Err(err) = validate_args(&args) {
-        eprintln!("justkv-benchmark: {err}");
+        eprintln!("betterkv-benchmark: {err}");
         return ExitCode::FAILURE;
     }
 
@@ -30,7 +30,7 @@ fn main() -> ExitCode {
     {
         Ok(rt) => rt,
         Err(err) => {
-            eprintln!("justkv-benchmark: failed to create runtime: {err}");
+            eprintln!("betterkv-benchmark: failed to create runtime: {err}");
             return ExitCode::FAILURE;
         }
     };
@@ -38,7 +38,7 @@ fn main() -> ExitCode {
     match runtime.block_on(run(args)) {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
-            eprintln!("justkv-benchmark: {err}");
+            eprintln!("betterkv-benchmark: {err}");
             ExitCode::FAILURE
         }
     }

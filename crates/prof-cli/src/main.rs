@@ -10,7 +10,7 @@ use protocol::encoder::Encoder;
 use protocol::parser::{self, ParseError};
 use protocol::types::{BulkData, RespFrame};
 
-/// Profile a Redis command against a private justkv-server instance and display
+/// Profile a Redis command against a private betterkv-server instance and display
 /// the profiler call-tree for every timed run.
 ///
 /// Examples:
@@ -44,8 +44,8 @@ struct Args {
     #[arg(short = 'p', long = "plain", default_value_t = false)]
     plain: bool,
 
-    /// Path to the justkv-server binary.
-    #[arg(long = "server", default_value = "./target/release/justkv-server")]
+    /// Path to the betterkv-server binary.
+    #[arg(long = "server", default_value = "./target/release/betterkv-server")]
     server_bin: String,
 }
 
@@ -160,9 +160,9 @@ fn timed_run(
 
     let mut child = std::process::Command::new(server_bin)
         .args(["--port", &port.to_string(), "--bind", "127.0.0.1"])
-        .env("JUSTKV_TRACE", "1")
-        .env("JUSTKV_TRACE_MAX", "1")
-        .env("JUSTKV_PRETTY", pretty)
+        .env("BETTERKV_TRACE", "1")
+        .env("BETTERKV_TRACE_MAX", "1")
+        .env("BETTERKV_PRETTY", pretty)
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .spawn()

@@ -12,25 +12,25 @@ pub(crate) struct TraceConfig {
 
 impl TraceConfig {
     fn from_env() -> Option<Self> {
-        if !env_flag_enabled("JUSTKV_TRACE") {
+        if !env_flag_enabled("BETTERKV_TRACE") {
             return None;
         }
 
-        let max_traces = std::env::var("JUSTKV_TRACE_MAX")
+        let max_traces = std::env::var("BETTERKV_TRACE_MAX")
             .ok()
             .and_then(|v| v.parse::<u64>().ok())
             .filter(|v| *v > 0)
             .unwrap_or(1);
 
-        let command_filter = std::env::var("JUSTKV_TRACE_COMMAND")
+        let command_filter = std::env::var("BETTERKV_TRACE_COMMAND")
             .ok()
             .map(|v| uppercased(v.as_bytes()));
 
-        let key_filter = std::env::var("JUSTKV_TRACE_KEY")
+        let key_filter = std::env::var("BETTERKV_TRACE_KEY")
             .ok()
             .map(|v| v.into_bytes());
 
-        let pretty = env_flag_default_true("JUSTKV_PRETTY");
+        let pretty = env_flag_default_true("BETTERKV_PRETTY");
 
         Some(Self {
             command_filter,

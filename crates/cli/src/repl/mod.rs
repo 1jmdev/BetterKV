@@ -138,7 +138,7 @@ fn history_path() -> Option<PathBuf> {
     let _trace = profiler::scope("cli::repl::history_path");
     let home = env::var_os("HOME")?;
     let mut path = PathBuf::from(home);
-    path.push(".justkv-cli-history");
+    path.push(".betterkv-cli-history");
     Some(path)
 }
 

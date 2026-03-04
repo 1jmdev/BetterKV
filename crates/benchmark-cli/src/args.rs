@@ -2,11 +2,11 @@ use clap::{ArgAction, Parser};
 
 #[derive(Debug, Clone, Parser)]
 #[command(
-    name = "justkv-benchmark",
+    name = "betterkv-benchmark",
     version,
     disable_help_flag = true,
     disable_version_flag = true,
-    about = "Redis-benchmark compatible load tester for JustKV"
+    about = "Redis-benchmark compatible load tester for BetterKV"
 )]
 pub struct Args {
     #[arg(short = 'h', long = "host", default_value = "127.0.0.1")]

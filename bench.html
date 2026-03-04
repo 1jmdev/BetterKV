@@ -1,0 +1,3219 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>JustKV vs Redis Bench</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b0f14;
+      --panel: #0f1722;
+      --text: #e6edf3;
+      --muted: #9aa7b2;
+      --grid: rgba(255,255,255,0.08);
+      --ok: #3ddc97;
+      --fail: #ff6b6b;
+      --border: rgba(255,255,255,0.10);
+    }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      background: radial-gradient(1200px 700px at 20% 0%, rgba(61,220,151,0.10), transparent 60%),
+                  radial-gradient(900px 600px at 90% 20%, rgba(100,149,237,0.10), transparent 60%),
+                  var(--bg);
+      color: var(--text);
+    }
+    header {
+      padding: 22px 18px 10px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(0,0,0,0.20);
+      backdrop-filter: blur(8px);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    h1 {
+      margin: 0 0 6px;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+    }
+    .sub {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    main {
+      padding: 16px 18px 40px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+    @media (min-width: 960px) {
+      .grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+    .card {
+      background: rgba(15, 23, 34, 0.78);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+    }
+    .card h2 {
+      margin: 0 0 10px;
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 600;
+      letter-spacing: 0.25px;
+      text-transform: uppercase;
+    }
+    canvas { width: 100% !important; height: 360px !important; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    thead th {
+      text-align: left;
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 600;
+      padding: 10px 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    tbody td {
+      padding: 9px 8px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      vertical-align: top;
+    }
+    tbody tr:hover td {
+      background: rgba(255,255,255,0.03);
+    }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    .ok { color: var(--ok); }
+    .fail { color: var(--fail); }
+    details {
+      margin-top: 14px;
+    }
+    summary {
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    pre {
+      overflow: auto;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(0,0,0,0.25);
+      max-height: 420px;
+      font-size: 11px;
+      line-height: 1.35;
+    }
+    .pill {
+      display: inline-block;
+      font-size: 11px;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      padding: 4px 8px;
+      border-radius: 999px;
+      margin-right: 6px;
+      background: rgba(0,0,0,0.22);
+    }
+    .meta {
+      margin-top: 8px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>JustKV vs Redis Bench</h1>
+    <p class="sub">Generated 2026-03-04T11:51:59.644Z. RPS and p99 latency (ms) per command. 🧪</p>
+  </header>
+  <main>
+    <div class="meta">
+      <span class="pill">n=5000000</span>
+      <span class="pill">c=16</span>
+      <span class="pill">P=256</span>
+      <span class="pill">host=127.0.0.1</span>
+      <span class="pill">port=6379</span>
+    </div>
+
+    <div class="grid" style="margin-top:14px;">
+      <div class="card">
+        <h2>Requests per second (higher is better)</h2>
+        <canvas id="rpsChart"></canvas>
+      </div>
+
+      <div class="card">
+        <h2>p99 latency (ms, lower is better)</h2>
+        <canvas id="p99Chart"></canvas>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px;">
+      <h2>Table</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Test</th>
+            <th>JustKV RPS</th>
+            <th>Redis RPS</th>
+            <th>JustKV/Redis</th>
+            <th>JustKV p99 (ms)</th>
+            <th>Redis p99 (ms)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+          <td class="mono">PingInline</td>
+          <td class="ok mono">38707064.22</td>
+          <td class="ok mono">3222859.01</td>
+          <td class="mono">12.010×</td>
+          <td class="ok mono">0.0014</td>
+          <td class="ok mono">0.0065</td>
+        </tr>
+<tr>
+          <td class="mono">PingMbulk</td>
+          <td class="ok mono">36673028.70</td>
+          <td class="ok mono">4174816.87</td>
+          <td class="mono">8.784×</td>
+          <td class="ok mono">0.0010</td>
+          <td class="ok mono">0.0052</td>
+        </tr>
+<tr>
+          <td class="mono">Echo</td>
+          <td class="ok mono">29430764.00</td>
+          <td class="ok mono">3441055.75</td>
+          <td class="mono">8.553×</td>
+          <td class="ok mono">0.0013</td>
+          <td class="ok mono">0.0057</td>
+        </tr>
+<tr>
+          <td class="mono">Set</td>
+          <td class="ok mono">20479815.12</td>
+          <td class="ok mono">2116404.48</td>
+          <td class="mono">9.677×</td>
+          <td class="ok mono">0.0021</td>
+          <td class="ok mono">0.0086</td>
+        </tr>
+<tr>
+          <td class="mono">SetNx</td>
+          <td class="ok mono">24644526.24</td>
+          <td class="ok mono">2797063.76</td>
+          <td class="mono">8.811×</td>
+          <td class="ok mono">0.0016</td>
+          <td class="ok mono">0.0072</td>
+        </tr>
+<tr>
+          <td class="mono">Get</td>
+          <td class="ok mono">26058728.21</td>
+          <td class="ok mono">2939646.50</td>
+          <td class="mono">8.865×</td>
+          <td class="ok mono">0.0014</td>
+          <td class="ok mono">0.0067</td>
+        </tr>
+<tr>
+          <td class="mono">GetSet</td>
+          <td class="ok mono">18916137.84</td>
+          <td class="ok mono">1696168.14</td>
+          <td class="mono">11.152×</td>
+          <td class="ok mono">0.0021</td>
+          <td class="ok mono">0.0113</td>
+        </tr>
+<tr>
+          <td class="mono">Mset</td>
+          <td class="ok mono">17216407.09</td>
+          <td class="ok mono">1453811.27</td>
+          <td class="mono">11.842×</td>
+          <td class="ok mono">0.0023</td>
+          <td class="ok mono">0.0148</td>
+        </tr>
+<tr>
+          <td class="mono">Mget</td>
+          <td class="ok mono">15493921.62</td>
+          <td class="ok mono">2299977.29</td>
+          <td class="mono">6.737×</td>
+          <td class="ok mono">0.0025</td>
+          <td class="ok mono">0.0081</td>
+        </tr>
+<tr>
+          <td class="mono">Del</td>
+          <td class="ok mono">26699583.91</td>
+          <td class="ok mono">3288979.54</td>
+          <td class="mono">8.118×</td>
+          <td class="ok mono">0.0014</td>
+          <td class="ok mono">0.0068</td>
+        </tr>
+<tr>
+          <td class="mono">Exists</td>
+          <td class="ok mono">26818782.08</td>
+          <td class="ok mono">3281913.13</td>
+          <td class="mono">8.172×</td>
+          <td class="ok mono">0.0014</td>
+          <td class="ok mono">0.0065</td>
+        </tr>
+<tr>
+          <td class="mono">Expire</td>
+          <td class="ok mono">21503249.79</td>
+          <td class="ok mono">2021456.07</td>
+          <td class="mono">10.638×</td>
+          <td class="ok mono">0.0017</td>
+          <td class="ok mono">0.0091</td>
+        </tr>
+<tr>
+          <td class="mono">Ttl</td>
+          <td class="ok mono">24968244.14</td>
+          <td class="ok mono">2940609.41</td>
+          <td class="mono">8.491×</td>
+          <td class="ok mono">0.0015</td>
+          <td class="ok mono">0.0076</td>
+        </tr>
+<tr>
+          <td class="mono">Incr</td>
+          <td class="ok mono">23603387.34</td>
+          <td class="ok mono">2771241.52</td>
+          <td class="mono">8.517×</td>
+          <td class="ok mono">0.0015</td>
+          <td class="ok mono">0.0080</td>
+        </tr>
+<tr>
+          <td class="mono">IncrBy</td>
+          <td class="ok mono">20302899.94</td>
+          <td class="ok mono">2492417.07</td>
+          <td class="mono">8.146×</td>
+          <td class="ok mono">0.0018</td>
+          <td class="ok mono">0.0089</td>
+        </tr>
+<tr>
+          <td class="mono">Decr</td>
+          <td class="ok mono">22635071.54</td>
+          <td class="ok mono">2752769.03</td>
+          <td class="mono">8.223×</td>
+          <td class="ok mono">0.0016</td>
+          <td class="ok mono">0.0080</td>
+        </tr>
+<tr>
+          <td class="mono">DecrBy</td>
+          <td class="ok mono">20637328.76</td>
+          <td class="ok mono">2513881.55</td>
+          <td class="mono">8.209×</td>
+          <td class="ok mono">0.0018</td>
+          <td class="ok mono">0.0087</td>
+        </tr>
+<tr>
+          <td class="mono">Strlen</td>
+          <td class="ok mono">25914844.41</td>
+          <td class="ok mono">3031122.89</td>
+          <td class="mono">8.550×</td>
+          <td class="ok mono">0.0020</td>
+          <td class="ok mono">0.0073</td>
+        </tr>
+<tr>
+          <td class="mono">Eval</td>
+          <td class="ok mono">2468352.66</td>
+          <td class="ok mono">556447.48</td>
+          <td class="mono">4.436×</td>
+          <td class="ok mono">0.0126</td>
+          <td class="ok mono">0.0380</td>
+        </tr>
+<tr>
+          <td class="mono">EvalSha</td>
+          <td class="ok mono">2419744.84</td>
+          <td class="ok mono">620663.05</td>
+          <td class="mono">3.899×</td>
+          <td class="ok mono">0.0137</td>
+          <td class="ok mono">0.0327</td>
+        </tr>
+<tr>
+          <td class="mono">SetRange</td>
+          <td class="ok mono">17131596.50</td>
+          <td class="ok mono">2303695.69</td>
+          <td class="mono">7.437×</td>
+          <td class="ok mono">0.0021</td>
+          <td class="ok mono">0.0089</td>
+        </tr>
+<tr>
+          <td class="mono">GetRange</td>
+          <td class="ok mono">18860043.66</td>
+          <td class="ok mono">2433705.75</td>
+          <td class="mono">7.750×</td>
+          <td class="ok mono">0.0019</td>
+          <td class="ok mono">0.0082</td>
+        </tr>
+<tr>
+          <td class="mono">Lpush</td>
+          <td class="ok mono">18920216.87</td>
+          <td class="ok mono">2065234.53</td>
+          <td class="mono">9.161×</td>
+          <td class="ok mono">0.0025</td>
+          <td class="ok mono">0.0104</td>
+        </tr>
+<tr>
+          <td class="mono">Rpush</td>
+          <td class="ok mono">18657296.05</td>
+          <td class="ok mono">2238362.42</td>
+          <td class="mono">8.335×</td>
+          <td class="ok mono">0.0031</td>
+          <td class="ok mono">0.0100</td>
+        </tr>
+<tr>
+          <td class="mono">Lpop</td>
+          <td class="ok mono">26224171.88</td>
+          <td class="ok mono">3313853.77</td>
+          <td class="mono">7.913×</td>
+          <td class="ok mono">0.0014</td>
+          <td class="ok mono">0.0070</td>
+        </tr>
+<tr>
+          <td class="mono">Rpop</td>
+          <td class="ok mono">27159932.91</td>
+          <td class="ok mono">3293598.76</td>
+          <td class="mono">8.246×</td>
+          <td class="ok mono">0.0014</td>
+          <td class="ok mono">0.0078</td>
+        </tr>
+<tr>
+          <td class="mono">Llen</td>
+          <td class="ok mono">26259279.92</td>
+          <td class="ok mono">3162739.90</td>
+          <td class="mono">8.303×</td>
+          <td class="ok mono">0.0014</td>
+          <td class="ok mono">0.0072</td>
+        </tr>
+<tr>
+          <td class="mono">Lrange</td>
+          <td class="ok mono">14510001.64</td>
+          <td class="ok mono">2247311.73</td>
+          <td class="mono">6.457×</td>
+          <td class="ok mono">0.0027</td>
+          <td class="ok mono">0.0089</td>
+        </tr>
+<tr>
+          <td class="mono">Sadd</td>
+          <td class="ok mono">20111207.42</td>
+          <td class="ok mono">2564261.14</td>
+          <td class="mono">7.843×</td>
+          <td class="ok mono">0.0025</td>
+          <td class="ok mono">0.0091</td>
+        </tr>
+<tr>
+          <td class="mono">Srem</td>
+          <td class="ok mono">25011410.58</td>
+          <td class="ok mono">2995233.09</td>
+          <td class="mono">8.350×</td>
+          <td class="ok mono">0.0016</td>
+          <td class="ok mono">0.0070</td>
+        </tr>
+<tr>
+          <td class="mono">Scard</td>
+          <td class="ok mono">26634680.62</td>
+          <td class="ok mono">3088769.79</td>
+          <td class="mono">8.623×</td>
+          <td class="ok mono">0.0013</td>
+          <td class="ok mono">0.0078</td>
+        </tr>
+<tr>
+          <td class="mono">Sismember</td>
+          <td class="ok mono">22834000.30</td>
+          <td class="ok mono">2584730.26</td>
+          <td class="mono">8.834×</td>
+          <td class="ok mono">0.0015</td>
+          <td class="ok mono">0.0083</td>
+        </tr>
+<tr>
+          <td class="mono">Hset</td>
+          <td class="ok mono">16959855.48</td>
+          <td class="ok mono">2128448.29</td>
+          <td class="mono">7.968×</td>
+          <td class="ok mono">0.0023</td>
+          <td class="ok mono">0.0097</td>
+        </tr>
+<tr>
+          <td class="mono">Hget</td>
+          <td class="ok mono">21864798.75</td>
+          <td class="ok mono">2472612.32</td>
+          <td class="mono">8.843×</td>
+          <td class="ok mono">0.0017</td>
+          <td class="ok mono">0.0089</td>
+        </tr>
+<tr>
+          <td class="mono">Hgetall</td>
+          <td class="ok mono">14541433.41</td>
+          <td class="ok mono">2348357.99</td>
+          <td class="mono">6.192×</td>
+          <td class="ok mono">0.0028</td>
+          <td class="ok mono">0.0078</td>
+        </tr>
+<tr>
+          <td class="mono">Hincrby</td>
+          <td class="ok mono">18075550.51</td>
+          <td class="ok mono">1758039.95</td>
+          <td class="mono">10.282×</td>
+          <td class="ok mono">0.0019</td>
+          <td class="ok mono">0.0114</td>
+        </tr>
+<tr>
+          <td class="mono">Zadd</td>
+          <td class="ok mono">17012653.80</td>
+          <td class="ok mono">1890432.27</td>
+          <td class="mono">8.999×</td>
+          <td class="ok mono">0.0019</td>
+          <td class="ok mono">0.0125</td>
+        </tr>
+<tr>
+          <td class="mono">Zrem</td>
+          <td class="ok mono">23121099.25</td>
+          <td class="ok mono">2937711.03</td>
+          <td class="mono">7.870×</td>
+          <td class="ok mono">0.0022</td>
+          <td class="ok mono">0.0081</td>
+        </tr>
+<tr>
+          <td class="mono">Zcard</td>
+          <td class="ok mono">25018710.37</td>
+          <td class="ok mono">3091120.38</td>
+          <td class="mono">8.094×</td>
+          <td class="ok mono">0.0015</td>
+          <td class="ok mono">0.0075</td>
+        </tr>
+<tr>
+          <td class="mono">Zscore</td>
+          <td class="ok mono">17768993.29</td>
+          <td class="ok mono">2389541.93</td>
+          <td class="mono">7.436×</td>
+          <td class="ok mono">0.0019</td>
+          <td class="ok mono">0.0096</td>
+        </tr>
+<tr>
+          <td class="mono">Zrank</td>
+          <td class="ok mono">21745932.47</td>
+          <td class="ok mono">2562368.25</td>
+          <td class="mono">8.487×</td>
+          <td class="ok mono">0.0016</td>
+          <td class="ok mono">0.0089</td>
+        </tr>
+<tr>
+          <td class="mono">Zrevrank</td>
+          <td class="ok mono">20475077.24</td>
+          <td class="ok mono">2531850.05</td>
+          <td class="mono">8.087×</td>
+          <td class="ok mono">0.0017</td>
+          <td class="ok mono">0.0095</td>
+        </tr>
+        </tbody>
+      </table>
+
+      <details>
+        <summary>Show embedded JSON (full raw outputs)</summary>
+        <pre class="mono">{
+  &quot;meta&quot;: {
+    &quot;generatedAt&quot;: &quot;2026-03-04T11:51:59.644Z&quot;
+  },
+  &quot;results&quot;: [
+    {
+      &quot;engine&quot;: &quot;JustKV&quot;,
+      &quot;startedAt&quot;: &quot;2026-03-04T11:50:05.444Z&quot;,
+      &quot;finishedAt&quot;: &quot;2026-03-04T11:50:21.171Z&quot;,
+      &quot;config&quot;: {
+        &quot;host&quot;: &quot;127.0.0.1&quot;,
+        &quot;port&quot;: 6379,
+        &quot;n&quot;: 5000000,
+        &quot;c&quot;: 16,
+        &quot;P&quot;: 256,
+        &quot;warmup&quot;: false,
+        &quot;timeoutMsPerTest&quot;: 180000,
+        &quot;waitAfterServerStartMs&quot;: 100,
+        &quot;outJson&quot;: &quot;bench.json&quot;,
+        &quot;outHtml&quot;: &quot;bench.html&quot;
+      },
+      &quot;runs&quot;: [
+        {
+          &quot;test&quot;: &quot;PingInline&quot;,
+          &quot;raw&quot;: &quot;====== PING_INLINE ======\n  5000000 requests completed in 0.13 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0000/0.0004/0.0009/0.0014 ms\n  38707064.22 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;PingInline&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;PING_INLINE&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.13,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0,
+          &quot;latencyP50Ms&quot;: 0.0004,
+          &quot;latencyP95Ms&quot;: 0.0009,
+          &quot;latencyP99Ms&quot;: 0.0014,
+          &quot;rps&quot;: 38707064.22
+        },
+        {
+          &quot;test&quot;: &quot;PingMbulk&quot;,
+          &quot;raw&quot;: &quot;====== PING_MBULK ======\n  5000000 requests completed in 0.14 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0000/0.0004/0.0008/0.0010 ms\n  36673028.70 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;PingMbulk&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;PING_MBULK&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.14,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0,
+          &quot;latencyP50Ms&quot;: 0.0004,
+          &quot;latencyP95Ms&quot;: 0.0008,
+          &quot;latencyP99Ms&quot;: 0.001,
+          &quot;rps&quot;: 36673028.7
+        },
+        {
+          &quot;test&quot;: &quot;Echo&quot;,
+          &quot;raw&quot;: &quot;====== ECHO ======\n  5000000 requests completed in 0.17 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0000/0.0005/0.0010/0.0013 ms\n  29430764.00 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Echo&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;ECHO&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.17,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0,
+          &quot;latencyP50Ms&quot;: 0.0005,
+          &quot;latencyP95Ms&quot;: 0.001,
+          &quot;latencyP99Ms&quot;: 0.0013,
+          &quot;rps&quot;: 29430764
+        },
+        {
+          &quot;test&quot;: &quot;Set&quot;,
+          &quot;raw&quot;: &quot;====== SET ======\n  5000000 requests completed in 0.24 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0000/0.0007/0.0013/0.0021 ms\n  20479815.12 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Set&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;SET&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.24,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0,
+          &quot;latencyP50Ms&quot;: 0.0007,
+          &quot;latencyP95Ms&quot;: 0.0013,
+          &quot;latencyP99Ms&quot;: 0.0021,
+          &quot;rps&quot;: 20479815.12
+        },
+        {
+          &quot;test&quot;: &quot;SetNx&quot;,
+          &quot;raw&quot;: &quot;====== SETNX ======\n  5000000 requests completed in 0.20 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0000/0.0006/0.0011/0.0016 ms\n  24644526.24 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;SetNx&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;SETNX&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.2,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0,
+          &quot;latencyP50Ms&quot;: 0.0006,
+          &quot;latencyP95Ms&quot;: 0.0011,
+          &quot;latencyP99Ms&quot;: 0.0016,
+          &quot;rps&quot;: 24644526.24
+        },
+        {
+          &quot;test&quot;: &quot;Get&quot;,
+          &quot;raw&quot;: &quot;====== GET ======\n  5000000 requests completed in 0.19 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0000/0.0006/0.0010/0.0014 ms\n  26058728.21 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Get&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;GET&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.19,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0,
+          &quot;latencyP50Ms&quot;: 0.0006,
+          &quot;latencyP95Ms&quot;: 0.001,
+          &quot;latencyP99Ms&quot;: 0.0014,
+          &quot;rps&quot;: 26058728.21
+        },
+        {
+          &quot;test&quot;: &quot;GetSet&quot;,
+          &quot;raw&quot;: &quot;====== GETSET ======\n  5000000 requests completed in 0.26 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0001/0.0007/0.0014/0.0021 ms\n  18916137.84 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;GetSet&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;GETSET&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.26,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0001,
+          &quot;latencyP50Ms&quot;: 0.0007,
+          &quot;latencyP95Ms&quot;: 0.0014,
+          &quot;latencyP99Ms&quot;: 0.0021,
+          &quot;rps&quot;: 18916137.84
+        },
+        {
+          &quot;test&quot;: &quot;Mset&quot;,
+          &quot;raw&quot;: &quot;====== MSET ======\n  5000000 requests completed in 0.29 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0001/0.0008/0.0015/0.0023 ms\n  17216407.09 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Mset&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;MSET&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.29,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0001,
+          &quot;latencyP50Ms&quot;: 0.0008,
+          &quot;latencyP95Ms&quot;: 0.0015,
+          &quot;latencyP99Ms&quot;: 0.0023,
+          &quot;rps&quot;: 17216407.09
+        },
+        {
+          &quot;test&quot;: &quot;Mget&quot;,
+          &quot;raw&quot;: &quot;====== MGET ======\n  5000000 requests completed in 0.32 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0001/0.0009/0.0018/0.0025 ms\n  15493921.62 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Mget&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;MGET&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.32,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0001,
+          &quot;latencyP50Ms&quot;: 0.0009,
+          &quot;latencyP95Ms&quot;: 0.0018,
+          &quot;latencyP99Ms&quot;: 0.0025,
+          &quot;rps&quot;: 15493921.62
+        },
+        {
+          &quot;test&quot;: &quot;Del&quot;,
+          &quot;raw&quot;: &quot;====== DEL ======\n  5000000 requests completed in 0.19 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0000/0.0005/0.0009/0.0014 ms\n  26699583.91 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Del&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;DEL&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.19,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0,
+          &quot;latencyP50Ms&quot;: 0.0005,
+          &quot;latencyP95Ms&quot;: 0.0009,
+          &quot;latencyP99Ms&quot;: 0.0014,
+          &quot;rps&quot;: 26699583.91
+        },
+        {
+          &quot;test&quot;: &quot;Exists&quot;,
+          &quot;raw&quot;: &quot;====== EXISTS ======\n  5000000 requests completed in 0.19 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0000/0.0005/0.0010/0.0014 ms\n  26818782.08 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Exists&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;EXISTS&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.19,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0,
+          &quot;latencyP50Ms&quot;: 0.0005,
+          &quot;latencyP95Ms&quot;: 0.001,
+          &quot;latencyP99Ms&quot;: 0.0014,
+          &quot;rps&quot;: 26818782.08
+        },
+        {
+          &quot;test&quot;: &quot;Expire&quot;,
+          &quot;raw&quot;: &quot;====== EXPIRE ======\n  5000000 requests completed in 0.23 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0000/0.0007/0.0012/0.0017 ms\n  21503249.79 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Expire&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;EXPIRE&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.23,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0,
+          &quot;latencyP50Ms&quot;: 0.0007,
+          &quot;latencyP95Ms&quot;: 0.0012,
+          &quot;latencyP99Ms&quot;: 0.0017,
+          &quot;rps&quot;: 21503249.79
+        },
+        {
+          &quot;test&quot;: &quot;Ttl&quot;,
+          &quot;raw&quot;: &quot;====== TTL ======\n  5000000 requests completed in 0.20 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0000/0.0006/0.0011/0.0015 ms\n  24968244.14 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Ttl&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;TTL&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.2,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0,
+          &quot;latencyP50Ms&quot;: 0.0006,
+          &quot;latencyP95Ms&quot;: 0.0011,
+          &quot;latencyP99Ms&quot;: 0.0015,
+          &quot;rps&quot;: 24968244.14
+        },
+        {
+          &quot;test&quot;: &quot;Incr&quot;,
+          &quot;raw&quot;: &quot;====== INCR ======\n  5000000 requests completed in 0.21 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0000/0.0006/0.0011/0.0015 ms\n  23603387.34 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Incr&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;INCR&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.21,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0,
+          &quot;latencyP50Ms&quot;: 0.0006,
+          &quot;latencyP95Ms&quot;: 0.0011,
+          &quot;latencyP99Ms&quot;: 0.0015,
+          &quot;rps&quot;: 23603387.34
+        },
+        {
+          &quot;test&quot;: &quot;IncrBy&quot;,
+          &quot;raw&quot;: &quot;====== INCRBY ======\n  5000000 requests completed in 0.25 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0000/0.0007/0.0013/0.0018 ms\n  20302899.94 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;IncrBy&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;INCRBY&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.25,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0,
+          &quot;latencyP50Ms&quot;: 0.0007,
+          &quot;latencyP95Ms&quot;: 0.0013,
+          &quot;latencyP99Ms&quot;: 0.0018,
+          &quot;rps&quot;: 20302899.94
+        },
+        {
+          &quot;test&quot;: &quot;Decr&quot;,
+          &quot;raw&quot;: &quot;====== DECR ======\n  5000000 requests completed in 0.22 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0000/0.0006/0.0012/0.0016 ms\n  22635071.54 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Decr&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;DECR&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.22,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0,
+          &quot;latencyP50Ms&quot;: 0.0006,
+          &quot;latencyP95Ms&quot;: 0.0012,
+          &quot;latencyP99Ms&quot;: 0.0016,
+          &quot;rps&quot;: 22635071.54
+        },
+        {
+          &quot;test&quot;: &quot;DecrBy&quot;,
+          &quot;raw&quot;: &quot;====== DECRBY ======\n  5000000 requests completed in 0.24 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0000/0.0007/0.0013/0.0018 ms\n  20637328.76 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;DecrBy&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;DECRBY&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.24,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0,
+          &quot;latencyP50Ms&quot;: 0.0007,
+          &quot;latencyP95Ms&quot;: 0.0013,
+          &quot;latencyP99Ms&quot;: 0.0018,
+          &quot;rps&quot;: 20637328.76
+        },
+        {
+          &quot;test&quot;: &quot;Strlen&quot;,
+          &quot;raw&quot;: &quot;====== STRLEN ======\n  5000000 requests completed in 0.19 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0000/0.0005/0.0010/0.0020 ms\n  25914844.41 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Strlen&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;STRLEN&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.19,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0,
+          &quot;latencyP50Ms&quot;: 0.0005,
+          &quot;latencyP95Ms&quot;: 0.001,
+          &quot;latencyP99Ms&quot;: 0.002,
+          &quot;rps&quot;: 25914844.41
+        },
+        {
+          &quot;test&quot;: &quot;Eval&quot;,
+          &quot;raw&quot;: &quot;====== EVAL ======\n  5000000 requests completed in 2.03 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0004/0.0061/0.0104/0.0126 ms\n  2468352.66 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Eval&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;EVAL&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 2.03,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0004,
+          &quot;latencyP50Ms&quot;: 0.0061,
+          &quot;latencyP95Ms&quot;: 0.0104,
+          &quot;latencyP99Ms&quot;: 0.0126,
+          &quot;rps&quot;: 2468352.66
+        },
+        {
+          &quot;test&quot;: &quot;EvalSha&quot;,
+          &quot;raw&quot;: &quot;====== EVALSHA ======\n  5000000 requests completed in 2.07 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0004/0.0062/0.0108/0.0137 ms\n  2419744.84 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;EvalSha&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;EVALSHA&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 2.07,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0004,
+          &quot;latencyP50Ms&quot;: 0.0062,
+          &quot;latencyP95Ms&quot;: 0.0108,
+          &quot;latencyP99Ms&quot;: 0.0137,
+          &quot;rps&quot;: 2419744.84
+        },
+        {
+          &quot;test&quot;: &quot;SetRange&quot;,
+          &quot;raw&quot;: &quot;====== SETRANGE ======\n  5000000 requests completed in 0.29 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0001/0.0008/0.0014/0.0021 ms\n  17131596.50 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;SetRange&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;SETRANGE&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.29,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0001,
+          &quot;latencyP50Ms&quot;: 0.0008,
+          &quot;latencyP95Ms&quot;: 0.0014,
+          &quot;latencyP99Ms&quot;: 0.0021,
+          &quot;rps&quot;: 17131596.5
+        },
+        {
+          &quot;test&quot;: &quot;GetRange&quot;,
+          &quot;raw&quot;: &quot;====== GETRANGE ======\n  5000000 requests completed in 0.27 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0001/0.0008/0.0014/0.0019 ms\n  18860043.66 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;GetRange&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;GETRANGE&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.27,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0001,
+          &quot;latencyP50Ms&quot;: 0.0008,
+          &quot;latencyP95Ms&quot;: 0.0014,
+          &quot;latencyP99Ms&quot;: 0.0019,
+          &quot;rps&quot;: 18860043.66
+        },
+        {
+          &quot;test&quot;: &quot;Lpush&quot;,
+          &quot;raw&quot;: &quot;====== LPUSH ======\n  5000000 requests completed in 0.26 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0001/0.0006/0.0013/0.0025 ms\n  18920216.87 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Lpush&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;LPUSH&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.26,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0001,
+          &quot;latencyP50Ms&quot;: 0.0006,
+          &quot;latencyP95Ms&quot;: 0.0013,
+          &quot;latencyP99Ms&quot;: 0.0025,
+          &quot;rps&quot;: 18920216.87
+        },
+        {
+          &quot;test&quot;: &quot;Rpush&quot;,
+          &quot;raw&quot;: &quot;====== RPUSH ======\n  5000000 requests completed in 0.27 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0001/0.0006/0.0014/0.0031 ms\n  18657296.05 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Rpush&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;RPUSH&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.27,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0001,
+          &quot;latencyP50Ms&quot;: 0.0006,
+          &quot;latencyP95Ms&quot;: 0.0014,
+          &quot;latencyP99Ms&quot;: 0.0031,
+          &quot;rps&quot;: 18657296.05
+        },
+        {
+          &quot;test&quot;: &quot;Lpop&quot;,
+          &quot;raw&quot;: &quot;====== LPOP ======\n  5000000 requests completed in 0.19 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0000/0.0005/0.0011/0.0014 ms\n  26224171.88 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Lpop&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;LPOP&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.19,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0,
+          &quot;latencyP50Ms&quot;: 0.0005,
+          &quot;latencyP95Ms&quot;: 0.0011,
+          &quot;latencyP99Ms&quot;: 0.0014,
+          &quot;rps&quot;: 26224171.88
+        },
+        {
+          &quot;test&quot;: &quot;Rpop&quot;,
+          &quot;raw&quot;: &quot;====== RPOP ======\n  5000000 requests completed in 0.18 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0000/0.0005/0.0010/0.0014 ms\n  27159932.91 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Rpop&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;RPOP&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.18,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0,
+          &quot;latencyP50Ms&quot;: 0.0005,
+          &quot;latencyP95Ms&quot;: 0.001,
+          &quot;latencyP99Ms&quot;: 0.0014,
+          &quot;rps&quot;: 27159932.91
+        },
+        {
+          &quot;test&quot;: &quot;Llen&quot;,
+          &quot;raw&quot;: &quot;====== LLEN ======\n  5000000 requests completed in 0.19 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0000/0.0006/0.0011/0.0014 ms\n  26259279.92 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Llen&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;LLEN&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.19,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0,
+          &quot;latencyP50Ms&quot;: 0.0006,
+          &quot;latencyP95Ms&quot;: 0.0011,
+          &quot;latencyP99Ms&quot;: 0.0014,
+          &quot;rps&quot;: 26259279.92
+        },
+        {
+          &quot;test&quot;: &quot;Lrange&quot;,
+          &quot;raw&quot;: &quot;====== LRANGE ======\n  5000000 requests completed in 0.34 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0001/0.0010/0.0019/0.0027 ms\n  14510001.64 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Lrange&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;LRANGE&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.34,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0001,
+          &quot;latencyP50Ms&quot;: 0.001,
+          &quot;latencyP95Ms&quot;: 0.0019,
+          &quot;latencyP99Ms&quot;: 0.0027,
+          &quot;rps&quot;: 14510001.64
+        },
+        {
+          &quot;test&quot;: &quot;Sadd&quot;,
+          &quot;raw&quot;: &quot;====== SADD ======\n  5000000 requests completed in 0.25 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0000/0.0006/0.0013/0.0025 ms\n  20111207.42 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Sadd&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;SADD&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.25,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0,
+          &quot;latencyP50Ms&quot;: 0.0006,
+          &quot;latencyP95Ms&quot;: 0.0013,
+          &quot;latencyP99Ms&quot;: 0.0025,
+          &quot;rps&quot;: 20111207.42
+        },
+        {
+          &quot;test&quot;: &quot;Srem&quot;,
+          &quot;raw&quot;: &quot;====== SREM ======\n  5000000 requests completed in 0.20 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0000/0.0006/0.0011/0.0016 ms\n  25011410.58 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Srem&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;SREM&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.2,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0,
+          &quot;latencyP50Ms&quot;: 0.0006,
+          &quot;latencyP95Ms&quot;: 0.0011,
+          &quot;latencyP99Ms&quot;: 0.0016,
+          &quot;rps&quot;: 25011410.58
+        },
+        {
+          &quot;test&quot;: &quot;Scard&quot;,
+          &quot;raw&quot;: &quot;====== SCARD ======\n  5000000 requests completed in 0.19 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0000/0.0006/0.0010/0.0013 ms\n  26634680.62 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Scard&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;SCARD&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.19,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0,
+          &quot;latencyP50Ms&quot;: 0.0006,
+          &quot;latencyP95Ms&quot;: 0.001,
+          &quot;latencyP99Ms&quot;: 0.0013,
+          &quot;rps&quot;: 26634680.62
+        },
+        {
+          &quot;test&quot;: &quot;Sismember&quot;,
+          &quot;raw&quot;: &quot;====== SISMEMBER ======\n  5000000 requests completed in 0.22 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0000/0.0006/0.0012/0.0015 ms\n  22834000.30 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Sismember&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;SISMEMBER&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.22,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0,
+          &quot;latencyP50Ms&quot;: 0.0006,
+          &quot;latencyP95Ms&quot;: 0.0012,
+          &quot;latencyP99Ms&quot;: 0.0015,
+          &quot;rps&quot;: 22834000.3
+        },
+        {
+          &quot;test&quot;: &quot;Hset&quot;,
+          &quot;raw&quot;: &quot;====== HSET ======\n  5000000 requests completed in 0.29 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0001/0.0008/0.0015/0.0023 ms\n  16959855.48 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Hset&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;HSET&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.29,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0001,
+          &quot;latencyP50Ms&quot;: 0.0008,
+          &quot;latencyP95Ms&quot;: 0.0015,
+          &quot;latencyP99Ms&quot;: 0.0023,
+          &quot;rps&quot;: 16959855.48
+        },
+        {
+          &quot;test&quot;: &quot;Hget&quot;,
+          &quot;raw&quot;: &quot;====== HGET ======\n  5000000 requests completed in 0.23 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0000/0.0007/0.0012/0.0017 ms\n  21864798.75 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Hget&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;HGET&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.23,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0,
+          &quot;latencyP50Ms&quot;: 0.0007,
+          &quot;latencyP95Ms&quot;: 0.0012,
+          &quot;latencyP99Ms&quot;: 0.0017,
+          &quot;rps&quot;: 21864798.75
+        },
+        {
+          &quot;test&quot;: &quot;Hgetall&quot;,
+          &quot;raw&quot;: &quot;====== HGETALL ======\n  5000000 requests completed in 0.34 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0001/0.0010/0.0019/0.0028 ms\n  14541433.41 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Hgetall&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;HGETALL&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.34,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0001,
+          &quot;latencyP50Ms&quot;: 0.001,
+          &quot;latencyP95Ms&quot;: 0.0019,
+          &quot;latencyP99Ms&quot;: 0.0028,
+          &quot;rps&quot;: 14541433.41
+        },
+        {
+          &quot;test&quot;: &quot;Hincrby&quot;,
+          &quot;raw&quot;: &quot;====== HINCRBY ======\n  5000000 requests completed in 0.28 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0001/0.0008/0.0015/0.0019 ms\n  18075550.51 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Hincrby&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;HINCRBY&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.28,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0001,
+          &quot;latencyP50Ms&quot;: 0.0008,
+          &quot;latencyP95Ms&quot;: 0.0015,
+          &quot;latencyP99Ms&quot;: 0.0019,
+          &quot;rps&quot;: 18075550.51
+        },
+        {
+          &quot;test&quot;: &quot;Zadd&quot;,
+          &quot;raw&quot;: &quot;====== ZADD ======\n  5000000 requests completed in 0.29 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0001/0.0009/0.0015/0.0019 ms\n  17012653.80 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Zadd&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;ZADD&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.29,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0001,
+          &quot;latencyP50Ms&quot;: 0.0009,
+          &quot;latencyP95Ms&quot;: 0.0015,
+          &quot;latencyP99Ms&quot;: 0.0019,
+          &quot;rps&quot;: 17012653.8
+        },
+        {
+          &quot;test&quot;: &quot;Zrem&quot;,
+          &quot;raw&quot;: &quot;====== ZREM ======\n  5000000 requests completed in 0.22 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0000/0.0006/0.0012/0.0022 ms\n  23121099.25 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Zrem&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;ZREM&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.22,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0,
+          &quot;latencyP50Ms&quot;: 0.0006,
+          &quot;latencyP95Ms&quot;: 0.0012,
+          &quot;latencyP99Ms&quot;: 0.0022,
+          &quot;rps&quot;: 23121099.25
+        },
+        {
+          &quot;test&quot;: &quot;Zcard&quot;,
+          &quot;raw&quot;: &quot;====== ZCARD ======\n  5000000 requests completed in 0.20 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0000/0.0006/0.0011/0.0015 ms\n  25018710.37 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Zcard&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;ZCARD&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.2,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0,
+          &quot;latencyP50Ms&quot;: 0.0006,
+          &quot;latencyP95Ms&quot;: 0.0011,
+          &quot;latencyP99Ms&quot;: 0.0015,
+          &quot;rps&quot;: 25018710.37
+        },
+        {
+          &quot;test&quot;: &quot;Zscore&quot;,
+          &quot;raw&quot;: &quot;====== ZSCORE ======\n  5000000 requests completed in 0.28 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0001/0.0008/0.0015/0.0019 ms\n  17768993.29 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Zscore&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;ZSCORE&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.28,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0001,
+          &quot;latencyP50Ms&quot;: 0.0008,
+          &quot;latencyP95Ms&quot;: 0.0015,
+          &quot;latencyP99Ms&quot;: 0.0019,
+          &quot;rps&quot;: 17768993.29
+        },
+        {
+          &quot;test&quot;: &quot;Zrank&quot;,
+          &quot;raw&quot;: &quot;====== ZRANK ======\n  5000000 requests completed in 0.23 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0000/0.0007/0.0013/0.0016 ms\n  21745932.47 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Zrank&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;ZRANK&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.23,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0,
+          &quot;latencyP50Ms&quot;: 0.0007,
+          &quot;latencyP95Ms&quot;: 0.0013,
+          &quot;latencyP99Ms&quot;: 0.0016,
+          &quot;rps&quot;: 21745932.47
+        },
+        {
+          &quot;test&quot;: &quot;Zrevrank&quot;,
+          &quot;raw&quot;: &quot;====== ZREVRANK ======\n  5000000 requests completed in 0.24 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0000/0.0007/0.0013/0.0017 ms\n  20475077.24 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Zrevrank&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;ZREVRANK&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 0.24,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0,
+          &quot;latencyP50Ms&quot;: 0.0007,
+          &quot;latencyP95Ms&quot;: 0.0013,
+          &quot;latencyP99Ms&quot;: 0.0017,
+          &quot;rps&quot;: 20475077.24
+        }
+      ]
+    },
+    {
+      &quot;engine&quot;: &quot;Redis&quot;,
+      &quot;startedAt&quot;: &quot;2026-03-04T11:50:21.422Z&quot;,
+      &quot;finishedAt&quot;: &quot;2026-03-04T11:51:59.644Z&quot;,
+      &quot;config&quot;: {
+        &quot;host&quot;: &quot;127.0.0.1&quot;,
+        &quot;port&quot;: 6379,
+        &quot;n&quot;: 5000000,
+        &quot;c&quot;: 16,
+        &quot;P&quot;: 256,
+        &quot;warmup&quot;: false,
+        &quot;timeoutMsPerTest&quot;: 180000,
+        &quot;waitAfterServerStartMs&quot;: 100,
+        &quot;outJson&quot;: &quot;bench.json&quot;,
+        &quot;outHtml&quot;: &quot;bench.html&quot;
+      },
+      &quot;runs&quot;: [
+        {
+          &quot;test&quot;: &quot;PingInline&quot;,
+          &quot;raw&quot;: &quot;====== PING_INLINE ======\n  5000000 requests completed in 1.55 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0003/0.0052/0.0057/0.0065 ms\n  3222859.01 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;PingInline&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;PING_INLINE&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 1.55,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0003,
+          &quot;latencyP50Ms&quot;: 0.0052,
+          &quot;latencyP95Ms&quot;: 0.0057,
+          &quot;latencyP99Ms&quot;: 0.0065,
+          &quot;rps&quot;: 3222859.01
+        },
+        {
+          &quot;test&quot;: &quot;PingMbulk&quot;,
+          &quot;raw&quot;: &quot;====== PING_MBULK ======\n  5000000 requests completed in 1.20 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0002/0.0040/0.0047/0.0052 ms\n  4174816.87 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;PingMbulk&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;PING_MBULK&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 1.2,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0002,
+          &quot;latencyP50Ms&quot;: 0.004,
+          &quot;latencyP95Ms&quot;: 0.0047,
+          &quot;latencyP99Ms&quot;: 0.0052,
+          &quot;rps&quot;: 4174816.87
+        },
+        {
+          &quot;test&quot;: &quot;Echo&quot;,
+          &quot;raw&quot;: &quot;====== ECHO ======\n  5000000 requests completed in 1.45 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0003/0.0048/0.0052/0.0057 ms\n  3441055.75 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Echo&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;ECHO&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 1.45,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0003,
+          &quot;latencyP50Ms&quot;: 0.0048,
+          &quot;latencyP95Ms&quot;: 0.0052,
+          &quot;latencyP99Ms&quot;: 0.0057,
+          &quot;rps&quot;: 3441055.75
+        },
+        {
+          &quot;test&quot;: &quot;Set&quot;,
+          &quot;raw&quot;: &quot;====== SET ======\n  5000000 requests completed in 2.36 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0005/0.0076/0.0082/0.0086 ms\n  2116404.48 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Set&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;SET&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 2.36,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0005,
+          &quot;latencyP50Ms&quot;: 0.0076,
+          &quot;latencyP95Ms&quot;: 0.0082,
+          &quot;latencyP99Ms&quot;: 0.0086,
+          &quot;rps&quot;: 2116404.48
+        },
+        {
+          &quot;test&quot;: &quot;SetNx&quot;,
+          &quot;raw&quot;: &quot;====== SETNX ======\n  5000000 requests completed in 1.79 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0004/0.0059/0.0065/0.0072 ms\n  2797063.76 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;SetNx&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;SETNX&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 1.79,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0004,
+          &quot;latencyP50Ms&quot;: 0.0059,
+          &quot;latencyP95Ms&quot;: 0.0065,
+          &quot;latencyP99Ms&quot;: 0.0072,
+          &quot;rps&quot;: 2797063.76
+        },
+        {
+          &quot;test&quot;: &quot;Get&quot;,
+          &quot;raw&quot;: &quot;====== GET ======\n  5000000 requests completed in 1.70 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0003/0.0056/0.0061/0.0067 ms\n  2939646.50 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Get&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;GET&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 1.7,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0003,
+          &quot;latencyP50Ms&quot;: 0.0056,
+          &quot;latencyP95Ms&quot;: 0.0061,
+          &quot;latencyP99Ms&quot;: 0.0067,
+          &quot;rps&quot;: 2939646.5
+        },
+        {
+          &quot;test&quot;: &quot;GetSet&quot;,
+          &quot;raw&quot;: &quot;====== GETSET ======\n  5000000 requests completed in 2.95 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0006/0.0094/0.0104/0.0113 ms\n  1696168.14 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;GetSet&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;GETSET&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 2.95,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0006,
+          &quot;latencyP50Ms&quot;: 0.0094,
+          &quot;latencyP95Ms&quot;: 0.0104,
+          &quot;latencyP99Ms&quot;: 0.0113,
+          &quot;rps&quot;: 1696168.14
+        },
+        {
+          &quot;test&quot;: &quot;Mset&quot;,
+          &quot;raw&quot;: &quot;====== MSET ======\n  5000000 requests completed in 3.44 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0007/0.0114/0.0130/0.0148 ms\n  1453811.27 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Mset&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;MSET&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 3.44,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0007,
+          &quot;latencyP50Ms&quot;: 0.0114,
+          &quot;latencyP95Ms&quot;: 0.013,
+          &quot;latencyP99Ms&quot;: 0.0148,
+          &quot;rps&quot;: 1453811.27
+        },
+        {
+          &quot;test&quot;: &quot;Mget&quot;,
+          &quot;raw&quot;: &quot;====== MGET ======\n  5000000 requests completed in 2.17 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0004/0.0069/0.0073/0.0081 ms\n  2299977.29 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Mget&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;MGET&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 2.17,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0004,
+          &quot;latencyP50Ms&quot;: 0.0069,
+          &quot;latencyP95Ms&quot;: 0.0073,
+          &quot;latencyP99Ms&quot;: 0.0081,
+          &quot;rps&quot;: 2299977.29
+        },
+        {
+          &quot;test&quot;: &quot;Del&quot;,
+          &quot;raw&quot;: &quot;====== DEL ======\n  5000000 requests completed in 1.52 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0003/0.0051/0.0060/0.0068 ms\n  3288979.54 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Del&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;DEL&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 1.52,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0003,
+          &quot;latencyP50Ms&quot;: 0.0051,
+          &quot;latencyP95Ms&quot;: 0.006,
+          &quot;latencyP99Ms&quot;: 0.0068,
+          &quot;rps&quot;: 3288979.54
+        },
+        {
+          &quot;test&quot;: &quot;Exists&quot;,
+          &quot;raw&quot;: &quot;====== EXISTS ======\n  5000000 requests completed in 1.52 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0003/0.0051/0.0056/0.0065 ms\n  3281913.13 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Exists&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;EXISTS&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 1.52,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0003,
+          &quot;latencyP50Ms&quot;: 0.0051,
+          &quot;latencyP95Ms&quot;: 0.0056,
+          &quot;latencyP99Ms&quot;: 0.0065,
+          &quot;rps&quot;: 3281913.13
+        },
+        {
+          &quot;test&quot;: &quot;Expire&quot;,
+          &quot;raw&quot;: &quot;====== EXPIRE ======\n  5000000 requests completed in 2.47 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0005/0.0080/0.0087/0.0091 ms\n  2021456.07 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Expire&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;EXPIRE&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 2.47,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0005,
+          &quot;latencyP50Ms&quot;: 0.008,
+          &quot;latencyP95Ms&quot;: 0.0087,
+          &quot;latencyP99Ms&quot;: 0.0091,
+          &quot;rps&quot;: 2021456.07
+        },
+        {
+          &quot;test&quot;: &quot;Ttl&quot;,
+          &quot;raw&quot;: &quot;====== TTL ======\n  5000000 requests completed in 1.70 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0003/0.0057/0.0068/0.0076 ms\n  2940609.41 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Ttl&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;TTL&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 1.7,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0003,
+          &quot;latencyP50Ms&quot;: 0.0057,
+          &quot;latencyP95Ms&quot;: 0.0068,
+          &quot;latencyP99Ms&quot;: 0.0076,
+          &quot;rps&quot;: 2940609.41
+        },
+        {
+          &quot;test&quot;: &quot;Incr&quot;,
+          &quot;raw&quot;: &quot;====== INCR ======\n  5000000 requests completed in 1.80 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0004/0.0060/0.0071/0.0080 ms\n  2771241.52 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Incr&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;INCR&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 1.8,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0004,
+          &quot;latencyP50Ms&quot;: 0.006,
+          &quot;latencyP95Ms&quot;: 0.0071,
+          &quot;latencyP99Ms&quot;: 0.008,
+          &quot;rps&quot;: 2771241.52
+        },
+        {
+          &quot;test&quot;: &quot;IncrBy&quot;,
+          &quot;raw&quot;: &quot;====== INCRBY ======\n  5000000 requests completed in 2.01 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0004/0.0066/0.0078/0.0089 ms\n  2492417.07 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;IncrBy&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;INCRBY&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 2.01,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0004,
+          &quot;latencyP50Ms&quot;: 0.0066,
+          &quot;latencyP95Ms&quot;: 0.0078,
+          &quot;latencyP99Ms&quot;: 0.0089,
+          &quot;rps&quot;: 2492417.07
+        },
+        {
+          &quot;test&quot;: &quot;Decr&quot;,
+          &quot;raw&quot;: &quot;====== DECR ======\n  5000000 requests completed in 1.82 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0004/0.0060/0.0072/0.0080 ms\n  2752769.03 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Decr&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;DECR&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 1.82,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0004,
+          &quot;latencyP50Ms&quot;: 0.006,
+          &quot;latencyP95Ms&quot;: 0.0072,
+          &quot;latencyP99Ms&quot;: 0.008,
+          &quot;rps&quot;: 2752769.03
+        },
+        {
+          &quot;test&quot;: &quot;DecrBy&quot;,
+          &quot;raw&quot;: &quot;====== DECRBY ======\n  5000000 requests completed in 1.99 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0004/0.0066/0.0079/0.0087 ms\n  2513881.55 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;DecrBy&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;DECRBY&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 1.99,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0004,
+          &quot;latencyP50Ms&quot;: 0.0066,
+          &quot;latencyP95Ms&quot;: 0.0079,
+          &quot;latencyP99Ms&quot;: 0.0087,
+          &quot;rps&quot;: 2513881.55
+        },
+        {
+          &quot;test&quot;: &quot;Strlen&quot;,
+          &quot;raw&quot;: &quot;====== STRLEN ======\n  5000000 requests completed in 1.65 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0003/0.0055/0.0066/0.0073 ms\n  3031122.89 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Strlen&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;STRLEN&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 1.65,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0003,
+          &quot;latencyP50Ms&quot;: 0.0055,
+          &quot;latencyP95Ms&quot;: 0.0066,
+          &quot;latencyP99Ms&quot;: 0.0073,
+          &quot;rps&quot;: 3031122.89
+        },
+        {
+          &quot;test&quot;: &quot;Eval&quot;,
+          &quot;raw&quot;: &quot;====== EVAL ======\n  5000000 requests completed in 8.99 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0018/0.0286/0.0327/0.0380 ms\n  556447.48 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Eval&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;EVAL&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 8.99,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0018,
+          &quot;latencyP50Ms&quot;: 0.0286,
+          &quot;latencyP95Ms&quot;: 0.0327,
+          &quot;latencyP99Ms&quot;: 0.038,
+          &quot;rps&quot;: 556447.48
+        },
+        {
+          &quot;test&quot;: &quot;EvalSha&quot;,
+          &quot;raw&quot;: &quot;====== EVALSHA ======\n  5000000 requests completed in 8.06 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0016/0.0258/0.0286/0.0327 ms\n  620663.05 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;EvalSha&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;EVALSHA&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 8.06,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0016,
+          &quot;latencyP50Ms&quot;: 0.0258,
+          &quot;latencyP95Ms&quot;: 0.0286,
+          &quot;latencyP99Ms&quot;: 0.0327,
+          &quot;rps&quot;: 620663.05
+        },
+        {
+          &quot;test&quot;: &quot;SetRange&quot;,
+          &quot;raw&quot;: &quot;====== SETRANGE ======\n  5000000 requests completed in 2.17 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0004/0.0071/0.0080/0.0089 ms\n  2303695.69 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;SetRange&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;SETRANGE&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 2.17,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0004,
+          &quot;latencyP50Ms&quot;: 0.0071,
+          &quot;latencyP95Ms&quot;: 0.008,
+          &quot;latencyP99Ms&quot;: 0.0089,
+          &quot;rps&quot;: 2303695.69
+        },
+        {
+          &quot;test&quot;: &quot;GetRange&quot;,
+          &quot;raw&quot;: &quot;====== GETRANGE ======\n  5000000 requests completed in 2.05 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0004/0.0067/0.0074/0.0082 ms\n  2433705.75 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;GetRange&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;GETRANGE&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 2.05,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0004,
+          &quot;latencyP50Ms&quot;: 0.0067,
+          &quot;latencyP95Ms&quot;: 0.0074,
+          &quot;latencyP99Ms&quot;: 0.0082,
+          &quot;rps&quot;: 2433705.75
+        },
+        {
+          &quot;test&quot;: &quot;Lpush&quot;,
+          &quot;raw&quot;: &quot;====== LPUSH ======\n  5000000 requests completed in 2.42 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0005/0.0078/0.0091/0.0104 ms\n  2065234.53 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Lpush&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;LPUSH&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 2.42,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0005,
+          &quot;latencyP50Ms&quot;: 0.0078,
+          &quot;latencyP95Ms&quot;: 0.0091,
+          &quot;latencyP99Ms&quot;: 0.0104,
+          &quot;rps&quot;: 2065234.53
+        },
+        {
+          &quot;test&quot;: &quot;Rpush&quot;,
+          &quot;raw&quot;: &quot;====== RPUSH ======\n  5000000 requests completed in 2.23 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0004/0.0073/0.0087/0.0100 ms\n  2238362.42 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Rpush&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;RPUSH&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 2.23,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0004,
+          &quot;latencyP50Ms&quot;: 0.0073,
+          &quot;latencyP95Ms&quot;: 0.0087,
+          &quot;latencyP99Ms&quot;: 0.01,
+          &quot;rps&quot;: 2238362.42
+        },
+        {
+          &quot;test&quot;: &quot;Lpop&quot;,
+          &quot;raw&quot;: &quot;====== LPOP ======\n  5000000 requests completed in 1.51 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0003/0.0051/0.0062/0.0070 ms\n  3313853.77 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Lpop&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;LPOP&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 1.51,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0003,
+          &quot;latencyP50Ms&quot;: 0.0051,
+          &quot;latencyP95Ms&quot;: 0.0062,
+          &quot;latencyP99Ms&quot;: 0.007,
+          &quot;rps&quot;: 3313853.77
+        },
+        {
+          &quot;test&quot;: &quot;Rpop&quot;,
+          &quot;raw&quot;: &quot;====== RPOP ======\n  5000000 requests completed in 1.52 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0003/0.0050/0.0061/0.0078 ms\n  3293598.76 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Rpop&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;RPOP&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 1.52,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0003,
+          &quot;latencyP50Ms&quot;: 0.005,
+          &quot;latencyP95Ms&quot;: 0.0061,
+          &quot;latencyP99Ms&quot;: 0.0078,
+          &quot;rps&quot;: 3293598.76
+        },
+        {
+          &quot;test&quot;: &quot;Llen&quot;,
+          &quot;raw&quot;: &quot;====== LLEN ======\n  5000000 requests completed in 1.58 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0003/0.0052/0.0063/0.0072 ms\n  3162739.90 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Llen&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;LLEN&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 1.58,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0003,
+          &quot;latencyP50Ms&quot;: 0.0052,
+          &quot;latencyP95Ms&quot;: 0.0063,
+          &quot;latencyP99Ms&quot;: 0.0072,
+          &quot;rps&quot;: 3162739.9
+        },
+        {
+          &quot;test&quot;: &quot;Lrange&quot;,
+          &quot;raw&quot;: &quot;====== LRANGE ======\n  5000000 requests completed in 2.22 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0004/0.0070/0.0076/0.0089 ms\n  2247311.73 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Lrange&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;LRANGE&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 2.22,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0004,
+          &quot;latencyP50Ms&quot;: 0.007,
+          &quot;latencyP95Ms&quot;: 0.0076,
+          &quot;latencyP99Ms&quot;: 0.0089,
+          &quot;rps&quot;: 2247311.73
+        },
+        {
+          &quot;test&quot;: &quot;Sadd&quot;,
+          &quot;raw&quot;: &quot;====== SADD ======\n  5000000 requests completed in 1.95 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0004/0.0064/0.0077/0.0091 ms\n  2564261.14 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Sadd&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;SADD&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 1.95,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0004,
+          &quot;latencyP50Ms&quot;: 0.0064,
+          &quot;latencyP95Ms&quot;: 0.0077,
+          &quot;latencyP99Ms&quot;: 0.0091,
+          &quot;rps&quot;: 2564261.14
+        },
+        {
+          &quot;test&quot;: &quot;Srem&quot;,
+          &quot;raw&quot;: &quot;====== SREM ======\n  5000000 requests completed in 1.67 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0003/0.0056/0.0062/0.0070 ms\n  2995233.09 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Srem&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;SREM&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 1.67,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0003,
+          &quot;latencyP50Ms&quot;: 0.0056,
+          &quot;latencyP95Ms&quot;: 0.0062,
+          &quot;latencyP99Ms&quot;: 0.007,
+          &quot;rps&quot;: 2995233.09
+        },
+        {
+          &quot;test&quot;: &quot;Scard&quot;,
+          &quot;raw&quot;: &quot;====== SCARD ======\n  5000000 requests completed in 1.62 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0003/0.0054/0.0066/0.0078 ms\n  3088769.79 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Scard&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;SCARD&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 1.62,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0003,
+          &quot;latencyP50Ms&quot;: 0.0054,
+          &quot;latencyP95Ms&quot;: 0.0066,
+          &quot;latencyP99Ms&quot;: 0.0078,
+          &quot;rps&quot;: 3088769.79
+        },
+        {
+          &quot;test&quot;: &quot;Sismember&quot;,
+          &quot;raw&quot;: &quot;====== SISMEMBER ======\n  5000000 requests completed in 1.93 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0004/0.0064/0.0073/0.0083 ms\n  2584730.26 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Sismember&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;SISMEMBER&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 1.93,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0004,
+          &quot;latencyP50Ms&quot;: 0.0064,
+          &quot;latencyP95Ms&quot;: 0.0073,
+          &quot;latencyP99Ms&quot;: 0.0083,
+          &quot;rps&quot;: 2584730.26
+        },
+        {
+          &quot;test&quot;: &quot;Hset&quot;,
+          &quot;raw&quot;: &quot;====== HSET ======\n  5000000 requests completed in 2.35 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0005/0.0076/0.0087/0.0097 ms\n  2128448.29 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Hset&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;HSET&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 2.35,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0005,
+          &quot;latencyP50Ms&quot;: 0.0076,
+          &quot;latencyP95Ms&quot;: 0.0087,
+          &quot;latencyP99Ms&quot;: 0.0097,
+          &quot;rps&quot;: 2128448.29
+        },
+        {
+          &quot;test&quot;: &quot;Hget&quot;,
+          &quot;raw&quot;: &quot;====== HGET ======\n  5000000 requests completed in 2.02 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0004/0.0066/0.0076/0.0089 ms\n  2472612.32 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Hget&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;HGET&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 2.02,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0004,
+          &quot;latencyP50Ms&quot;: 0.0066,
+          &quot;latencyP95Ms&quot;: 0.0076,
+          &quot;latencyP99Ms&quot;: 0.0089,
+          &quot;rps&quot;: 2472612.32
+        },
+        {
+          &quot;test&quot;: &quot;Hgetall&quot;,
+          &quot;raw&quot;: &quot;====== HGETALL ======\n  5000000 requests completed in 2.13 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0004/0.0067/0.0072/0.0078 ms\n  2348357.99 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Hgetall&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;HGETALL&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 2.13,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0004,
+          &quot;latencyP50Ms&quot;: 0.0067,
+          &quot;latencyP95Ms&quot;: 0.0072,
+          &quot;latencyP99Ms&quot;: 0.0078,
+          &quot;rps&quot;: 2348357.99
+        },
+        {
+          &quot;test&quot;: &quot;Hincrby&quot;,
+          &quot;raw&quot;: &quot;====== HINCRBY ======\n  5000000 requests completed in 2.84 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0006/0.0090/0.0103/0.0114 ms\n  1758039.95 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Hincrby&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;HINCRBY&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 2.84,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0006,
+          &quot;latencyP50Ms&quot;: 0.009,
+          &quot;latencyP95Ms&quot;: 0.0103,
+          &quot;latencyP99Ms&quot;: 0.0114,
+          &quot;rps&quot;: 1758039.95
+        },
+        {
+          &quot;test&quot;: &quot;Zadd&quot;,
+          &quot;raw&quot;: &quot;====== ZADD ======\n  5000000 requests completed in 2.64 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0005/0.0085/0.0104/0.0125 ms\n  1890432.27 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Zadd&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;ZADD&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 2.64,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0005,
+          &quot;latencyP50Ms&quot;: 0.0085,
+          &quot;latencyP95Ms&quot;: 0.0104,
+          &quot;latencyP99Ms&quot;: 0.0125,
+          &quot;rps&quot;: 1890432.27
+        },
+        {
+          &quot;test&quot;: &quot;Zrem&quot;,
+          &quot;raw&quot;: &quot;====== ZREM ======\n  5000000 requests completed in 1.70 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0003/0.0056/0.0069/0.0081 ms\n  2937711.03 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Zrem&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;ZREM&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 1.7,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0003,
+          &quot;latencyP50Ms&quot;: 0.0056,
+          &quot;latencyP95Ms&quot;: 0.0069,
+          &quot;latencyP99Ms&quot;: 0.0081,
+          &quot;rps&quot;: 2937711.03
+        },
+        {
+          &quot;test&quot;: &quot;Zcard&quot;,
+          &quot;raw&quot;: &quot;====== ZCARD ======\n  5000000 requests completed in 1.62 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0003/0.0054/0.0066/0.0075 ms\n  3091120.38 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Zcard&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;ZCARD&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 1.62,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0003,
+          &quot;latencyP50Ms&quot;: 0.0054,
+          &quot;latencyP95Ms&quot;: 0.0066,
+          &quot;latencyP99Ms&quot;: 0.0075,
+          &quot;rps&quot;: 3091120.38
+        },
+        {
+          &quot;test&quot;: &quot;Zscore&quot;,
+          &quot;raw&quot;: &quot;====== ZSCORE ======\n  5000000 requests completed in 2.09 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0004/0.0068/0.0082/0.0096 ms\n  2389541.93 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Zscore&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;ZSCORE&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 2.09,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0004,
+          &quot;latencyP50Ms&quot;: 0.0068,
+          &quot;latencyP95Ms&quot;: 0.0082,
+          &quot;latencyP99Ms&quot;: 0.0096,
+          &quot;rps&quot;: 2389541.93
+        },
+        {
+          &quot;test&quot;: &quot;Zrank&quot;,
+          &quot;raw&quot;: &quot;====== ZRANK ======\n  5000000 requests completed in 1.95 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0004/0.0064/0.0079/0.0089 ms\n  2562368.25 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Zrank&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;ZRANK&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 1.95,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0004,
+          &quot;latencyP50Ms&quot;: 0.0064,
+          &quot;latencyP95Ms&quot;: 0.0079,
+          &quot;latencyP99Ms&quot;: 0.0089,
+          &quot;rps&quot;: 2562368.25
+        },
+        {
+          &quot;test&quot;: &quot;Zrevrank&quot;,
+          &quot;raw&quot;: &quot;====== ZREVRANK ======\n  5000000 requests completed in 1.97 seconds\n  16 parallel clients\n  3 bytes payload\n  256 pipeline depth\n  latency avg/p50/p95/p99 = 0.0004/0.0065/0.0081/0.0095 ms\n  2531850.05 requests per second&quot;,
+          &quot;ok&quot;: true,
+          &quot;command&quot;: [
+            &quot;target/release/justkv-benchmark&quot;,
+            &quot;-t&quot;,
+            &quot;Zrevrank&quot;,
+            &quot;-n&quot;,
+            &quot;5000000&quot;,
+            &quot;-c&quot;,
+            &quot;16&quot;,
+            &quot;-P&quot;,
+            &quot;256&quot;,
+            &quot;--host&quot;,
+            &quot;127.0.0.1&quot;,
+            &quot;--port&quot;,
+            &quot;6379&quot;
+          ],
+          &quot;header&quot;: &quot;ZREVRANK&quot;,
+          &quot;requests&quot;: 5000000,
+          &quot;seconds&quot;: 1.97,
+          &quot;clients&quot;: 16,
+          &quot;payloadBytes&quot;: 3,
+          &quot;pipeline&quot;: 256,
+          &quot;latencyAvgMs&quot;: 0.0004,
+          &quot;latencyP50Ms&quot;: 0.0065,
+          &quot;latencyP95Ms&quot;: 0.0081,
+          &quot;latencyP99Ms&quot;: 0.0095,
+          &quot;rps&quot;: 2531850.05
+        }
+      ]
+    }
+  ]
+}</pre>
+      </details>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script>
+    const tests = ["PingInline","PingMbulk","Echo","Set","SetNx","Get","GetSet","Mset","Mget","Del","Exists","Expire","Ttl","Incr","IncrBy","Decr","DecrBy","Strlen","Eval","EvalSha","SetRange","GetRange","Lpush","Rpush","Lpop","Rpop","Llen","Lrange","Sadd","Srem","Scard","Sismember","Hset","Hget","Hgetall","Hincrby","Zadd","Zrem","Zcard","Zscore","Zrank","Zrevrank"];
+    const justkvRps = [38707064.22,36673028.7,29430764,20479815.12,24644526.24,26058728.21,18916137.84,17216407.09,15493921.62,26699583.91,26818782.08,21503249.79,24968244.14,23603387.34,20302899.94,22635071.54,20637328.76,25914844.41,2468352.66,2419744.84,17131596.5,18860043.66,18920216.87,18657296.05,26224171.88,27159932.91,26259279.92,14510001.64,20111207.42,25011410.58,26634680.62,22834000.3,16959855.48,21864798.75,14541433.41,18075550.51,17012653.8,23121099.25,25018710.37,17768993.29,21745932.47,20475077.24];
+    const redisRps  = [3222859.01,4174816.87,3441055.75,2116404.48,2797063.76,2939646.5,1696168.14,1453811.27,2299977.29,3288979.54,3281913.13,2021456.07,2940609.41,2771241.52,2492417.07,2752769.03,2513881.55,3031122.89,556447.48,620663.05,2303695.69,2433705.75,2065234.53,2238362.42,3313853.77,3293598.76,3162739.9,2247311.73,2564261.14,2995233.09,3088769.79,2584730.26,2128448.29,2472612.32,2348357.99,1758039.95,1890432.27,2937711.03,3091120.38,2389541.93,2562368.25,2531850.05];
+    const justkvP99 = [0.0014,0.001,0.0013,0.0021,0.0016,0.0014,0.0021,0.0023,0.0025,0.0014,0.0014,0.0017,0.0015,0.0015,0.0018,0.0016,0.0018,0.002,0.0126,0.0137,0.0021,0.0019,0.0025,0.0031,0.0014,0.0014,0.0014,0.0027,0.0025,0.0016,0.0013,0.0015,0.0023,0.0017,0.0028,0.0019,0.0019,0.0022,0.0015,0.0019,0.0016,0.0017];
+    const redisP99  = [0.0065,0.0052,0.0057,0.0086,0.0072,0.0067,0.0113,0.0148,0.0081,0.0068,0.0065,0.0091,0.0076,0.008,0.0089,0.008,0.0087,0.0073,0.038,0.0327,0.0089,0.0082,0.0104,0.01,0.007,0.0078,0.0072,0.0089,0.0091,0.007,0.0078,0.0083,0.0097,0.0089,0.0078,0.0114,0.0125,0.0081,0.0075,0.0096,0.0089,0.0095];
+
+    function mkLine(ctx, title, aLabel, aData, bLabel, bData, yTitle) {
+      return new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: tests,
+          datasets: [
+            { label: aLabel, data: aData, tension: 0.25 },
+            { label: bLabel, data: bData, tension: 0.25 },
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: { display: false, text: title },
+            legend: { labels: { color: '#e6edf3' } },
+            tooltip: { mode: 'index', intersect: false },
+          },
+          interaction: { mode: 'nearest', axis: 'x', intersect: false },
+          scales: {
+            x: {
+              ticks: { color: '#9aa7b2', maxRotation: 70, minRotation: 40 },
+              grid: { color: '#{getComputedStyle(document.documentElement).getPropertyValue("--grid")}' }
+            },
+            y: {
+              title: { display: true, text: yTitle, color: '#9aa7b2' },
+              ticks: { color: '#9aa7b2' },
+              grid: { color: '#{getComputedStyle(document.documentElement).getPropertyValue("--grid")}' }
+            }
+          }
+        }
+      });
+    }
+
+    mkLine(document.getElementById('rpsChart'), 'RPS', 'JustKV', justkvRps, 'Redis', redisRps, 'requests/sec');
+    mkLine(document.getElementById('p99Chart'), 'p99', 'JustKV', justkvP99, 'Redis', redisP99, 'ms');
+  </script>
+</body>
+</html>
