@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "deploy": "bun run build && bun wrangler deploy"
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",
