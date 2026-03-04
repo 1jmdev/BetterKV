@@ -39,7 +39,10 @@ where
         self.maybe_grow();
         bucket = (hash as usize) & self.table.mask;
         let head = self.table.heads[bucket];
-        assert!(self.nodes.len() < super::constants::NIL as usize, "Max capacity exceeded");
+        assert!(
+            self.nodes.len() < super::constants::NIL as usize,
+            "Max capacity exceeded"
+        );
         let idx = self.nodes.len() as u32;
 
         self.nodes.push(Node {
@@ -73,7 +76,10 @@ where
         self.maybe_grow();
         bucket = (hash as usize) & self.table.mask;
         let head = self.table.heads[bucket];
-        assert!(self.nodes.len() < super::constants::NIL as usize, "Max capacity exceeded");
+        assert!(
+            self.nodes.len() < super::constants::NIL as usize,
+            "Max capacity exceeded"
+        );
         let idx = self.nodes.len() as u32;
 
         self.nodes.push(Node {

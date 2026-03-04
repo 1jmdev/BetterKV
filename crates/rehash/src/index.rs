@@ -12,7 +12,9 @@ fn wymix(a: u64, b: u64) -> u64 {
 fn read_u32_le(bytes: &[u8], off: usize) -> u32 {
     // Safety: Caller logic guarantees `off + 4 <= bytes.len()`
     unsafe {
-        u32::from_le_bytes(std::ptr::read_unaligned(bytes.as_ptr().add(off) as *const[u8; 4]))
+        u32::from_le_bytes(std::ptr::read_unaligned(
+            bytes.as_ptr().add(off) as *const [u8; 4]
+        ))
     }
 }
 
@@ -20,7 +22,9 @@ fn read_u32_le(bytes: &[u8], off: usize) -> u32 {
 fn read_u64_le(bytes: &[u8], off: usize) -> u64 {
     // Safety: Caller logic guarantees `off + 8 <= bytes.len()`
     unsafe {
-        u64::from_le_bytes(std::ptr::read_unaligned(bytes.as_ptr().add(off) as *const[u8; 8]))
+        u64::from_le_bytes(std::ptr::read_unaligned(
+            bytes.as_ptr().add(off) as *const [u8; 8]
+        ))
     }
 }
 

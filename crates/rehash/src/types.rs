@@ -48,7 +48,9 @@ where
     }
 
     pub(super) fn reserve_for_batch(&mut self, additional: usize) {
-        if additional == 0 { return; }
+        if additional == 0 {
+            return;
+        }
 
         let required = self.nodes.len().saturating_add(additional);
         let bucket_need = required.div_ceil(MAX_LOAD_FACTOR).next_power_of_two();
