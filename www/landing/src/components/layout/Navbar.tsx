@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Link } from "react-router-dom"
 import {
   NavigationMenu,
@@ -164,6 +164,21 @@ function MobileNavSection({
 
 export function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [openMenu, setOpenMenu] = useState<string | false>(false)
+  const scrollY = useRef(0)
+
+  // Close dropdowns on scroll
+  useEffect(() => {
+    function handleScroll() {
+      const currentY = window.scrollY
+      if (Math.abs(currentY - scrollY.current) > 5) {
+        setOpenMenu(false)
+      }
+      scrollY.current = currentY
+    }
+    window.addEventListener("scroll", handleScroll, { passive: true })
+    return () => window.removeEventListener("scroll", handleScroll)
+  }, [])
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/80 backdrop-blur-xl">
@@ -178,7 +193,11 @@ export function Navbar() {
           </Link>
 
           {/* Desktop Navigation */}
-          <NavigationMenu className="hidden md:flex">
+          <NavigationMenu
+            className="hidden md:flex"
+            value={openMenu}
+            onValueChange={setOpenMenu}
+          >
             <NavigationMenuList>
               <NavigationMenuItem>
                 <NavigationMenuTrigger>Product</NavigationMenuTrigger>
