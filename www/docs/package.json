@@ -1,23 +1,23 @@
 {
-  "name": "betterkv-docs",
-  "version": "1.0.0",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "dev": "rspress dev",
-    "build": "rspress build",
-    "check": "biome check .",
-    "format": "biome format --write .",
-    "lint": "biome lint .",
-    "deploy": "bun run build && bun wrangler deploy"
-  },
-  "dependencies": {
-    "@rspress/core": "^2.0.4"
-  },
-  "devDependencies": {
-    "@rspress/plugin-sitemap": "^2.0.4",
-    "@types/node": "^25.3.3",
-    "typescript": "^5.0.0",
-    "wrangler": "^4.70.0"
-  }
+    "name": "betterkv-docs",
+    "version": "1.0.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "rspress dev",
+        "build": "rspress build",
+        "check": "biome check .",
+        "format": "biome format --write .",
+        "lint": "biome lint .",
+        "deploy": "bun run build && bun wrangler deploy"
+    },
+    "dependencies": {
+        "@rspress/core": "^2.0.4"
+    },
+    "devDependencies": {
+        "@rspress/plugin-sitemap": "^2.0.4",
+        "@types/node": "^25.3.3",
+        "typescript": "^5.0.0",
+        "wrangler": "^4.70.0"
+    }
 }

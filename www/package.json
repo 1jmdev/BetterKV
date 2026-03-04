@@ -7,11 +7,13 @@
   "scripts": {
     "check": "biome check landing docs",
     "check:fix": "biome check --write landing docs",
-    "format": "biome format --write landing docs",
+    "format": "bun run format:landing && bun run format:docs",
+    "format:landing": "bun run --filter betterkv-landing format",
+    "format:docs": "bun run --filter betterkv-docs format",
     "lint": "biome lint landing docs",
     "deploy": "bun run deploy:landing && bun run deploy:docs",
-    "deploy:landing": "bun --filter betterkv-landing run deploy",
-    "deploy:docs": "bun --filter betterkv-docs run deploy"
+    "deploy:landing": "bun run --filter betterkv-landing deploy",
+    "deploy:docs": "bun run --filter betterkv-docs deploy"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4"
