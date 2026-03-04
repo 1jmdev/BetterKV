@@ -3,6 +3,7 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use justkv_server::config::Config;
+use justkv_server::logging::init_logging;
 
 fn main() {
     let _trace = profiler::scope("server::main::main");
@@ -197,15 +198,33 @@ fn run(runtime: RuntimeArgs) -> Result<(), String> {
         eprintln!("justkv-server: accepted but ignored directives: {names}");
     }
 
+    let logging_guard = init_logging(&config)?;
+    let _ = &logging_guard.file_guard;
+    tracing::info!(
+        bind = %config.bind,
+        port = config.port,
+        io_threads = config.io_threads,
+        shards = config.shards,
+        snapshot_path = %config.snapshot_path().display(),
+        snapshot_interval_secs = config.snapshot_interval_secs,
+        "starting justkv server"
+    );
+
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(config.io_threads)
         .enable_all()
         .build()
         .map_err(|err| format!("failed to create runtime: {err}"))?;
 
-    runtime
+    let result = runtime
         .block_on(justkv_server::run(config))
-        .map_err(|err| format!("server error: {err}"))
+        .map_err(|err| format!("server error: {err}"));
+    if let Err(err) = &result {
+        tracing::error!(error = %err, "server exited with error");
+    } else {
+        tracing::info!("server shutdown complete");
+    }
+    result
 }
 
 fn load_config_directives(input: &ConfigInput) -> Result<Vec<Directive>, String> {
@@ -337,6 +356,33 @@ fn apply_directive(
                 .parse::<u64>()
                 .map_err(|_| format!("invalid sweep-interval-ms value '{value}'"))?;
         }
+        "loglevel" => {
+            let value = first_value(name, values)?;
+            config.log_level = value.to_ascii_lowercase();
+        }
+        "logfile" => {
+            let value = first_value(name, values)?;
+            if value.eq_ignore_ascii_case("stdout") {
+                config.log_file = None;
+            } else {
+                config.log_file = Some(value.to_string());
+            }
+        }
+        "dir" => {
+            let value = first_value(name, values)?;
+            config.data_dir = value.to_string();
+        }
+        "dbfilename" => {
+            let value = first_value(name, values)?;
+            config.dbfilename = value.to_string();
+        }
+        "save" => {
+            config.snapshot_interval_secs = parse_save_interval(values)?;
+        }
+        "snapshot-on-shutdown" => {
+            let value = first_value(name, values)?;
+            config.snapshot_on_shutdown = parse_yes_no(name, value)?;
+        }
         "appendonly" | "daemonize" | "protected-mode" | "io-threads-do-reads" => {
             let value = first_value(name, values)?;
             parse_yes_no(name, value)?;
@@ -367,6 +413,43 @@ fn parse_yes_no(name: &str, value: &str) -> Result<bool, String> {
     }
 }
 
+fn parse_save_interval(values: &[String]) -> Result<u64, String> {
+    let _trace = profiler::scope("server::main::parse_save_interval");
+    if values.is_empty() {
+        return Ok(0);
+    }
+
+    if values.len() == 1 {
+        return values[0]
+            .parse::<u64>()
+            .map_err(|_| format!("invalid save value '{}'", values[0]));
+    }
+
+    if values.len() % 2 != 0 {
+        return Err("save expects pairs of <seconds> <changes>".to_string());
+    }
+
+    let mut interval: Option<u64> = None;
+    for chunk in values.chunks(2) {
+        let seconds = chunk[0]
+            .parse::<u64>()
+            .map_err(|_| format!("invalid save seconds '{}'", chunk[0]))?;
+        chunk[1]
+            .parse::<u64>()
+            .map_err(|_| format!("invalid save changes '{}'", chunk[1]))?;
+
+        if seconds == 0 {
+            continue;
+        }
+        interval = Some(match interval {
+            Some(current) => current.min(seconds),
+            None => seconds,
+        });
+    }
+
+    Ok(interval.unwrap_or(0))
+}
+
 fn print_usage() {
     let _trace = profiler::scope("server::main::print_usage");
     let bin = std::env::args()
@@ -384,6 +467,13 @@ fn print_usage() {
     println!("       {bin} -h or --help");
     println!("       {bin} --test-memory <megabytes>");
     println!("       {bin} --check-system");
+    println!();
+    println!("Important directives:");
+    println!("       --loglevel <trace|debug|info|warn|error>");
+    println!("       --logfile <path|stdout>");
+    println!("       --dir <snapshot-directory>");
+    println!("       --dbfilename <snapshot-file>");
+    println!("       --save <seconds> [changes]");
     println!();
     println!("Examples:");
     println!("       {bin}");

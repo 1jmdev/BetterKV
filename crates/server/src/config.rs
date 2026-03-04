@@ -5,6 +5,12 @@ pub struct Config {
     pub io_threads: usize,
     pub shards: usize,
     pub sweep_interval_ms: u64,
+    pub log_level: String,
+    pub log_file: Option<String>,
+    pub data_dir: String,
+    pub dbfilename: String,
+    pub snapshot_interval_secs: u64,
+    pub snapshot_on_shutdown: bool,
 }
 
 impl Default for Config {
@@ -16,6 +22,12 @@ impl Default for Config {
             io_threads: default_threads(),
             shards: default_shards(),
             sweep_interval_ms: 250,
+            log_level: "info".to_string(),
+            log_file: None,
+            data_dir: ".".to_string(),
+            dbfilename: "dump.jkv".to_string(),
+            snapshot_interval_secs: 300,
+            snapshot_on_shutdown: true,
         }
     }
 }
@@ -25,10 +37,16 @@ impl Config {
         let _trace = profiler::scope("server::config::addr");
         format!("{}:{}", self.bind, self.port)
     }
+
+    pub fn snapshot_path(&self) -> std::path::PathBuf {
+        let _trace = profiler::scope("server::config::snapshot_path");
+        std::path::Path::new(&self.data_dir).join(&self.dbfilename)
+    }
 }
 
 fn default_shards() -> usize {
     let _trace = profiler::scope("server::config::default_shards");
+    println!("{}", default_threads().next_power_of_two());
     default_threads().next_power_of_two()
 }
 

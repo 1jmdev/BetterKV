@@ -1,10 +1,12 @@
 use crate::config::Config;
 use crate::connection::handle_connection;
 use crate::pubsub::PubSubHub;
+use crate::{backup, backup::SnapshotStats};
 use engine::store::Store;
 use socket2::{Domain, Protocol, Socket, Type};
 use std::io;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use tokio::net::TcpListener;
 use tokio::task::JoinSet;
 use tokio::task::block_in_place;
@@ -12,15 +14,50 @@ use tokio::time::{Duration, sleep};
 
 pub async fn run_listener(config: Config) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let _trace = profiler::scope("server::listener::run_listener");
-    let listeners = bind_reuse_port_listeners(config.addr(), config.io_threads).await?;
+    let bind_addr = config.addr();
+    let listeners = bind_reuse_port_listeners(bind_addr.clone(), config.io_threads).await?;
     let store = Store::new(config.shards);
     let pubsub = PubSubHub::new();
+    let snapshot_path = config.snapshot_path();
+
+    if snapshot_path.exists() {
+        match backup::load_snapshot(&store, &snapshot_path) {
+            Ok(stats) => {
+                tracing::info!(
+                    keys_loaded = stats.keys_loaded,
+                    path = %snapshot_path.display(),
+                    "loaded snapshot"
+                );
+            }
+            Err(err) => {
+                tracing::error!(
+                    error = %err,
+                    path = %snapshot_path.display(),
+                    "failed to load snapshot"
+                );
+            }
+        }
+    }
 
     spawn_expiry_sweeper(
         store.clone(),
         Duration::from_millis(config.sweep_interval_ms),
     );
     spawn_cached_clock_updater(store.clone());
+    if config.snapshot_interval_secs > 0 {
+        spawn_periodic_snapshot(
+            store.clone(),
+            snapshot_path.clone(),
+            Duration::from_secs(config.snapshot_interval_secs),
+        );
+    }
+    tracing::info!(
+        bind = %bind_addr,
+        io_threads = config.io_threads,
+        sweep_interval_ms = config.sweep_interval_ms,
+        snapshot_interval_secs = config.snapshot_interval_secs,
+        "listener ready"
+    );
 
     let mut accept_tasks = JoinSet::new();
     for listener in listeners {
@@ -31,14 +68,28 @@ pub async fn run_listener(config: Config) -> Result<(), Box<dyn std::error::Erro
     }
 
     loop {
-        let Some(task_result) = accept_tasks.join_next().await else {
-            return Ok(());
-        };
+        tokio::select! {
+            task = accept_tasks.join_next() => {
+                let Some(task_result) = task else {
+                    return Ok(());
+                };
 
-        match task_result {
-            Ok(Ok(())) => {}
-            Ok(Err(err)) => return Err(err),
-            Err(err) => return Err(err.into()),
+                match task_result {
+                    Ok(Ok(())) => {}
+                    Ok(Err(err)) => return Err(err),
+                    Err(err) => return Err(err.into()),
+                }
+            }
+            _ = shutdown_signal() => {
+                tracing::warn!("shutdown signal received");
+                if config.snapshot_on_shutdown {
+                    let stats = write_snapshot_with_log(&store, &snapshot_path, "shutdown");
+                    if stats.is_none() {
+                        tracing::error!("shutdown snapshot failed");
+                    }
+                }
+                return Ok(());
+            }
         }
     }
 }
@@ -56,7 +107,9 @@ async fn run_accept_loop(
         let shared_store = store.clone();
         let shared_pubsub = pubsub.clone();
         tokio::spawn(async move {
-            let _ = handle_connection(socket, shared_store, shared_pubsub).await;
+            if let Err(err) = handle_connection(socket, shared_store, shared_pubsub).await {
+                tracing::debug!(error = %err, "connection closed with error");
+            }
         });
     }
 }
@@ -121,4 +174,66 @@ fn spawn_cached_clock_updater(store: Store) {
             sleep(Duration::from_millis(1)).await;
         }
     });
+}
+
+fn spawn_periodic_snapshot(store: Store, snapshot_path: PathBuf, interval: Duration) {
+    let _trace = profiler::scope("server::listener::spawn_periodic_snapshot");
+    tokio::spawn(async move {
+        loop {
+            sleep(interval).await;
+            let _ = write_snapshot_with_log(&store, &snapshot_path, "periodic");
+        }
+    });
+}
+
+fn write_snapshot_with_log(
+    store: &Store,
+    snapshot_path: &PathBuf,
+    reason: &str,
+) -> Option<SnapshotStats> {
+    let _trace = profiler::scope("server::listener::write_snapshot_with_log");
+    match backup::write_snapshot(store, snapshot_path) {
+        Ok(stats) => {
+            tracing::info!(
+                reason,
+                keys_written = stats.keys_written,
+                bytes_written = stats.bytes_written,
+                path = %snapshot_path.display(),
+                "snapshot completed"
+            );
+            Some(stats)
+        }
+        Err(err) => {
+            tracing::error!(
+                reason,
+                error = %err,
+                path = %snapshot_path.display(),
+                "snapshot failed"
+            );
+            None
+        }
+    }
+}
+
+async fn shutdown_signal() {
+    let _trace = profiler::scope("server::listener::shutdown_signal");
+    #[cfg(unix)]
+    {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut sigterm) => {
+                tokio::select! {
+                    _ = tokio::signal::ctrl_c() => {},
+                    _ = sigterm.recv() => {},
+                }
+            }
+            Err(_) => {
+                let _ = tokio::signal::ctrl_c().await;
+            }
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        let _ = tokio::signal::ctrl_c().await;
+    }
 }

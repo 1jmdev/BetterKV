@@ -1,6 +1,8 @@
+pub mod backup;
 pub mod config;
 pub mod connection;
 pub mod listener;
+pub mod logging;
 pub mod pubsub;
 pub mod transaction;
 
