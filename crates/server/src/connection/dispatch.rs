@@ -8,6 +8,7 @@ use protocol::types::{BulkData, RespFrame};
 use super::super::pubsub::{ConnectionPubSub, PubSubHub};
 use super::notifications::emit_command_notifications;
 use super::util::{collapse_pubsub_responses, wrong_args};
+use crate::auth::{self, AuthError, AuthService, SessionAuth};
 
 #[inline]
 fn bulk_static(value: &'static [u8]) -> RespFrame {
@@ -19,6 +20,8 @@ pub(super) fn execute_regular_command(
     hub: &PubSubHub,
     push_tx: &UnboundedSender<RespFrame>,
     pubsub_state: &mut ConnectionPubSub,
+    auth: &AuthService,
+    auth_state: &mut SessionAuth,
     args: &[CompactArg],
 ) -> RespFrame {
     let _trace = profiler::scope("server::connection::dispatch::execute_regular_command");
@@ -27,6 +30,24 @@ pub(super) fn execute_regular_command(
     }
 
     let command = args[0].as_slice();
+
+    if command == b"AUTH" {
+        return auth_command(auth, auth_state, args);
+    }
+
+    if command == b"ACL" {
+        return auth.acl_command(auth_state, args);
+    }
+
+    if command == b"HELLO" {
+        if let Some(response) = hello_with_auth(auth, auth_state, args) {
+            return response;
+        }
+    }
+
+    if !auth.is_authorized(auth_state) && !is_allowed_without_auth(command) {
+        return auth::no_auth();
+    }
 
     if let Some(response) =
         handle_pubsub_or_config_command(hub, push_tx, pubsub_state, command, args)
@@ -42,6 +63,96 @@ pub(super) fn execute_regular_command(
         emit_command_notifications(hub, command, args, &response);
     }
     response
+}
+
+fn auth_command(
+    auth: &AuthService,
+    auth_state: &mut SessionAuth,
+    args: &[CompactArg],
+) -> RespFrame {
+    let _trace = profiler::scope("server::connection::dispatch::auth_command");
+    if args.len() == 2 {
+        if !auth.default_user_has_password() {
+            return RespFrame::error_static(
+                "ERR AUTH <password> called without any password configured for the default user. Are you sure your configuration is correct?",
+            );
+        }
+        return authenticate_with(auth, auth_state, b"default", args[1].as_slice());
+    }
+    if args.len() == 3 {
+        return authenticate_with(auth, auth_state, args[1].as_slice(), args[2].as_slice());
+    }
+    wrong_args("AUTH")
+}
+
+fn authenticate_with(
+    auth: &AuthService,
+    auth_state: &mut SessionAuth,
+    username: &[u8],
+    password: &[u8],
+) -> RespFrame {
+    let _trace = profiler::scope("server::connection::dispatch::authenticate_with");
+    match auth.authenticate(username, password) {
+        Ok(user) => {
+            auth_state.set_user(user);
+            RespFrame::ok()
+        }
+        Err(AuthError::WrongPass) => {
+            RespFrame::error_static("WRONGPASS invalid username-password pair or user is disabled.")
+        }
+        Err(AuthError::NoPasswordSet) => {
+            RespFrame::error_static("ERR AUTH called without any password configured for the user.")
+        }
+    }
+}
+
+fn hello_with_auth(
+    auth: &AuthService,
+    auth_state: &mut SessionAuth,
+    args: &[CompactArg],
+) -> Option<RespFrame> {
+    let _trace = profiler::scope("server::connection::dispatch::hello_with_auth");
+    if args.len() < 4 {
+        return None;
+    }
+
+    let mut index = 2;
+    while index < args.len() {
+        let token = args[index].as_slice();
+        if token.eq_ignore_ascii_case(b"AUTH") {
+            if index + 2 >= args.len() {
+                return Some(RespFrame::error_static(
+                    "ERR Syntax error in HELLO option AUTH",
+                ));
+            }
+            let response = authenticate_with(
+                auth,
+                auth_state,
+                args[index + 1].as_slice(),
+                args[index + 2].as_slice(),
+            );
+            if response_is_ok(&response) {
+                return None;
+            }
+            return Some(response);
+        }
+        index += 1;
+    }
+    None
+}
+
+fn is_allowed_without_auth(command: &[u8]) -> bool {
+    let _trace = profiler::scope("server::connection::dispatch::is_allowed_without_auth");
+    matches!(command, b"AUTH" | b"HELLO" | b"QUIT")
+}
+
+fn response_is_ok(response: &RespFrame) -> bool {
+    let _trace = profiler::scope("server::connection::dispatch::response_is_ok");
+    match response {
+        RespFrame::SimpleStatic(value) => *value == "OK",
+        RespFrame::Simple(value) => value == "OK",
+        _ => false,
+    }
 }
 
 fn handle_pubsub_or_config_command(

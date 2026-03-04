@@ -4,6 +4,7 @@ use tokio::net::TcpStream;
 use tokio::sync::mpsc::error::TryRecvError;
 use tokio::sync::mpsc::unbounded_channel;
 
+use crate::auth::AuthService;
 use crate::pubsub::{ConnectionPubSub, PubSubHub};
 use crate::transaction::TransactionState;
 use engine::store::Store;
@@ -23,6 +24,7 @@ pub async fn handle_connection(
     mut stream: TcpStream,
     store: Store,
     pubsub_hub: PubSubHub,
+    auth: AuthService,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let _trace = profiler::scope("server::connection::handle_connection");
     let mut read_buf = BytesMut::with_capacity(READ_BUFFER_INITIAL);
@@ -35,6 +37,7 @@ pub async fn handle_connection(
 
     let (push_tx, mut push_rx) = unbounded_channel::<RespFrame>();
     let mut pubsub_state = ConnectionPubSub::new(pubsub_hub.next_connection_id());
+    let mut auth_state = auth.new_session();
 
     let result = loop {
         tokio::select! {
@@ -81,6 +84,8 @@ pub async fn handle_connection(
                             &pubsub_hub,
                             &push_tx,
                             &mut pubsub_state,
+                            &auth,
+                            &mut auth_state,
                             args,
                         )
                     });

@@ -2,6 +2,7 @@ use std::collections::BTreeSet;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
+use justkv_server::auth::parse_user_directive;
 use justkv_server::config::Config;
 use justkv_server::logging::init_logging;
 
@@ -205,6 +206,8 @@ fn run(runtime: RuntimeArgs) -> Result<(), String> {
         port = config.port,
         io_threads = config.io_threads,
         shards = config.shards,
+        requirepass = config.requirepass.is_some(),
+        acl_users = config.user_directives.len(),
         snapshot_path = %config.snapshot_path().display(),
         snapshot_interval_secs = config.snapshot_interval_secs,
         "starting justkv server"
@@ -383,6 +386,14 @@ fn apply_directive(
             let value = first_value(name, values)?;
             config.snapshot_on_shutdown = parse_yes_no(name, value)?;
         }
+        "requirepass" => {
+            let value = first_value(name, values)?;
+            config.requirepass = Some(value.to_string());
+        }
+        "user" => {
+            let user = parse_user_directive(values)?;
+            config.user_directives.push(user);
+        }
         "appendonly" | "daemonize" | "protected-mode" | "io-threads-do-reads" => {
             let value = first_value(name, values)?;
             parse_yes_no(name, value)?;
@@ -474,6 +485,8 @@ fn print_usage() {
     println!("       --dir <snapshot-directory>");
     println!("       --dbfilename <snapshot-file>");
     println!("       --save <seconds> [changes]");
+    println!("       --requirepass <password>");
+    println!("       --user <name> <acl-rules...>");
     println!();
     println!("Examples:");
     println!("       {bin}");

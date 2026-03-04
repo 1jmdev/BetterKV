@@ -1,3 +1,4 @@
+use crate::auth::AuthService;
 use crate::config::Config;
 use crate::connection::handle_connection;
 use crate::pubsub::PubSubHub;
@@ -18,6 +19,7 @@ pub async fn run_listener(config: Config) -> Result<(), Box<dyn std::error::Erro
     let listeners = bind_reuse_port_listeners(bind_addr.clone(), config.io_threads).await?;
     let store = Store::new(config.shards);
     let pubsub = PubSubHub::new();
+    let auth = AuthService::from_config(&config).map_err(io::Error::other)?;
     let snapshot_path = config.snapshot_path();
 
     if snapshot_path.exists() {
@@ -63,8 +65,10 @@ pub async fn run_listener(config: Config) -> Result<(), Box<dyn std::error::Erro
     for listener in listeners {
         let shared_store = store.clone();
         let shared_pubsub = pubsub.clone();
-        accept_tasks
-            .spawn(async move { run_accept_loop(listener, shared_store, shared_pubsub).await });
+        let shared_auth = auth.clone();
+        accept_tasks.spawn(async move {
+            run_accept_loop(listener, shared_store, shared_pubsub, shared_auth).await
+        });
     }
 
     loop {
@@ -98,6 +102,7 @@ async fn run_accept_loop(
     listener: TcpListener,
     store: Store,
     pubsub: PubSubHub,
+    auth: AuthService,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let _trace = profiler::scope("server::listener::run_accept_loop");
     loop {
@@ -106,8 +111,11 @@ async fn run_accept_loop(
 
         let shared_store = store.clone();
         let shared_pubsub = pubsub.clone();
+        let shared_auth = auth.clone();
         tokio::spawn(async move {
-            if let Err(err) = handle_connection(socket, shared_store, shared_pubsub).await {
+            if let Err(err) =
+                handle_connection(socket, shared_store, shared_pubsub, shared_auth).await
+            {
                 tracing::debug!(error = %err, "connection closed with error");
             }
         });

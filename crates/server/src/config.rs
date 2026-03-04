@@ -1,3 +1,5 @@
+use crate::auth::UserDirectiveConfig;
+
 #[derive(Clone, Debug)]
 pub struct Config {
     pub bind: String,
@@ -11,6 +13,8 @@ pub struct Config {
     pub dbfilename: String,
     pub snapshot_interval_secs: u64,
     pub snapshot_on_shutdown: bool,
+    pub requirepass: Option<String>,
+    pub user_directives: Vec<UserDirectiveConfig>,
 }
 
 impl Default for Config {
@@ -28,6 +32,8 @@ impl Default for Config {
             dbfilename: "dump.jkv".to_string(),
             snapshot_interval_secs: 300,
             snapshot_on_shutdown: true,
+            requirepass: None,
+            user_directives: Vec::new(),
         }
     }
 }

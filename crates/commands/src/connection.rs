@@ -3,7 +3,7 @@ use protocol::types::{BulkData, RespFrame};
 
 pub(crate) fn auth(args: &Args) -> RespFrame {
     let _trace = profiler::scope("commands::connection::auth");
-    if args.is_empty() || args.len() > 3 {
+    if args.len() != 2 && args.len() != 3 {
         return wrong_args("AUTH");
     }
     RespFrame::ok()
