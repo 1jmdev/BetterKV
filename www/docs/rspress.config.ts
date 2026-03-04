@@ -3,13 +3,13 @@ import { defineConfig } from '@rspress/core';
 import { pluginSitemap } from '@rspress/plugin-sitemap';
 
 export default defineConfig({
-  root: path.join(import.meta.dirname, 'docs'),
+  root: path.join(import.meta.dirname, 'pages'),
   plugins: [
     pluginSitemap({
       siteUrl: 'https://docs.betterkv.dev',
     }),
   ],
-  title: 'BetterKV',
+  title: 'BetterKV Docs',
   description:
     'The high-performance Redis-compatible key-value store. Lightning-fast, reliable, open-source.',
   icon: '/icon.svg',
@@ -103,12 +103,9 @@ export default defineConfig({
       ],
     },
     editLink: {
-      docRepoBaseUrl: 'https://github.com/1jmdev/BetterKV/tree/main/docs',
-      text: 'Edit this page on GitHub',
+      docRepoBaseUrl: 'https://github.com/1jmdev/BetterKV/tree/main/www/docs/pages',
     },
     lastUpdated: true,
-    prevPageText: 'Previous',
-    nextPageText: 'Next',
   },
   markdown: {
     showLineNumbers: true,
