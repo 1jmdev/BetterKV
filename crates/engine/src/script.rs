@@ -6,11 +6,18 @@ impl Store {
     pub fn script_load(&self, script: &[u8]) -> Vec<u8> {
         let _trace = profiler::scope("engine::script::script_load");
         let digest = sha1_hex(script);
+
+        {
+            let scripts = self.scripts.read();
+            if scripts.contains_key(digest.as_slice()) {
+                return digest;
+            }
+        }
+
         let mut scripts = self.scripts.write();
-        scripts.insert(
-            CompactKey::from_vec(digest.clone()),
-            CompactValue::from_slice(script),
-        );
+        let _ = scripts
+            .entry(CompactKey::from_vec(digest.clone()))
+            .or_insert_with(|| CompactValue::from_slice(script));
         digest
     }
 

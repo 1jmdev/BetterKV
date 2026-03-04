@@ -18,3 +18,4 @@ parking_lot.workspace = true
 thiserror.workspace = true
 ryu.workspace = true
 mlua.workspace = true
+tokio.workspace = true
