@@ -1,3 +1,4 @@
+use super::constants::NIL;
 use super::index::hash_key;
 use super::types::RehashingMap;
 
@@ -14,30 +15,44 @@ where
         let hash = hash_key(self.seed, key_bytes);
         let bucket = (hash as usize) & self.table.mask;
 
-        let mut cur = self.table.heads[bucket];
-        let mut prev = super::constants::NIL;
+        unsafe {
+            let heads_ptr = self.table.heads.as_mut_ptr();
+            let metas_ptr = self.metas.as_mut_ptr();
+            let keys_ptr = self.keys.as_ptr();
+            let key_len = key_bytes.len() as u32;
 
-        // Single pass: Find AND unlink in one go
-        while cur != super::constants::NIL {
-            let node = &self.nodes[cur as usize];
-            if node.hash == hash && node.key.as_ref() == key_bytes {
-                let next = node.next;
-                if prev == super::constants::NIL {
-                    self.table.heads[bucket] = next;
-                } else {
-                    self.nodes[prev as usize].next = next;
+            let mut cur = *heads_ptr.add(bucket);
+            let mut prev = NIL;
+
+            while cur != NIL {
+                let meta = &*metas_ptr.add(cur as usize);
+                if meta.hash == hash
+                    && meta.key_len == key_len
+                    && (*keys_ptr.add(cur as usize)).as_ref() == key_bytes
+                {
+                    let next = meta.next;
+
+                    if prev == NIL {
+                        *heads_ptr.add(bucket) = next;
+                    } else {
+                        (*metas_ptr.add(prev as usize)).next = next;
+                    }
+
+                    // Remove from all 3 SoA vectors
+                    self.metas.swap_remove(cur as usize);
+                    self.keys.swap_remove(cur as usize);
+                    let removed_val = self.values.swap_remove(cur as usize);
+
+                    if (cur as usize) < self.metas.len() {
+                        let old_last_idx = self.metas.len() as u32;
+                        self.patch_swapped(old_last_idx, cur);
+                    }
+
+                    return Some(removed_val);
                 }
-
-                let removed = self.nodes.swap_remove(cur as usize);
-                if (cur as usize) < self.nodes.len() {
-                    let old_last_idx = self.nodes.len() as u32;
-                    self.patch_swapped(old_last_idx, cur);
-                }
-
-                return Some(removed.value);
+                prev = cur;
+                cur = meta.next;
             }
-            prev = cur;
-            cur = node.next;
         }
         None
     }

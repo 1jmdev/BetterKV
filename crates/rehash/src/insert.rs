@@ -1,6 +1,6 @@
-use super::constants::BULK_RESERVE_CAP;
+use super::constants::{BULK_RESERVE_CAP, NIL};
 use super::index::hash_key;
-use super::node::Node;
+use super::node::NodeMeta;
 use super::types::RehashingMap;
 
 impl<K, V> RehashingMap<K, V>
@@ -26,32 +26,43 @@ where
         let key_bytes = key.as_ref();
         let hash = hash_key(self.seed, key_bytes);
         let mut bucket = (hash as usize) & self.table.mask;
-        let mut idx = self.table.heads[bucket];
 
-        while idx != super::constants::NIL {
-            let node = &mut self.nodes[idx as usize];
-            if node.hash == hash && node.key.as_ref() == key_bytes {
-                return Some(std::mem::replace(&mut node.value, value));
+        unsafe {
+            let mut idx = *self.table.heads.as_ptr().add(bucket);
+            let metas_ptr = self.metas.as_ptr();
+            let keys_ptr = self.keys.as_ptr();
+            let key_len = key_bytes.len() as u32;
+
+            while idx != NIL {
+                let meta = &*metas_ptr.add(idx as usize);
+                if meta.hash == hash
+                    && meta.key_len == key_len
+                    && (*keys_ptr.add(idx as usize)).as_ref() == key_bytes
+                {
+                    let val_ptr = self.values.as_mut_ptr().add(idx as usize);
+                    return Some(std::ptr::replace(val_ptr, value));
+                }
+                idx = meta.next;
             }
-            idx = node.next;
         }
 
         self.maybe_grow();
         bucket = (hash as usize) & self.table.mask;
-        let head = self.table.heads[bucket];
-        assert!(
-            self.nodes.len() < super::constants::NIL as usize,
-            "Max capacity exceeded"
-        );
-        let idx = self.nodes.len() as u32;
 
-        self.nodes.push(Node {
-            hash,
-            next: head,
-            key,
-            value,
-        });
-        self.table.heads[bucket] = idx;
+        unsafe {
+            let head = *self.table.heads.as_ptr().add(bucket);
+            let idx = self.metas.len() as u32;
+
+            self.metas.push(NodeMeta {
+                hash,
+                key_len: key_bytes.len() as u32,
+                next: head,
+            });
+            self.keys.push(key);
+            self.values.push(value);
+
+            *self.table.heads.as_mut_ptr().add(bucket) = idx;
+        }
         None
     }
 
@@ -63,32 +74,42 @@ where
         let key_bytes = key.as_ref();
         let hash = hash_key(self.seed, key_bytes);
         let mut bucket = (hash as usize) & self.table.mask;
-        let mut idx = self.table.heads[bucket];
 
-        while idx != super::constants::NIL {
-            let node = &self.nodes[idx as usize];
-            if node.hash == hash && node.key.as_ref() == key_bytes {
-                return &mut self.nodes[idx as usize].value;
+        unsafe {
+            let mut idx = *self.table.heads.as_ptr().add(bucket);
+            let metas_ptr = self.metas.as_ptr();
+            let keys_ptr = self.keys.as_ptr();
+            let key_len = key_bytes.len() as u32;
+
+            while idx != NIL {
+                let meta = &*metas_ptr.add(idx as usize);
+                if meta.hash == hash
+                    && meta.key_len == key_len
+                    && (*keys_ptr.add(idx as usize)).as_ref() == key_bytes
+                {
+                    return &mut *self.values.as_mut_ptr().add(idx as usize);
+                }
+                idx = meta.next;
             }
-            idx = node.next;
         }
 
         self.maybe_grow();
         bucket = (hash as usize) & self.table.mask;
-        let head = self.table.heads[bucket];
-        assert!(
-            self.nodes.len() < super::constants::NIL as usize,
-            "Max capacity exceeded"
-        );
-        let idx = self.nodes.len() as u32;
 
-        self.nodes.push(Node {
-            hash,
-            next: head,
-            key,
-            value: default(),
-        });
-        self.table.heads[bucket] = idx;
-        &mut self.nodes[idx as usize].value
+        unsafe {
+            let head = *self.table.heads.as_ptr().add(bucket);
+            let idx = self.metas.len() as u32;
+
+            self.metas.push(NodeMeta {
+                hash,
+                key_len: key_bytes.len() as u32,
+                next: head,
+            });
+            self.keys.push(key);
+            self.values.push(default());
+
+            *self.table.heads.as_mut_ptr().add(bucket) = idx;
+            &mut *self.values.as_mut_ptr().add(idx as usize)
+        }
     }
 }

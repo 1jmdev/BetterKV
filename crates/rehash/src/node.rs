@@ -1,6 +1,6 @@
-pub(super) struct Node<K, V> {
+#[derive(Clone, Copy)]
+pub(super) struct NodeMeta {
     pub(super) hash: u64,
+    pub(super) key_len: u32,
     pub(super) next: u32,
-    pub(super) key: K,
-    pub(super) value: V,
 }

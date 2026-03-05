@@ -4,12 +4,14 @@ const WY_SECRET_2: u64 = 0x8ebc_6af0_9c88_c6e3;
 
 #[inline(always)]
 fn wymix(a: u64, b: u64) -> u64 {
+    let _trace = profiler::scope("rehash::index::wymix");
     let r = (a as u128).wrapping_mul(b as u128);
     (r as u64) ^ ((r >> 64) as u64)
 }
 
 #[inline(always)]
 fn read_u32_le(bytes: &[u8], off: usize) -> u32 {
+    let _trace = profiler::scope("rehash::index::read_u32_le");
     // Safety: Caller logic guarantees `off + 4 <= bytes.len()`
     unsafe {
         u32::from_le_bytes(std::ptr::read_unaligned(
@@ -20,6 +22,7 @@ fn read_u32_le(bytes: &[u8], off: usize) -> u32 {
 
 #[inline(always)]
 fn read_u64_le(bytes: &[u8], off: usize) -> u64 {
+    let _trace = profiler::scope("rehash::index::read_u64_le");
     // Safety: Caller logic guarantees `off + 8 <= bytes.len()`
     unsafe {
         u64::from_le_bytes(std::ptr::read_unaligned(
@@ -36,7 +39,12 @@ pub(super) fn hash_key(seed: u64, key: &[u8]) -> u64 {
     if len <= 16 {
         let a;
         let b;
-        if len >= 4 {
+        if (4..8).contains(&len) {
+            let first = read_u32_le(key, 0) as u64;
+            let last = read_u32_le(key, len - 4) as u64;
+            a = (first << 32) | first;
+            b = (last << 32) | last;
+        } else if len >= 4 {
             let half = (len >> 3) << 2;
             a = (read_u32_le(key, 0) as u64) << 32 | read_u32_le(key, half) as u64;
             b = (read_u32_le(key, len - 4) as u64) << 32 | read_u32_le(key, len - 4 - half) as u64;

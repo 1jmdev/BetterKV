@@ -1,12 +1,15 @@
-use super::node::Node;
-
 pub struct Iter<'a, K, V> {
-    iter: std::slice::Iter<'a, Node<K, V>>,
+    keys: std::slice::Iter<'a, K>,
+    values: std::slice::Iter<'a, V>,
 }
 
 impl<'a, K, V> Iter<'a, K, V> {
-    pub(super) fn new(nodes: &'a [Node<K, V>]) -> Self {
-        Self { iter: nodes.iter() }
+    pub(super) fn new(keys: &'a [K], values: &'a [V]) -> Self {
+        let _trace = profiler::scope("rehash::iter::new");
+        Self {
+            keys: keys.iter(),
+            values: values.iter(),
+        }
     }
 }
 
@@ -15,12 +18,17 @@ impl<'a, K, V> Iterator for Iter<'a, K, V> {
 
     #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next().map(|n| (&n.key, &n.value))
+        let _trace = profiler::scope("rehash::iter::next");
+        match (self.keys.next(), self.values.next()) {
+            (Some(k), Some(v)) => Some((k, v)),
+            _ => None,
+        }
     }
 
     #[inline(always)]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        self.iter.size_hint()
+        let _trace = profiler::scope("rehash::iter::size_hint");
+        self.keys.size_hint()
     }
 }
 
