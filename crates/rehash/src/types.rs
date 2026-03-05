@@ -46,6 +46,11 @@ where
         Iter::new(&self.keys, &self.values)
     }
 
+    pub fn slices(&self) -> (&[K], &[V]) {
+        let _trace = profiler::scope("rehash::types::slices");
+        (&self.keys, &self.values)
+    }
+
     #[inline(always)]
     pub(super) fn maybe_grow(&mut self) {
         let _trace = profiler::scope("rehash::types::maybe_grow");

@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use super::Store;
 use super::helpers::{is_expired, monotonic_now_ms, purge_if_expired};
-use super::pattern::wildcard_match;
+use super::pattern::{CompiledPattern, wildcard_match};
 use crate::value::{CompactKey, CompactValue, Entry};
 
 #[derive(Clone, Debug)]
@@ -220,15 +220,18 @@ impl Store {
         let mut total = 0;
         for shard in self.shards.iter() {
             let guard = shard.read();
+            let has_ttl = !guard.ttl.is_empty();
             total += guard
                 .entries
                 .iter()
                 .filter(|(key, _entry): &(&CompactKey, &Entry)| {
-                    guard
-                        .ttl
-                        .get(key.as_slice())
-                        .copied()
-                        .is_none_or(|deadline| now_ms < deadline)
+                    let key_bytes = key.slice();
+                    !has_ttl
+                        || guard
+                            .ttl
+                            .get(key_bytes)
+                            .copied()
+                            .is_none_or(|deadline| now_ms < deadline)
                 })
                 .count() as i64;
         }
@@ -238,16 +241,38 @@ impl Store {
     pub fn keys(&self, pattern: &[u8]) -> Vec<Vec<u8>> {
         let _trace = profiler::scope("engine::keyspace::keys");
         let now_ms = monotonic_now_ms();
+        let pattern = CompiledPattern::new((pattern != b"*").then_some(pattern));
         let mut out = Vec::new();
         for shard in self.shards.iter() {
             let guard = shard.read();
+            let has_ttl = !guard.ttl.is_empty();
             for (key, _) in guard.entries.iter() {
-                if guard
-                    .ttl
-                    .get::<[u8]>(key.as_slice())
-                    .copied()
-                    .is_none_or(|deadline| now_ms < deadline)
-                    && wildcard_match(pattern, key.as_slice())
+                let key_bytes = key.slice();
+                let pattern_matches = match &pattern {
+                    CompiledPattern::Any => true,
+                    CompiledPattern::Exact(pattern) => key_bytes == *pattern,
+                    CompiledPattern::Prefix(prefix) => key_bytes.starts_with(prefix),
+                    CompiledPattern::Suffix(suffix) => key_bytes.ends_with(suffix),
+                    CompiledPattern::Contains(needle) => {
+                        needle.is_empty()
+                            || key_bytes
+                                .windows(needle.len())
+                                .any(|window| window == *needle)
+                    }
+                    CompiledPattern::PrefixSuffix { prefix, suffix } => {
+                        key_bytes.len() >= prefix.len() + suffix.len()
+                            && key_bytes.starts_with(prefix)
+                            && key_bytes.ends_with(suffix)
+                    }
+                    CompiledPattern::Wildcard(pattern) => wildcard_match(pattern, key_bytes),
+                };
+                if (!has_ttl
+                    || guard
+                        .ttl
+                        .get::<[u8]>(key_bytes)
+                        .copied()
+                        .is_none_or(|deadline| now_ms < deadline))
+                    && pattern_matches
                 {
                     out.push(key.to_vec());
                 }
@@ -266,22 +291,71 @@ impl Store {
         let _trace = profiler::scope("engine::keyspace::scan");
         let cursor = usize::try_from(cursor).unwrap_or(usize::MAX);
         let now_ms = monotonic_now_ms();
+        let pattern = CompiledPattern::new(pattern.filter(|pattern| *pattern != b"*"));
         let target = count.max(1);
         let mut seen = 0usize;
         let mut out = Vec::with_capacity(target);
 
         for shard in self.shards.iter() {
             let guard = shard.read();
-            for (key, entry) in guard.entries.iter() {
-                if !guard
-                    .ttl
-                    .get::<[u8]>(key.as_slice())
-                    .copied()
-                    .is_none_or(|deadline| now_ms < deadline)
+            let has_ttl = !guard.ttl.is_empty();
+            let (keys, entries) = guard.entries.slices();
+
+            // Fast path: no per-entry filters, so the cursor can skip entire shards.
+            if !has_ttl && matches!(pattern, CompiledPattern::Any) && value_type.is_none() {
+                if cursor >= seen + keys.len() {
+                    seen += keys.len();
+                    continue;
+                }
+
+                let start = cursor.saturating_sub(seen);
+                let remaining = target - out.len();
+                let available = keys.len().saturating_sub(start);
+                let take = available.min(remaining);
+
+                out.extend(keys[start..start + take].iter().cloned());
+                seen += start + take;
+
+                if out.len() == target {
+                    return (seen as u64, out);
+                }
+
+                continue;
+            }
+
+            for i in 0..keys.len() {
+                let key = &keys[i];
+                let entry = &entries[i];
+                let key_bytes = key.slice();
+                let pattern_matches = match &pattern {
+                    CompiledPattern::Any => true,
+                    CompiledPattern::Exact(pattern) => key_bytes == *pattern,
+                    CompiledPattern::Prefix(prefix) => key_bytes.starts_with(prefix),
+                    CompiledPattern::Suffix(suffix) => key_bytes.ends_with(suffix),
+                    CompiledPattern::Contains(needle) => {
+                        needle.is_empty()
+                            || key_bytes
+                                .windows(needle.len())
+                                .any(|window| window == *needle)
+                    }
+                    CompiledPattern::PrefixSuffix { prefix, suffix } => {
+                        key_bytes.len() >= prefix.len() + suffix.len()
+                            && key_bytes.starts_with(prefix)
+                            && key_bytes.ends_with(suffix)
+                    }
+                    CompiledPattern::Wildcard(pattern) => wildcard_match(pattern, key_bytes),
+                };
+
+                if has_ttl
+                    && !guard
+                        .ttl
+                        .get::<[u8]>(key_bytes)
+                        .copied()
+                        .is_none_or(|deadline| now_ms < deadline)
                 {
                     continue;
                 }
-                if pattern.is_some_and(|matcher| !wildcard_match(matcher, key.as_slice())) {
+                if !pattern_matches {
                     continue;
                 }
                 if value_type

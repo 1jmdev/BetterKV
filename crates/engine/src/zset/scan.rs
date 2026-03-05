@@ -2,7 +2,7 @@ use crate::store::Store;
 use crate::value::CompactKey;
 
 use super::super::helpers::{is_expired, monotonic_now_ms};
-use super::super::pattern::wildcard_match;
+use super::super::pattern::{CompiledPattern, wildcard_match};
 use super::{get_zset, sorted_by_score_refs};
 
 impl Store {
@@ -26,6 +26,7 @@ impl Store {
         };
         let zset = get_zset(entry).ok_or(())?;
         let ordered = sorted_by_score_refs(zset, false);
+        let pattern = CompiledPattern::new(pattern);
         if ordered.is_empty() {
             return Ok((0, Vec::new()));
         }
@@ -37,7 +38,26 @@ impl Store {
         let mut out = Vec::with_capacity(target);
         while index < ordered.len() && out.len() < target {
             let item = &ordered[index];
-            if pattern.is_none_or(|matcher| wildcard_match(matcher, item.0.as_slice())) {
+            let member_bytes = item.0.as_slice();
+            let pattern_matches = match &pattern {
+                CompiledPattern::Any => true,
+                CompiledPattern::Exact(pattern) => member_bytes == *pattern,
+                CompiledPattern::Prefix(prefix) => member_bytes.starts_with(prefix),
+                CompiledPattern::Suffix(suffix) => member_bytes.ends_with(suffix),
+                CompiledPattern::Contains(needle) => {
+                    needle.is_empty()
+                        || member_bytes
+                            .windows(needle.len())
+                            .any(|window| window == *needle)
+                }
+                CompiledPattern::PrefixSuffix { prefix, suffix } => {
+                    member_bytes.len() >= prefix.len() + suffix.len()
+                        && member_bytes.starts_with(prefix)
+                        && member_bytes.ends_with(suffix)
+                }
+                CompiledPattern::Wildcard(pattern) => wildcard_match(pattern, member_bytes),
+            };
+            if pattern_matches {
                 out.push((item.0.clone(), item.1));
             }
             index += 1;

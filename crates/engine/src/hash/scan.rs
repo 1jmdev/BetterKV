@@ -2,7 +2,7 @@ use crate::store::Store;
 use crate::value::{CompactKey, CompactValue};
 
 use super::super::helpers::{is_expired, monotonic_now_ms};
-use super::super::pattern::wildcard_match;
+use super::super::pattern::{CompiledPattern, wildcard_match};
 use super::get_hash_map;
 
 impl Store {
@@ -25,6 +25,7 @@ impl Store {
             return Ok((0, Vec::new()));
         };
         let map = get_hash_map(entry).ok_or(())?;
+        let pattern = CompiledPattern::new(pattern);
 
         if map.is_empty() {
             return Ok((0, Vec::new()));
@@ -39,7 +40,26 @@ impl Store {
             let Some((field, value)) = iter.next() else {
                 break;
             };
-            if pattern.is_none_or(|matcher| wildcard_match(matcher, field.as_slice())) {
+            let field_bytes = field.as_slice();
+            let pattern_matches = match &pattern {
+                CompiledPattern::Any => true,
+                CompiledPattern::Exact(pattern) => field_bytes == *pattern,
+                CompiledPattern::Prefix(prefix) => field_bytes.starts_with(prefix),
+                CompiledPattern::Suffix(suffix) => field_bytes.ends_with(suffix),
+                CompiledPattern::Contains(needle) => {
+                    needle.is_empty()
+                        || field_bytes
+                            .windows(needle.len())
+                            .any(|window| window == *needle)
+                }
+                CompiledPattern::PrefixSuffix { prefix, suffix } => {
+                    field_bytes.len() >= prefix.len() + suffix.len()
+                        && field_bytes.starts_with(prefix)
+                        && field_bytes.ends_with(suffix)
+                }
+                CompiledPattern::Wildcard(pattern) => wildcard_match(pattern, field_bytes),
+            };
+            if pattern_matches {
                 out.push((field.clone(), value.clone()));
             }
             index += 1;
