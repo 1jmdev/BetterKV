@@ -1,7 +1,7 @@
 use bytes::{BufMut, BytesMut};
 
 use crate::store::{ListInsertPosition, ListSetError, ListSide, Store};
-use crate::value::{CompactArg, CompactKey, CompactValue, Entry};
+use types::value::{CompactArg, CompactKey, CompactValue, Entry};
 
 use super::super::helpers::{is_expired, monotonic_now_ms, purge_if_expired};
 use super::{get_list, get_list_mut};

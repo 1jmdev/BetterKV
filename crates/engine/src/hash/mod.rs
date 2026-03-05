@@ -3,7 +3,7 @@ mod counter;
 mod random;
 mod scan;
 
-use crate::value::{CompactKey, CompactValue, Entry, HashValueMap};
+use types::value::{CompactKey, CompactValue, Entry, HashValueMap};
 
 fn get_hash_map_mut(entry: &mut Entry) -> Option<&mut HashValueMap> {
     let _trace = profiler::scope("engine::hash::get_hash_map_mut");

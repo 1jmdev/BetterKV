@@ -7,7 +7,7 @@ edition.workspace = true
 profiling = ["profiler/enabled"]
 
 [dependencies]
-engine.workspace = true
+types.workspace = true
 profiler.workspace = true
 bytes.workspace = true
 itoa.workspace = true

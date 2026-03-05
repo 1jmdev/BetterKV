@@ -1,7 +1,7 @@
 use crate::dispatcher;
 use crate::util::{Args, int_error, wrong_args};
 use engine::store::Store;
-use engine::value::CompactArg;
+use types::value::CompactArg;
 use mlua::{HookTriggers, Lua, Table, Value, Variadic, VmState};
 use parking_lot::Mutex;
 use protocol::types::{BulkData, RespFrame};

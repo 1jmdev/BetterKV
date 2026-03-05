@@ -1,7 +1,7 @@
 use crate::stream::parse::{parse_count, parse_stream_id};
 use crate::util::{Args, wrong_args, wrong_type};
 use engine::store::Store;
-use engine::value::StreamId;
+use types::value::StreamId;
 use protocol::types::{BulkData, RespFrame};
 
 pub(crate) fn xreadgroup(store: &Store, args: &Args) -> RespFrame {

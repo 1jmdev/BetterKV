@@ -5,7 +5,7 @@ use ahash::RandomState;
 use hashbrown::HashSet;
 
 use crate::store::Store;
-use crate::value::{CompactArg, Entry};
+use types::value::{CompactArg, Entry};
 
 use super::super::helpers::{monotonic_now_ms, purge_if_expired};
 use super::write_entry;

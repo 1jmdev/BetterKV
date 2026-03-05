@@ -1,5 +1,5 @@
 use crate::store::Store;
-use crate::value::{CompactArg, CompactKey, CompactValue, Entry};
+use types::value::{CompactArg, CompactKey, CompactValue, Entry};
 
 use super::super::helpers::{monotonic_now_ms, purge_if_expired};
 

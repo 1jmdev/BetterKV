@@ -1,5 +1,5 @@
 use crate::store::{BitFieldEncoding, BitFieldOp, BitFieldOverflow, BitOp, Store};
-use crate::value::{CompactArg, Entry};
+use types::value::{CompactArg, Entry};
 
 use super::super::helpers::{monotonic_now_ms, purge_if_expired};
 use super::write_entry;

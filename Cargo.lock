@@ -122,6 +122,7 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+ "types",
 ]
 
 [[package]]
@@ -269,6 +270,7 @@ dependencies = [
  "ryu",
  "thiserror",
  "tokio",
+ "types",
 ]
 
 [[package]]
@@ -776,13 +778,13 @@ name = "protocol"
 version = "0.1.0"
 dependencies = [
  "bytes",
- "engine",
  "itoa",
  "memchr",
  "profiler",
  "ryu",
  "smallvec",
  "thiserror",
+ "types",
 ]
 
 [[package]]

@@ -1,6 +1,7 @@
 use crate::util::{Args, eq_ascii, f64_to_bytes, int_error, wrong_args, wrong_type};
 use engine::store::Store;
 use protocol::types::{BulkData, RespFrame};
+use types::value::CompactKey;
 
 pub(crate) fn zrange(store: &Store, args: &Args, reverse: bool) -> RespFrame {
     let _trace = profiler::scope("commands::zset::range::zrange");
@@ -95,7 +96,7 @@ pub(crate) fn zrange_by_score(store: &Store, args: &Args, reverse: bool) -> Resp
     }
 }
 
-fn format_items(items: Vec<(engine::value::CompactKey, f64)>, withscores: bool) -> Vec<RespFrame> {
+fn format_items(items: Vec<(CompactKey, f64)>, withscores: bool) -> Vec<RespFrame> {
     let _trace = profiler::scope("commands::zset::range::format_items");
     if withscores {
         let mut out = Vec::with_capacity(items.len() * 2);

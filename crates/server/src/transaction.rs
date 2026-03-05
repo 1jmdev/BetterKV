@@ -1,7 +1,7 @@
 use ahash::AHashMap;
 
 use engine::store::Store;
-use engine::value::CompactArg;
+use types::value::CompactArg;
 use protocol::types::RespFrame;
 
 #[derive(Default)]

@@ -1,5 +1,5 @@
 use crate::store::Store;
-use crate::value::{CompactArg, CompactKey, CompactValue};
+use types::value::{CompactArg, CompactKey, CompactValue};
 use sha1::{Digest, Sha1};
 
 impl Store {

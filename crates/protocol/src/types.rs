@@ -1,6 +1,6 @@
 use bytes::Bytes;
 
-use engine::value::{CompactArg, CompactValue};
+use types::value::{CompactArg, CompactValue};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BulkData {

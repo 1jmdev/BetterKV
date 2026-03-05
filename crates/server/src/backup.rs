@@ -9,7 +9,7 @@ use hashbrown::HashMap;
 use indexmap::IndexSet;
 
 use engine::store::{PreDecodedRestoreEntry, Store};
-use engine::value::{
+use types::value::{
     CompactKey, CompactValue, Entry as StoreEntry, StreamId, StreamValue, ZSetValueMap,
 };
 

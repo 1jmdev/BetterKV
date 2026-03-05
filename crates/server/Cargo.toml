@@ -13,6 +13,7 @@ profiling = ["profiler/enabled"]
 [dependencies]
 commands.workspace = true
 engine.workspace = true
+types.workspace = true
 protocol.workspace = true
 profiler.workspace = true
 ahash.workspace = true

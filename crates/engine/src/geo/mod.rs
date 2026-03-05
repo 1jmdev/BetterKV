@@ -6,7 +6,7 @@ mod write;
 use ahash::RandomState;
 use hashbrown::HashMap;
 
-use crate::value::{CompactKey, Entry, GeoValue};
+use types::value::{CompactKey, Entry, GeoValue};
 
 pub struct GeoSearchMatch {
     pub member: CompactKey,

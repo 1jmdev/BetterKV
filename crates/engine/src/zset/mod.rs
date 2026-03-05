@@ -5,7 +5,7 @@ mod random;
 mod range;
 mod scan;
 
-use crate::value::{CompactKey, Entry, ZSetValueMap};
+use types::value::{CompactKey, Entry, ZSetValueMap};
 
 fn get_zset(entry: &Entry) -> Option<&ZSetValueMap> {
     let _trace = profiler::scope("engine::zset::get_zset");

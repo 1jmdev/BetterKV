@@ -2,7 +2,7 @@ use ahash::RandomState;
 use hashbrown::HashMap;
 
 use crate::store::Store;
-use crate::value::{CompactKey, Entry, StreamGroup, StreamId, StreamValue};
+use types::value::{CompactKey, Entry, StreamGroup, StreamId, StreamValue};
 
 use super::super::helpers::{monotonic_now_ms, purge_if_expired};
 use super::get_stream_mut;

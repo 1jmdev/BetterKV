@@ -1,7 +1,7 @@
 use crate::util::{cmd, pack_runtime};
 use crate::{connection, geo, hash, keyspace, list, scripting, set, stream, string, ttl, zset};
 use engine::store::Store;
-use engine::value::CompactArg;
+use types::value::CompactArg;
 use protocol::types::{BulkData, RespFrame};
 
 pub fn dispatch(store: &Store, frame: RespFrame) -> RespFrame {

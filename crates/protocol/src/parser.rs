@@ -4,7 +4,7 @@ use smallvec::SmallVec;
 use thiserror::Error;
 
 use crate::types::{BulkData, RespFrame};
-use engine::value::CompactArg;
+use types::value::CompactArg;
 
 #[derive(Debug, Error)]
 pub enum ParseError {

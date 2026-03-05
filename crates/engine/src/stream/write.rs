@@ -1,8 +1,8 @@
 use crate::store::{Store, XAddId, XTrimMode};
-use crate::value::{CompactArg, CompactKey, Entry, StreamId, StreamValue};
+use types::value::{CompactArg, CompactKey, Entry, StreamId, StreamValue};
 
 use super::super::helpers::{is_expired, monotonic_now_ms, purge_if_expired};
-use super::types::{apply_trim, xadd_into_stream};
+use super::stream_types::{apply_trim, xadd_into_stream};
 use super::{get_stream, get_stream_mut};
 
 impl Store {

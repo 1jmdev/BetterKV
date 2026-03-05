@@ -1,5 +1,5 @@
 use crate::store::Store;
-use crate::value::Entry;
+use types::value::Entry;
 
 use super::super::helpers::{monotonic_now_ms, purge_if_expired};
 use super::write_entry;

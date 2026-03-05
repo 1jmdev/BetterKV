@@ -1,5 +1,5 @@
 use crate::store::Store;
-use crate::value::{CompactArg, CompactKey, Entry, ZSetValueMap};
+use types::value::{CompactArg, CompactKey, Entry, ZSetValueMap};
 
 use super::super::helpers::{is_expired, monotonic_now_ms, purge_if_expired};
 use super::{get_zset, get_zset_mut, sorted_by_score};

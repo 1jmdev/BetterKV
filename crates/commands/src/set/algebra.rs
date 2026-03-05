@@ -1,6 +1,7 @@
 use crate::util::{Args, eq_ascii, int_error, wrong_args, wrong_type};
 use engine::store::Store;
 use protocol::types::{BulkData, RespFrame};
+use types::value::CompactKey;
 
 pub(crate) fn sinter(store: &Store, args: &Args) -> RespFrame {
     let _trace = profiler::scope("commands::set::algebra::sinter");
@@ -93,7 +94,7 @@ pub(crate) fn sintercard(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
-fn members_response(result: Result<Vec<engine::value::CompactKey>, ()>) -> RespFrame {
+fn members_response(result: Result<Vec<CompactKey>, ()>) -> RespFrame {
     let _trace = profiler::scope("commands::set::algebra::members_response");
     match result {
         Ok(members) => RespFrame::Array(Some(

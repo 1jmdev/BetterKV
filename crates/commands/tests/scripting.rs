@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use commands::dispatcher;
 use engine::store::Store;
-use engine::value::CompactArg;
+use types::value::CompactArg;
 use protocol::types::{BulkData, RespFrame};
 
 fn test_lock() -> &'static Mutex<()> {

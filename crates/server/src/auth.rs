@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 use protocol::types::{BulkData, RespFrame};
+use types::value::CompactArg;
 
 use crate::config::Config;
 
@@ -124,7 +125,7 @@ impl AuthService {
     pub fn acl_command(
         &self,
         session: &SessionAuth,
-        args: &[engine::value::CompactArg],
+        args: &[CompactArg],
     ) -> RespFrame {
         let _trace = profiler::scope("server::auth::acl_command");
         if !self.is_authorized(session) {

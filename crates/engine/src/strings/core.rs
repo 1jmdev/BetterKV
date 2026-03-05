@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use crate::store::Store;
-use crate::value::{CompactValue, Entry};
+use types::value::{CompactValue, Entry};
 
 use super::super::helpers::{deadline_from_ttl, monotonic_now_ms, purge_if_expired};
 use super::write_entry;

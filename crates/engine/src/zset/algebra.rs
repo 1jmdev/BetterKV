@@ -2,7 +2,7 @@ use ahash::RandomState;
 use hashbrown::HashMap;
 
 use crate::store::Store;
-use crate::value::{CompactArg, CompactKey, ZSetValueMap};
+use types::value::{CompactArg, CompactKey, ZSetValueMap};
 
 use super::super::helpers::{is_expired, monotonic_now_ms};
 use super::{compare_member_score, get_zset};

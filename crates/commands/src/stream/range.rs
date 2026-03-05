@@ -1,7 +1,7 @@
 use crate::stream::parse::{parse_count, parse_stream_id, stream_id_to_bulk};
 use crate::util::{Args, wrong_args, wrong_type};
 use engine::store::{Store, StreamRangeItem};
-use engine::value::StreamId;
+use types::value::StreamId;
 use protocol::types::{BulkData, RespFrame};
 
 pub(crate) fn xrange(store: &Store, args: &Args) -> RespFrame {

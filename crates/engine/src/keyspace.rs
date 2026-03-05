@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use super::Store;
 use super::helpers::{is_expired, monotonic_now_ms, purge_if_expired};
 use super::pattern::{CompiledPattern, wildcard_match};
-use crate::value::{CompactKey, CompactValue, Entry};
+use types::value::{CompactKey, CompactValue, Entry, ZSetValueMap, StreamValue, StreamId};
 
 #[derive(Clone, Debug)]
 pub struct PreDecodedRestoreEntry {
@@ -710,7 +710,7 @@ fn deserialize_entry(payload: &[u8]) -> Option<Entry> {
         }
         4 => {
             let count = read_u32(&mut input)? as usize;
-            let mut zset = crate::value::ZSetValueMap::new();
+            let mut zset = ZSetValueMap::new();
             for _ in 0..count {
                 let member = CompactKey::from_vec(read_bytes(&mut input)?);
                 if input.len() < 8 {
@@ -752,7 +752,7 @@ fn deserialize_entry(payload: &[u8]) -> Option<Entry> {
         }
         6 => {
             let count = read_u32(&mut input)? as usize;
-            let mut stream = crate::value::StreamValue::new();
+            let mut stream = StreamValue::new();
             for _ in 0..count {
                 if input.len() < 16 {
                     return None;
@@ -769,7 +769,7 @@ fn deserialize_entry(payload: &[u8]) -> Option<Entry> {
                     let value = CompactValue::from_vec(read_bytes(&mut input)?);
                     fields.push((field, value));
                 }
-                let id = crate::value::StreamId {
+                let id = StreamId {
                     ms: u64::from_le_bytes(ms_bytes),
                     seq: u64::from_le_bytes(seq_bytes),
                 };

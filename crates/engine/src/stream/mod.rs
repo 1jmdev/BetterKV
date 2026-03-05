@@ -1,12 +1,12 @@
 mod claim;
 mod group;
 mod range;
-mod types;
+mod stream_types;
 mod write;
 
-use crate::value::{Entry, StreamValue};
+use types::value::{Entry, StreamValue};
 
-pub use types::{StreamRangeItem, XPendingSummary};
+pub use stream_types::{StreamRangeItem, XPendingSummary};
 
 fn get_stream(entry: &Entry) -> Option<&StreamValue> {
     let _trace = profiler::scope("engine::stream::get_stream");

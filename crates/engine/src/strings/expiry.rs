@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use super::super::helpers::{deadline_from_ttl, monotonic_now_ms, purge_if_expired, unix_time_ms};
 use crate::store::{GetExMode, Store};
-use crate::value::CompactKey;
+use types::value::CompactKey;
 
 impl Store {
     pub fn getex(&self, key: &[u8], mode: GetExMode) -> Result<Option<Vec<u8>>, ()> {

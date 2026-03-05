@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::store::Store;
-use crate::value::{CompactKey, Entry};
+use types::value::{CompactKey, Entry};
 
 use super::super::helpers::{is_expired, monotonic_now_ms, purge_if_expired};
 use super::get_set;

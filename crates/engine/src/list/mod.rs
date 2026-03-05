@@ -2,7 +2,7 @@ mod core;
 mod moves;
 mod multi_pop;
 
-use crate::value::{Entry, ListValue};
+use types::value::{Entry, ListValue};
 
 fn get_list(entry: &Entry) -> Option<&ListValue> {
     let _trace = profiler::scope("engine::list::get_list");

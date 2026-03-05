@@ -11,8 +11,6 @@ mod strings;
 pub mod ttl;
 mod zset;
 
-pub mod value;
-
 // Re-export as `store` so that `engine::store::Store` etc. still works
 pub mod store {
     pub use super::geo::GeoSearchMatch;
@@ -33,12 +31,12 @@ use ahash::RandomState;
 use hashbrown::HashMap;
 use parking_lot::RwLock;
 
-use crate::value::{CompactKey, Entry};
+use types::value::{CompactKey, Entry, CompactValue};
 use rehash::RehashingMap;
 
 type StoreMap = RehashingMap<CompactKey, Entry>;
 type TtlMap = HashMap<CompactKey, u64, RandomState>;
-type ScriptMap = HashMap<CompactKey, crate::value::CompactValue, RandomState>;
+type ScriptMap = HashMap<CompactKey, CompactValue, RandomState>;
 
 #[derive(Clone, Copy, Debug)]
 pub enum GetExMode {

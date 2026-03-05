@@ -1,9 +1,9 @@
 use crate::store::Store;
-use crate::value::{CompactArg, StreamId};
+use types::value::{CompactArg, StreamId};
 
 use super::super::helpers::{is_expired, monotonic_now_ms};
 use super::get_stream;
-use super::types::{StreamRangeItem, push_items};
+use super::stream_types::{StreamRangeItem, push_items};
 
 impl Store {
     pub fn xrange(

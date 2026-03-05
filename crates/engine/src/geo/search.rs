@@ -1,5 +1,5 @@
 use crate::store::Store;
-use crate::value::{CompactKey, Entry};
+use types::value::{CompactKey, Entry, ZSetValueMap};
 
 use super::super::helpers::{is_expired, monotonic_now_ms};
 use super::math::{haversine_meters, meters_per_lat, meters_per_lon};
@@ -101,7 +101,7 @@ impl Store {
         }
 
         if store_dist {
-            let mut zset = crate::value::ZSetValueMap::new();
+            let mut zset = ZSetValueMap::new();
             for entry in &matches {
                 zset.insert(entry.member.clone(), entry.distance_meters.unwrap_or(0.0));
             }

@@ -1,5 +1,5 @@
 use crate::store::{ListSide, Store};
-use crate::value::{CompactKey, CompactValue, Entry};
+use types::value::{CompactKey, CompactValue, Entry};
 
 use super::super::helpers::{monotonic_now_ms, purge_if_expired};
 use super::get_list_mut;

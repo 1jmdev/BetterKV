@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use crate::util::{Args, eq_ascii, int_error, wrong_args, wrong_type};
 use engine::store::{GetExMode, Store};
-use engine::value::CompactArg;
+use types::value::CompactArg;
 use protocol::types::{BulkData, RespFrame};
 
 pub(crate) fn setex(store: &Store, args: &Args) -> RespFrame {

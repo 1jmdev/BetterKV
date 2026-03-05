@@ -8,6 +8,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use protocol::encoder::Encoder;
 use protocol::types::{BulkData, RespFrame};
+use types::value::CompactArg;
 
 type SubscriberMap = AHashMap<u64, UnboundedSender<RespFrame>>;
 
@@ -414,13 +415,13 @@ fn wildcard_match(pattern: &[u8], text: &[u8]) -> bool {
 fn encode_message_frame(channel: &[u8], payload: &[u8]) -> Bytes {
     let _trace = profiler::scope("server::pubsub::encode_message_frame");
     let frame = RespFrame::Array(Some(vec![
-        RespFrame::Bulk(Some(BulkData::Arg(engine::value::CompactArg::from_slice(
+        RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(
             b"message",
         )))),
-        RespFrame::Bulk(Some(BulkData::Arg(engine::value::CompactArg::from_slice(
+        RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(
             channel,
         )))),
-        RespFrame::Bulk(Some(BulkData::Arg(engine::value::CompactArg::from_slice(
+        RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(
             payload,
         )))),
     ]));
@@ -434,16 +435,16 @@ fn encode_message_frame(channel: &[u8], payload: &[u8]) -> Bytes {
 fn encode_pmessage_frame(pattern: &[u8], channel: &[u8], payload: &[u8]) -> Bytes {
     let _trace = profiler::scope("server::pubsub::encode_pmessage_frame");
     let frame = RespFrame::Array(Some(vec![
-        RespFrame::Bulk(Some(BulkData::Arg(engine::value::CompactArg::from_slice(
+        RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(
             b"pmessage",
         )))),
-        RespFrame::Bulk(Some(BulkData::Arg(engine::value::CompactArg::from_slice(
+        RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(
             pattern,
         )))),
-        RespFrame::Bulk(Some(BulkData::Arg(engine::value::CompactArg::from_slice(
+        RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(
             channel,
         )))),
-        RespFrame::Bulk(Some(BulkData::Arg(engine::value::CompactArg::from_slice(
+        RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(
             payload,
         )))),
     ]));

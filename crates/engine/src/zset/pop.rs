@@ -1,5 +1,5 @@
 use crate::store::Store;
-use crate::value::{CompactArg, CompactKey};
+use types::value::{CompactArg, CompactKey};
 
 use super::super::helpers::{monotonic_now_ms, purge_if_expired};
 use super::get_zset_mut;

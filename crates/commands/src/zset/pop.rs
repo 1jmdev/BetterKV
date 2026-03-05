@@ -1,6 +1,7 @@
 use crate::util::{Args, eq_ascii, f64_to_bytes, int_error, wrong_args, wrong_type};
 use engine::store::Store;
 use protocol::types::{BulkData, RespFrame};
+use types::value::CompactKey;
 
 pub(crate) fn zpop(store: &Store, args: &Args, max: bool) -> RespFrame {
     let _trace = profiler::scope("commands::zset::pop::zpop");
@@ -162,7 +163,7 @@ fn parse_timeout(raw: &[u8]) -> Result<f64, ()> {
         .ok_or(())
 }
 
-fn flatten_member_scores(items: Vec<(engine::value::CompactKey, f64)>) -> Vec<RespFrame> {
+fn flatten_member_scores(items: Vec<(CompactKey, f64)>) -> Vec<RespFrame> {
     let _trace = profiler::scope("commands::zset::pop::flatten_member_scores");
     let mut out = Vec::with_capacity(items.len() * 2);
     for (member, score) in items {
@@ -174,7 +175,7 @@ fn flatten_member_scores(items: Vec<(engine::value::CompactKey, f64)>) -> Vec<Re
     out
 }
 
-fn items_to_pairs(items: Vec<(engine::value::CompactKey, f64)>) -> Vec<RespFrame> {
+fn items_to_pairs(items: Vec<(CompactKey, f64)>) -> Vec<RespFrame> {
     let _trace = profiler::scope("commands::zset::pop::items_to_pairs");
     items
         .into_iter()

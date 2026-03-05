@@ -2,7 +2,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use commands::dispatcher::dispatch_args;
 use engine::store::Store;
-use engine::value::CompactArg;
+use types::value::CompactArg;
 use protocol::types::{BulkData, RespFrame};
 
 use super::super::pubsub::{ConnectionPubSub, PubSubHub};

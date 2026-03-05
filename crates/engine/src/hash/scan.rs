@@ -1,5 +1,5 @@
 use crate::store::Store;
-use crate::value::{CompactKey, CompactValue};
+use types::value::{CompactKey, CompactValue};
 
 use super::super::helpers::{is_expired, monotonic_now_ms};
 use super::super::pattern::{CompiledPattern, wildcard_match};

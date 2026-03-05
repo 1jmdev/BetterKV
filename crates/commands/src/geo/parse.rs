@@ -1,6 +1,7 @@
 use crate::util::{Args, int_error};
 use engine::store::Store;
 use protocol::types::RespFrame;
+use types::value::CompactArg;
 
 #[derive(Clone, Copy)]
 pub(super) enum SortOrder {
@@ -135,7 +136,7 @@ pub(super) fn geosearch_center_from_member(
     member: &[u8],
 ) -> Result<Option<(f64, f64)>, RespFrame> {
     let _trace = profiler::scope("commands::geo::parse::geosearch_center_from_member");
-    let members = [engine::value::CompactArg::from_slice(member)];
+    let members = [CompactArg::from_slice(member)];
     store
         .geopos(key, &members)
         .map_err(|_| crate::util::wrong_type())

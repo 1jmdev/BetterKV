@@ -1,5 +1,5 @@
 use crate::store::Store;
-use crate::value::CompactArg;
+use types::value::CompactArg;
 
 use super::super::helpers::{is_expired, monotonic_now_ms};
 use super::get_geo;

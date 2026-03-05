@@ -2,10 +2,10 @@ use ahash::RandomState;
 use hashbrown::HashMap;
 
 use crate::store::Store;
-use crate::value::{CompactArg, CompactKey, StreamId};
+use types::value::{CompactArg, CompactKey, StreamId};
 
 use super::super::helpers::{is_expired, monotonic_now_ms, purge_if_expired};
-use super::types::{StreamRangeItem, XPendingSummary, ensure_pending_entry};
+use super::stream_types::{StreamRangeItem, XPendingSummary, ensure_pending_entry};
 use super::{get_stream, get_stream_mut};
 
 impl Store {

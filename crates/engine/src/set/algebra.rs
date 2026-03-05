@@ -1,5 +1,5 @@
 use crate::store::Store;
-use crate::value::{CompactArg, CompactKey, Entry, SetValue};
+use types::value::{CompactArg, CompactKey, Entry, SetValue};
 
 use super::super::helpers::{is_expired, monotonic_now_ms, purge_if_expired};
 use super::{collect_members, get_set, new_set};

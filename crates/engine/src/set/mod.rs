@@ -5,7 +5,7 @@ mod scan;
 
 use ahash::RandomState;
 
-use crate::value::{CompactKey, Entry, SetValue};
+use types::value::{CompactKey, Entry, SetValue};
 
 fn get_set(entry: &Entry) -> Option<&SetValue> {
     let _trace = profiler::scope("engine::set::get_set");
