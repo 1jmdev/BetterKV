@@ -23,7 +23,7 @@ pub async fn run_listener(config: Config) -> Result<(), Box<dyn std::error::Erro
     let snapshot_path = config.snapshot_path();
 
     if snapshot_path.exists() {
-        match backup::load_snapshot(&store, &snapshot_path) {
+        match backup::load_snapshot(&store, &snapshot_path).await {
             Ok(stats) => {
                 tracing::info!(
                     keys_loaded = stats.keys_loaded,

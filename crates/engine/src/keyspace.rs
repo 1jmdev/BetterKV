@@ -5,6 +5,13 @@ use super::helpers::{is_expired, monotonic_now_ms, purge_if_expired};
 use super::pattern::wildcard_match;
 use crate::value::{CompactKey, CompactValue, Entry};
 
+#[derive(Clone, Debug)]
+pub struct PreDecodedRestoreEntry {
+    pub key: Vec<u8>,
+    pub ttl_ms: u64,
+    pub entry: Entry,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SortOrder {
     Asc,
@@ -327,6 +334,67 @@ impl Store {
         } else {
             Some(monotonic_now_ms().saturating_add(ttl_ms))
         };
+
+        self.restore_decoded_with_deadline(key, deadline, entry, replace)
+    }
+
+    pub fn restore_decoded(
+        &self,
+        key: &[u8],
+        ttl_ms: u64,
+        entry: Entry,
+        replace: bool,
+    ) -> Result<(), RestoreError> {
+        let _trace = profiler::scope("engine::keyspace::restore_decoded");
+        let deadline = if ttl_ms == 0 {
+            None
+        } else {
+            Some(monotonic_now_ms().saturating_add(ttl_ms))
+        };
+
+        self.restore_decoded_with_deadline(key, deadline, entry, replace)
+    }
+
+    pub fn restore_predecoded_unchecked(&self, entries: Vec<PreDecodedRestoreEntry>) {
+        let _trace = profiler::scope("engine::keyspace::restore_predecoded_unchecked");
+        if entries.is_empty() {
+            return;
+        }
+
+        let now_ms = monotonic_now_ms();
+
+        let mut by_shard = vec![Vec::new(); self.shards.len()];
+        for entry in entries {
+            let idx = self.shard_index(&entry.key);
+            by_shard[idx].push(entry);
+        }
+
+        for (idx, shard_entries) in by_shard.into_iter().enumerate() {
+            if shard_entries.is_empty() {
+                continue;
+            }
+            let mut shard = self.shards[idx].write();
+            for entry in shard_entries {
+                let compact_key = CompactKey::from_vec(entry.key);
+                shard.entries.insert(compact_key.clone(), entry.entry);
+                if entry.ttl_ms > 0 {
+                    let deadline = now_ms.saturating_add(entry.ttl_ms);
+                    shard.set_ttl(compact_key, deadline);
+                } else {
+                    let _ = shard.clear_ttl(compact_key.as_slice());
+                }
+            }
+        }
+    }
+
+    fn restore_decoded_with_deadline(
+        &self,
+        key: &[u8],
+        deadline: Option<u64>,
+        entry: Entry,
+        replace: bool,
+    ) -> Result<(), RestoreError> {
+        let _trace = profiler::scope("engine::keyspace::restore_decoded_with_deadline");
 
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();

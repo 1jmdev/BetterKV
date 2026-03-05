@@ -16,7 +16,9 @@ pub mod value;
 // Re-export as `store` so that `engine::store::Store` etc. still works
 pub mod store {
     pub use super::geo::GeoSearchMatch;
-    pub use super::keyspace::{RestoreError, SortError, SortOptions, SortOrder, SortResult};
+    pub use super::keyspace::{
+        PreDecodedRestoreEntry, RestoreError, SortError, SortOptions, SortOrder, SortResult,
+    };
     pub use super::stream::{StreamRangeItem, XPendingSummary};
     pub use super::{
         BitFieldEncoding, BitFieldOp, BitFieldOverflow, BitOp, GetExMode, HashFloatOpError,

@@ -1,14 +1,17 @@
 use std::collections::{BTreeMap, VecDeque};
 use std::fs::File;
 use std::io::{BufWriter, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use ahash::RandomState;
 use hashbrown::HashMap;
 use indexmap::IndexSet;
 
-use engine::store::Store;
+use engine::store::{PreDecodedRestoreEntry, Store};
+use engine::value::{
+    CompactKey, CompactValue, Entry as StoreEntry, StreamId, StreamValue, ZSetValueMap,
+};
 
 const RDB_MAGIC_PREFIX: &[u8; 5] = b"REDIS";
 const RDB_VERSION: &str = "0004";
@@ -58,14 +61,14 @@ struct LoadedEntry {
     value: Value,
 }
 
-pub fn load_snapshot(store: &Store, path: &Path) -> Result<RestoreStats, String> {
+pub async fn load_snapshot(store: &Store, path: &Path) -> Result<RestoreStats, String> {
     let _trace = profiler::scope("server::backup::load_snapshot");
-    let bytes = std::fs::read(path)
-        .map_err(|err| format!("failed to read snapshot {}: {err}", path.display()))?;
+    let bytes = read_snapshot_bytes(path).await?;
     let entries = parse_rdb(&bytes)?;
 
     let now_s = now_unix_seconds();
     let mut loaded = 0u64;
+    let mut restore_entries = Vec::with_capacity(entries.len());
     for entry in entries {
         if let Some(expire_at) = entry.expire_at_s
             && u64::from(expire_at) <= now_s
@@ -73,7 +76,6 @@ pub fn load_snapshot(store: &Store, path: &Path) -> Result<RestoreStats, String>
             continue;
         }
 
-        let payload = encode_custom_entry(&entry.value);
         let ttl_ms = entry
             .expire_at_s
             .map(|ts| {
@@ -82,14 +84,168 @@ pub fn load_snapshot(store: &Store, path: &Path) -> Result<RestoreStats, String>
             })
             .unwrap_or(0);
 
-        store
-            .restore(&entry.key, ttl_ms, &payload, true)
-            .map_err(|_| format!("failed to restore key from {}", path.display()))?;
+        restore_entries.push(PreDecodedRestoreEntry {
+            key: entry.key,
+            ttl_ms,
+            entry: value_into_store_entry(entry.value),
+        });
         loaded += 1;
     }
 
+    store.restore_predecoded_unchecked(restore_entries);
+
     Ok(RestoreStats {
         keys_loaded: loaded,
+    })
+}
+
+fn value_into_store_entry(value: Value) -> StoreEntry {
+    let _trace = profiler::scope("server::backup::value_into_store_entry");
+    match value {
+        Value::String(v) => StoreEntry::String(CompactValue::from_vec(v)),
+        Value::Hash(values) => {
+            let mut map: HashMap<CompactKey, CompactValue, RandomState> =
+                HashMap::with_capacity_and_hasher(values.len(), RandomState::new());
+            for (field, value) in values {
+                map.insert(CompactKey::from_vec(field), CompactValue::from_vec(value));
+            }
+            StoreEntry::Hash(Box::new(map))
+        }
+        Value::List(values) => {
+            let mut list = VecDeque::with_capacity(values.len());
+            for value in values {
+                list.push_back(CompactValue::from_vec(value));
+            }
+            StoreEntry::List(Box::new(list))
+        }
+        Value::Set(values) => {
+            let mut set: IndexSet<CompactKey, RandomState> =
+                IndexSet::with_capacity_and_hasher(values.len(), RandomState::new());
+            for value in values {
+                set.insert(CompactKey::from_vec(value));
+            }
+            StoreEntry::Set(Box::new(set))
+        }
+        Value::ZSet(values) => {
+            let mut zset = ZSetValueMap::new();
+            for (member, score) in values {
+                zset.insert(CompactKey::from_vec(member), score);
+            }
+            StoreEntry::ZSet(Box::new(zset))
+        }
+        Value::Geo(values) => {
+            let mut geo: HashMap<CompactKey, (f64, f64), RandomState> =
+                HashMap::with_capacity_and_hasher(values.len(), RandomState::new());
+            for (member, coords) in values {
+                geo.insert(CompactKey::from_vec(member), coords);
+            }
+            StoreEntry::Geo(Box::new(geo))
+        }
+        Value::Stream(values) => {
+            let mut stream = StreamValue::new();
+            for entry in values {
+                let id = StreamId {
+                    ms: entry.ms,
+                    seq: entry.seq,
+                };
+                let mut fields = Vec::with_capacity(entry.fields.len());
+                for (field, value) in entry.fields {
+                    fields.push((CompactKey::from_vec(field), CompactValue::from_vec(value)));
+                }
+                stream.last_id = id;
+                stream.entries.insert(id, fields);
+            }
+            StoreEntry::Stream(Box::new(stream))
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+async fn read_snapshot_bytes(path: &Path) -> Result<Vec<u8>, String> {
+    let _trace = profiler::scope("server::backup::read_snapshot_bytes");
+    match read_snapshot_bytes_io_uring(path).await {
+        Ok(bytes) => Ok(bytes),
+        Err(err) => {
+            tracing::warn!(
+                error = %err,
+                path = %path.display(),
+                "io_uring snapshot read failed, falling back to std::fs::read"
+            );
+            std::fs::read(path).map_err(|read_err| {
+                format!("failed to read snapshot {}: {read_err}", path.display())
+            })
+        }
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+async fn read_snapshot_bytes(path: &Path) -> Result<Vec<u8>, String> {
+    let _trace = profiler::scope("server::backup::read_snapshot_bytes");
+    std::fs::read(path).map_err(|err| format!("failed to read snapshot {}: {err}", path.display()))
+}
+
+#[cfg(target_os = "linux")]
+async fn read_snapshot_bytes_io_uring(path: &Path) -> Result<Vec<u8>, String> {
+    let _trace = profiler::scope("server::backup::read_snapshot_bytes_io_uring");
+    let path_buf = path.to_path_buf();
+    let path_for_runtime = path_buf.clone();
+    let file_size = file_size_bytes(&path_buf)?;
+
+    tokio::task::spawn_blocking(move || {
+        tokio_uring::start(async move { read_with_io_uring(path_for_runtime, file_size).await })
+    })
+    .await
+    .map_err(|err| {
+        format!(
+            "failed to join io_uring reader task for {}: {err}",
+            path.display()
+        )
+    })?
+}
+
+#[cfg(target_os = "linux")]
+async fn read_with_io_uring(path: PathBuf, file_size: usize) -> Result<Vec<u8>, String> {
+    let _trace = profiler::scope("server::backup::read_with_io_uring");
+    let file = tokio_uring::fs::File::open(path.clone())
+        .await
+        .map_err(|err| format!("failed to open snapshot {}: {err}", path.display()))?;
+
+    let mut bytes = Vec::with_capacity(file_size);
+    let mut offset = 0u64;
+    const CHUNK_SIZE: usize = 4 * 1024 * 1024;
+
+    while bytes.len() < file_size {
+        let remaining = file_size - bytes.len();
+        let read_len = remaining.min(CHUNK_SIZE);
+        let read_buf = vec![0u8; read_len];
+        let (result, read_buf) = file.read_at(read_buf, offset).await;
+        let read = result
+            .map_err(|err| format!("failed to read snapshot chunk {}: {err}", path.display()))?;
+        if read == 0 {
+            return Err(format!(
+                "snapshot {} ended early: expected {file_size} bytes, got {}",
+                path.display(),
+                bytes.len()
+            ));
+        }
+        bytes.extend_from_slice(&read_buf[..read]);
+        offset = offset.saturating_add(read as u64);
+    }
+
+    Ok(bytes)
+}
+
+#[cfg(target_os = "linux")]
+fn file_size_bytes(path: &Path) -> Result<usize, String> {
+    let _trace = profiler::scope("server::backup::file_size_bytes");
+    let len = std::fs::metadata(path)
+        .map_err(|err| format!("failed to stat snapshot {}: {err}", path.display()))?
+        .len();
+    usize::try_from(len).map_err(|_| {
+        format!(
+            "snapshot {} is too large to fit in memory on this platform",
+            path.display()
+        )
     })
 }
 
@@ -557,70 +713,6 @@ fn now_unix_seconds() -> u64 {
         .unwrap_or(0)
 }
 
-fn encode_custom_entry(value: &Value) -> Vec<u8> {
-    let _trace = profiler::scope("server::backup::encode_custom_entry");
-    let mut out = vec![1u8];
-    match value {
-        Value::String(v) => {
-            out.push(0);
-            write_bytes(&mut out, v);
-        }
-        Value::Hash(values) => {
-            out.push(1);
-            write_u32(&mut out, values.len() as u32);
-            for (field, value) in values {
-                write_bytes(&mut out, field);
-                write_bytes(&mut out, value);
-            }
-        }
-        Value::List(values) => {
-            out.push(2);
-            write_u32(&mut out, values.len() as u32);
-            for value in values {
-                write_bytes(&mut out, value);
-            }
-        }
-        Value::Set(values) => {
-            out.push(3);
-            write_u32(&mut out, values.len() as u32);
-            for value in values {
-                write_bytes(&mut out, value);
-            }
-        }
-        Value::ZSet(values) => {
-            out.push(4);
-            write_u32(&mut out, values.len() as u32);
-            for (member, score) in values {
-                write_bytes(&mut out, member);
-                out.extend_from_slice(&score.to_le_bytes());
-            }
-        }
-        Value::Geo(values) => {
-            out.push(5);
-            write_u32(&mut out, values.len() as u32);
-            for (member, (lon, lat)) in values {
-                write_bytes(&mut out, member);
-                out.extend_from_slice(&lon.to_le_bytes());
-                out.extend_from_slice(&lat.to_le_bytes());
-            }
-        }
-        Value::Stream(values) => {
-            out.push(6);
-            write_u32(&mut out, values.len() as u32);
-            for entry in values {
-                out.extend_from_slice(&entry.ms.to_le_bytes());
-                out.extend_from_slice(&entry.seq.to_le_bytes());
-                write_u32(&mut out, entry.fields.len() as u32);
-                for (field, value) in &entry.fields {
-                    write_bytes(&mut out, field);
-                    write_bytes(&mut out, value);
-                }
-            }
-        }
-    }
-    out
-}
-
 fn decode_custom_entry(payload: &[u8]) -> Result<Value, String> {
     let _trace = profiler::scope("server::backup::decode_custom_entry");
     if payload.len() < 2 || payload[0] != 1 {
@@ -727,11 +819,6 @@ fn decode_custom_entry(payload: &[u8]) -> Result<Value, String> {
     Ok(value)
 }
 
-fn write_u32(out: &mut Vec<u8>, value: u32) {
-    let _trace = profiler::scope("server::backup::write_u32");
-    out.extend_from_slice(&value.to_le_bytes());
-}
-
 fn read_u32(input: &mut &[u8]) -> Result<u32, String> {
     let _trace = profiler::scope("server::backup::read_u32");
     if input.len() < 4 {
@@ -741,12 +828,6 @@ fn read_u32(input: &mut &[u8]) -> Result<u32, String> {
     bytes.copy_from_slice(&input[..4]);
     *input = &input[4..];
     Ok(u32::from_le_bytes(bytes))
-}
-
-fn write_bytes(out: &mut Vec<u8>, value: &[u8]) {
-    let _trace = profiler::scope("server::backup::write_bytes");
-    write_u32(out, value.len() as u32);
-    out.extend_from_slice(value);
 }
 
 fn read_bytes(input: &mut &[u8]) -> Result<Vec<u8>, String> {
