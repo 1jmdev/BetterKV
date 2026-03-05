@@ -87,7 +87,7 @@ pub async fn run_listener(config: Config) -> Result<(), Box<dyn std::error::Erro
             _ = shutdown_signal() => {
                 tracing::warn!("shutdown signal received");
                 if config.snapshot_on_shutdown {
-                    let stats = write_snapshot_with_log(&store, &snapshot_path, "shutdown");
+                    let stats = write_snapshot_with_log(store.clone(), snapshot_path.clone(), "shutdown").await;
                     if stats.is_none() {
                         tracing::error!("shutdown snapshot failed");
                     }
@@ -189,34 +189,46 @@ fn spawn_periodic_snapshot(store: Store, snapshot_path: PathBuf, interval: Durat
     tokio::spawn(async move {
         loop {
             sleep(interval).await;
-            let _ = write_snapshot_with_log(&store, &snapshot_path, "periodic");
+            let _ = write_snapshot_with_log(store.clone(), snapshot_path.clone(), "periodic").await;
         }
     });
 }
 
-fn write_snapshot_with_log(
-    store: &Store,
-    snapshot_path: &PathBuf,
+async fn write_snapshot_with_log(
+    store: Store,
+    snapshot_path: PathBuf,
     reason: &str,
 ) -> Option<SnapshotStats> {
     let _trace = profiler::scope("server::listener::write_snapshot_with_log");
-    match backup::write_snapshot(store, snapshot_path) {
-        Ok(stats) => {
+    let path_for_log = snapshot_path.clone();
+    let result =
+        tokio::task::spawn_blocking(move || backup::write_snapshot(&store, &snapshot_path)).await;
+    match result {
+        Ok(Ok(stats)) => {
             tracing::info!(
                 reason,
                 keys_written = stats.keys_written,
                 bytes_written = stats.bytes_written,
-                path = %snapshot_path.display(),
+                path = %path_for_log.display(),
                 "snapshot completed"
             );
             Some(stats)
+        }
+        Ok(Err(err)) => {
+            tracing::error!(
+                reason,
+                error = %err,
+                path = %path_for_log.display(),
+                "snapshot failed"
+            );
+            None
         }
         Err(err) => {
             tracing::error!(
                 reason,
                 error = %err,
-                path = %snapshot_path.display(),
-                "snapshot failed"
+                path = %path_for_log.display(),
+                "snapshot task failed"
             );
             None
         }

@@ -23,6 +23,7 @@ pub struct AuthService {
 #[derive(Clone, Debug)]
 pub struct SessionAuth {
     user: Option<String>,
+    authorized: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -76,23 +77,23 @@ impl AuthService {
 
     pub fn new_session(&self) -> SessionAuth {
         let _trace = profiler::scope("server::auth::new_session");
-        if self.default_user_auto_auth() {
+        let state = self.inner.read();
+        if state.default_user_auto_auth() {
             SessionAuth {
                 user: Some(DEFAULT_USER.to_string()),
+                authorized: true,
             }
         } else {
-            SessionAuth { user: None }
+            SessionAuth {
+                user: None,
+                authorized: false,
+            }
         }
     }
 
     pub fn is_authorized(&self, session: &SessionAuth) -> bool {
         let _trace = profiler::scope("server::auth::is_authorized");
-        let Some(username) = &session.user else {
-            return false;
-        };
-
-        let state = self.inner.read();
-        state.users.get(username).is_some_and(|user| user.enabled)
+        session.is_authorized()
     }
 
     pub fn authenticate(&self, username: &[u8], password: &[u8]) -> Result<String, AuthError> {
@@ -122,13 +123,9 @@ impl AuthService {
         }
     }
 
-    pub fn acl_command(
-        &self,
-        session: &SessionAuth,
-        args: &[CompactArg],
-    ) -> RespFrame {
+    pub fn acl_command(&self, session: &SessionAuth, args: &[CompactArg]) -> RespFrame {
         let _trace = profiler::scope("server::auth::acl_command");
-        if !self.is_authorized(session) {
+        if !session.is_authorized() {
             return no_auth();
         }
         if args.len() < 2 {
@@ -229,19 +226,7 @@ impl AuthService {
     pub fn default_user_has_password(&self) -> bool {
         let _trace = profiler::scope("server::auth::default_user_has_password");
         let state = self.inner.read();
-        match state.users.get(DEFAULT_USER) {
-            Some(default_user) => !default_user.nopass && !default_user.passwords.is_empty(),
-            None => false,
-        }
-    }
-
-    fn default_user_auto_auth(&self) -> bool {
-        let _trace = profiler::scope("server::auth::default_user_auto_auth");
-        let state = self.inner.read();
-        state
-            .users
-            .get(DEFAULT_USER)
-            .is_some_and(|user| user.enabled && user.nopass)
+        state.default_user_has_password()
     }
 }
 
@@ -254,10 +239,28 @@ impl SessionAuth {
     pub fn set_user(&mut self, user: String) {
         let _trace = profiler::scope("server::auth::session_set_user");
         self.user = Some(user);
+        self.authorized = true;
+    }
+
+    pub fn is_authorized(&self) -> bool {
+        let _trace = profiler::scope("server::auth::session_is_authorized");
+        self.authorized
     }
 }
 
 impl AuthState {
+    fn default_user_has_password(&self) -> bool {
+        self.users
+            .get(DEFAULT_USER)
+            .is_some_and(|default_user| !default_user.nopass && !default_user.passwords.is_empty())
+    }
+
+    fn default_user_auto_auth(&self) -> bool {
+        self.users
+            .get(DEFAULT_USER)
+            .is_some_and(|user| user.enabled && user.nopass)
+    }
+
     fn set_user(&mut self, username: &str, rules: &[String]) -> Result<(), String> {
         let _trace = profiler::scope("server::auth::set_user");
         let user = self.users.entry(username.to_string()).or_insert(User {
@@ -411,5 +414,15 @@ mod tests {
             auth.authenticate(b"alice", b"wrong"),
             Err(AuthError::WrongPass)
         ));
+    }
+
+    #[test]
+    fn default_config_auto_authorizes_default_user() {
+        let _trace =
+            profiler::scope("server::auth::tests::default_config_auto_authorizes_default_user");
+        let auth = AuthService::from_config(&Config::default()).expect("auth service");
+        let session = auth.new_session();
+        assert!(session.is_authorized());
+        assert_eq!(session.user(), Some("default"));
     }
 }

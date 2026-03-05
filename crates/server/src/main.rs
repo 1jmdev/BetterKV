@@ -196,7 +196,7 @@ fn run(runtime: RuntimeArgs) -> Result<(), String> {
 
     if !ignored.is_empty() {
         let names = ignored.into_iter().collect::<Vec<_>>().join(", ");
-        eprintln!("jusbetterkvtkv-server: accepted but ignored directives: {names}");
+        eprintln!("betterkv-server: accepted but ignored directives: {names}");
     }
 
     let logging_guard = init_logging(&config)?;

@@ -30,8 +30,8 @@ impl Default for Config {
             log_file: None,
             data_dir: ".".to_string(),
             dbfilename: "dump.bkv".to_string(),
-            snapshot_interval_secs: 300,
-            snapshot_on_shutdown: true,
+            snapshot_interval_secs: 0,
+            snapshot_on_shutdown: false,
             requirepass: None,
             user_directives: Vec::new(),
         }
@@ -52,7 +52,6 @@ impl Config {
 
 fn default_shards() -> usize {
     let _trace = profiler::scope("server::config::default_shards");
-    println!("{}", default_threads().next_power_of_two());
     default_threads().next_power_of_two()
 }
 
