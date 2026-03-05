@@ -1,7 +1,7 @@
 use crate::util::{Args, int_error};
 use engine::store::{XAddId, XTrimMode};
-use types::value::StreamId;
 use protocol::types::RespFrame;
+use types::value::StreamId;
 
 pub(super) fn parse_stream_id(raw: &[u8]) -> Result<StreamId, RespFrame> {
     let _trace = profiler::scope("commands::stream::parse::parse_stream_id");

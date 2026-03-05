@@ -1,7 +1,6 @@
 use crate::dispatcher;
 use crate::util::{Args, int_error, wrong_args};
 use engine::store::Store;
-use types::value::CompactArg;
 use mlua::{HookTriggers, Lua, Table, Value, Variadic, VmState};
 use parking_lot::Mutex;
 use protocol::types::{BulkData, RespFrame};
@@ -11,6 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::thread;
 use tokio::sync::{Semaphore, SemaphorePermit, TryAcquireError};
+use types::value::CompactArg;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ScriptDebugMode {

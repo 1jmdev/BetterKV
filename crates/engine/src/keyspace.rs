@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use super::Store;
 use super::helpers::{is_expired, monotonic_now_ms, purge_if_expired};
 use super::pattern::{CompiledPattern, wildcard_match};
-use types::value::{CompactKey, CompactValue, Entry, ZSetValueMap, StreamValue, StreamId};
+use types::value::{CompactKey, CompactValue, Entry, StreamId, StreamValue, ZSetValueMap};
 
 #[derive(Clone, Debug)]
 pub struct PreDecodedRestoreEntry {

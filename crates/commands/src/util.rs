@@ -1,5 +1,5 @@
-use types::value::CompactArg;
 use protocol::types::RespFrame;
+use types::value::CompactArg;
 
 pub type Args = [CompactArg];
 

@@ -1,8 +1,8 @@
 use crate::stream::parse::{parse_count, parse_stream_id, stream_id_to_bulk};
 use crate::util::{Args, wrong_args, wrong_type};
 use engine::store::{Store, StreamRangeItem};
-use types::value::StreamId;
 use protocol::types::{BulkData, RespFrame};
+use types::value::StreamId;
 
 pub(crate) fn xrange(store: &Store, args: &Args) -> RespFrame {
     let _trace = profiler::scope("commands::stream::range::xrange");

@@ -415,15 +415,9 @@ fn wildcard_match(pattern: &[u8], text: &[u8]) -> bool {
 fn encode_message_frame(channel: &[u8], payload: &[u8]) -> Bytes {
     let _trace = profiler::scope("server::pubsub::encode_message_frame");
     let frame = RespFrame::Array(Some(vec![
-        RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(
-            b"message",
-        )))),
-        RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(
-            channel,
-        )))),
-        RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(
-            payload,
-        )))),
+        RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(b"message")))),
+        RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(channel)))),
+        RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(payload)))),
     ]));
     let mut out = BytesMut::with_capacity(channel.len() + payload.len() + 48);
 
@@ -435,18 +429,10 @@ fn encode_message_frame(channel: &[u8], payload: &[u8]) -> Bytes {
 fn encode_pmessage_frame(pattern: &[u8], channel: &[u8], payload: &[u8]) -> Bytes {
     let _trace = profiler::scope("server::pubsub::encode_pmessage_frame");
     let frame = RespFrame::Array(Some(vec![
-        RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(
-            b"pmessage",
-        )))),
-        RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(
-            pattern,
-        )))),
-        RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(
-            channel,
-        )))),
-        RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(
-            payload,
-        )))),
+        RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(b"pmessage")))),
+        RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(pattern)))),
+        RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(channel)))),
+        RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(payload)))),
     ]));
     let mut out = BytesMut::with_capacity(pattern.len() + channel.len() + payload.len() + 56);
 

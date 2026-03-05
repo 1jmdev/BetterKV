@@ -2,8 +2,8 @@ use std::time::Duration;
 
 use crate::util::{Args, eq_ascii, wrong_args, wrong_type};
 use engine::store::Store;
-use types::value::CompactArg;
 use protocol::types::{BulkData, RespFrame};
+use types::value::CompactArg;
 
 pub(crate) fn get(store: &Store, args: &Args) -> RespFrame {
     let _trace = profiler::scope("commands::string::get");

@@ -1,6 +1,6 @@
 use crate::store::Store;
-use types::value::{CompactArg, CompactKey, CompactValue};
 use sha1::{Digest, Sha1};
+use types::value::{CompactArg, CompactKey, CompactValue};
 
 impl Store {
     pub fn script_load(&self, script: &[u8]) -> Vec<u8> {

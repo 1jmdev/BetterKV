@@ -1,8 +1,8 @@
 use ahash::AHashMap;
 
 use engine::store::Store;
-use types::value::CompactArg;
 use protocol::types::RespFrame;
+use types::value::CompactArg;
 
 #[derive(Default)]
 pub struct TransactionState {

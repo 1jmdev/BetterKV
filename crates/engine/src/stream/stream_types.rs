@@ -3,7 +3,7 @@ use hashbrown::HashMap;
 
 use crate::store::{XAddId, XTrimMode};
 use types::value::{
-    CompactArg, CompactKey, CompactValue, StreamId, StreamPendingEntry, StreamValue
+    CompactArg, CompactKey, CompactValue, StreamId, StreamPendingEntry, StreamValue,
 };
 
 pub struct StreamRangeItem {

@@ -2,8 +2,8 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use commands::dispatcher::dispatch_args;
 use engine::store::Store;
-use types::value::CompactArg;
 use protocol::types::{BulkData, RespFrame};
+use types::value::CompactArg;
 
 use super::super::pubsub::{ConnectionPubSub, PubSubHub};
 use super::notifications::emit_command_notifications;

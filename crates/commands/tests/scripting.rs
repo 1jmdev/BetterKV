@@ -4,8 +4,8 @@ use std::time::{Duration, Instant};
 
 use commands::dispatcher;
 use engine::store::Store;
-use types::value::CompactArg;
 use protocol::types::{BulkData, RespFrame};
+use types::value::CompactArg;
 
 fn test_lock() -> &'static Mutex<()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();

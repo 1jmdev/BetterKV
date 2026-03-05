@@ -1,8 +1,8 @@
 use crate::stream::parse::{parse_stream_id, parse_xadd_id, parse_xtrim_args, stream_id_to_bulk};
 use crate::util::{Args, wrong_args, wrong_type};
 use engine::store::{Store, XTrimMode};
-use types::value::StreamId;
 use protocol::types::RespFrame;
+use types::value::StreamId;
 
 pub(crate) fn xadd(store: &Store, args: &Args) -> RespFrame {
     let _trace = profiler::scope("commands::stream::add::xadd");

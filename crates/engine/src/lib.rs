@@ -31,8 +31,8 @@ use ahash::RandomState;
 use hashbrown::HashMap;
 use parking_lot::RwLock;
 
-use types::value::{CompactKey, Entry, CompactValue};
 use rehash::RehashingMap;
+use types::value::{CompactKey, CompactValue, Entry};
 
 type StoreMap = RehashingMap<CompactKey, Entry>;
 type TtlMap = HashMap<CompactKey, u64, RandomState>;
