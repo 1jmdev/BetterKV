@@ -1,35 +1,56 @@
 use crate::store::Store;
-use types::value::{CompactArg, CompactKey, CompactValue, Entry};
+use ahash::RandomState;
+use types::value::{CompactArg, CompactKey, CompactValue, Entry, HashValueMap};
 
 use super::super::helpers::{is_expired, monotonic_now_ms, purge_if_expired};
 use super::{collect_pairs, get_hash_map, get_hash_map_mut};
 
 impl Store {
-    pub fn hset(&self, key: &[u8], pairs: &[(CompactArg, CompactArg)]) -> Result<i64, ()> {
-        let _trace = profiler::scope("engine::hash::core::hset");
+    pub fn hset_args(&self, key: &[u8], pairs: &[CompactArg]) -> Result<i64, ()> {
+        let _trace = profiler::scope("engine::hash::core::hset_args");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
         let now_ms = monotonic_now_ms();
         let _ = purge_if_expired(&mut shard, key, now_ms);
 
+        let pair_count = pairs.len() / 2;
         let entry = shard
             .entries
-            .get_or_insert_with(CompactKey::from_slice(key), Entry::empty_hash);
+            .get_or_insert_with(CompactKey::from_slice(key), || {
+                Entry::Hash(Box::new(HashValueMap::with_capacity_and_hasher(
+                    pair_count,
+                    RandomState::new(),
+                )))
+            });
 
         let map = get_hash_map_mut(entry).ok_or(())?;
+        if map.is_empty() {
+            map.reserve(pair_count);
+        }
+
         let mut created = 0;
-        for (field, value) in pairs {
-            if map
-                .insert(
-                    CompactKey::from_slice(field.as_slice()),
-                    CompactValue::from_slice(value.as_slice()),
-                )
-                .is_none()
-            {
+        for chunk in pairs.chunks_exact(2) {
+            if map.insert(chunk[0].clone(), chunk[1].clone()).is_none() {
                 created += 1;
             }
         }
+
         Ok(created)
+    }
+
+    pub fn hset(&self, key: &[u8], pairs: &[(CompactArg, CompactArg)]) -> Result<i64, ()> {
+        let _trace = profiler::scope("engine::hash::core::hset");
+        if pairs.is_empty() {
+            return Ok(0);
+        }
+
+        let mut flat = Vec::with_capacity(pairs.len() * 2);
+        for (field, value) in pairs {
+            flat.push(field.clone());
+            flat.push(value.clone());
+        }
+
+        self.hset_args(key, &flat)
     }
 
     pub fn hsetnx(&self, key: &[u8], field: &[u8], value: &[u8]) -> Result<i64, ()> {

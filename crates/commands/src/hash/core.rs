@@ -1,4 +1,4 @@
-use crate::util::{Args, wrong_args, wrong_type};
+use crate::util::{wrong_args, wrong_type, Args};
 use engine::store::Store;
 use protocol::types::{BulkData, RespFrame};
 
@@ -8,12 +8,7 @@ pub(crate) fn hset(store: &Store, args: &Args) -> RespFrame {
         return wrong_args("HSET");
     }
 
-    let pairs: Vec<_> = args[2..]
-        .chunks(2)
-        .map(|chunk| (chunk[0].clone(), chunk[1].clone()))
-        .collect();
-
-    match store.hset(&args[1], &pairs) {
+    match store.hset_args(&args[1], &args[2..]) {
         Ok(created) => RespFrame::Integer(created),
         Err(_) => wrong_type(),
     }
@@ -25,12 +20,7 @@ pub(crate) fn hmset(store: &Store, args: &Args) -> RespFrame {
         return wrong_args("HMSET");
     }
 
-    let pairs: Vec<_> = args[2..]
-        .chunks(2)
-        .map(|chunk| (chunk[0].clone(), chunk[1].clone()))
-        .collect();
-
-    match store.hset(&args[1], &pairs) {
+    match store.hset_args(&args[1], &args[2..]) {
         Ok(_) => RespFrame::ok(),
         Err(_) => wrong_type(),
     }

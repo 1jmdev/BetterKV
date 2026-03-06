@@ -98,33 +98,24 @@ impl Store {
             return;
         }
 
-        // Pre-size per-shard buffers to avoid repeated growth when MSET carries
-        // many keys.
-        let mut per_shard_counts = vec![0usize; shard_count];
-        for chunk in pairs.chunks_exact(2) {
-            let idx = self.shard_index(chunk[0].as_slice());
-            per_shard_counts[idx] += 1;
-        }
-
-        let mut grouped: Vec<Vec<(CompactKey, Entry)>> = per_shard_counts
-            .into_iter()
-            .map(Vec::with_capacity)
-            .collect();
+        let mut grouped: Vec<Vec<(CompactKey, Entry)>> = vec![Vec::new(); shard_count];
+        let mut touched = Vec::with_capacity(pair_count.min(shard_count));
 
         for chunk in pairs.chunks_exact(2) {
             let key = &chunk[0];
             let value = &chunk[1];
             let idx = self.shard_index(key.as_slice());
+            if grouped[idx].is_empty() {
+                touched.push(idx);
+            }
             grouped[idx].push((
                 CompactKey::from_slice(key.as_slice()),
                 Entry::from_slice(value.as_slice()),
             ));
         }
 
-        for (idx, entries) in grouped.into_iter().enumerate() {
-            if entries.is_empty() {
-                continue;
-            }
+        for idx in touched {
+            let entries = std::mem::take(&mut grouped[idx]);
 
             let mut shard = self.shards[idx].write();
             let has_ttl = !shard.ttl.is_empty();

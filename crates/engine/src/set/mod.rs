@@ -22,6 +22,11 @@ fn new_set() -> SetValue {
     SetValue::with_hasher(RandomState::new())
 }
 
+fn new_set_with_capacity(capacity: usize) -> SetValue {
+    let _trace = profiler::scope("engine::set::new_set_with_capacity");
+    SetValue::with_capacity_and_hasher(capacity, RandomState::new())
+}
+
 fn collect_members(set: &SetValue) -> Vec<CompactKey> {
     let _trace = profiler::scope("engine::set::collect_members");
     set.iter().cloned().collect()
