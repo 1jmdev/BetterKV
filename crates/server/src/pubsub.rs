@@ -1,5 +1,5 @@
+use std::sync::atomic::{AtomicBool, AtomicU16, AtomicU64, Ordering};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
 
 use ahash::{AHashMap, AHashSet, RandomState};
 use bytes::{Bytes, BytesMut};
@@ -19,6 +19,11 @@ pub struct PubSubHub {
     hash_builder: RandomState,
     next_id: Arc<AtomicU64>,
     notify_mask: Arc<AtomicU16>,
+    /// Cached result of `keyspace_notifications_enabled()`.
+    /// Updated atomically whenever `notify_mask` changes.
+    /// Lets the hot dispatch path do a single cheap boolean load instead of
+    /// two atomic loads + a multi-flag bitmask calculation on every command.
+    notify_enabled: Arc<AtomicBool>,
 }
 
 struct PubSubShard {
@@ -50,6 +55,7 @@ impl PubSubHub {
             hash_builder: RandomState::new(),
             next_id: Arc::new(AtomicU64::new(1)),
             notify_mask: Arc::new(AtomicU16::new(0)),
+            notify_enabled: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -194,6 +200,12 @@ impl PubSubHub {
         let _trace = profiler::scope("server::pubsub::set_notify_flags");
         let mask = flags_to_mask(flags)?;
         self.notify_mask.store(mask, Ordering::Relaxed);
+        let has_output_target = (mask & (FLAG_KEYSPACE | FLAG_KEYEVENT)) != 0;
+        let has_event_classes = (mask
+            & (FLAG_A | FLAG_G | FLAG_S | FLAG_H | FLAG_Z | FLAG_L | FLAG_DOLLAR | FLAG_X))
+            != 0;
+        self.notify_enabled
+            .store(has_output_target && has_event_classes, Ordering::Relaxed);
         Ok(())
     }
 
@@ -204,12 +216,7 @@ impl PubSubHub {
 
     pub fn keyspace_notifications_enabled(&self) -> bool {
         let _trace = profiler::scope("server::pubsub::keyspace_notifications_enabled");
-        let mask = self.notify_mask.load(Ordering::Relaxed);
-        let has_output_target = (mask & (FLAG_KEYSPACE | FLAG_KEYEVENT)) != 0;
-        let has_event_classes = (mask
-            & (FLAG_A | FLAG_G | FLAG_S | FLAG_H | FLAG_Z | FLAG_L | FLAG_DOLLAR | FLAG_X))
-            != 0;
-        has_output_target && has_event_classes
+        self.notify_enabled.load(Ordering::Relaxed)
     }
 
     pub fn emit_keyspace_event(&self, event: &[u8], key: &[u8], class: u8) {

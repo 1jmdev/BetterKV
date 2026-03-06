@@ -246,6 +246,11 @@ impl SessionAuth {
         let _trace = profiler::scope("server::auth::session_is_authorized");
         self.authorized
     }
+
+    #[inline(always)]
+    pub fn authorized(&self) -> bool {
+        self.authorized
+    }
 }
 
 impl AuthState {

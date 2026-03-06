@@ -26,6 +26,25 @@ impl TransactionState {
             return RespFrame::error_static("ERR empty command");
         }
 
+        // hot path
+        if !self.in_multi {
+            let cmd = args[0].as_slice();
+            match cmd.first().copied() {
+                Some(b'M') if cmd == b"MULTI" => return self.multi(args.as_slice()),
+                Some(b'E') if cmd == b"EXEC" => {
+                    return RespFrame::error_static("ERR EXEC without MULTI")
+                }
+                Some(b'D') if cmd == b"DISCARD" => {
+                    return RespFrame::error_static("ERR DISCARD without MULTI")
+                }
+                Some(b'W') if cmd == b"WATCH" => return self.watch(store, args.as_slice()),
+                Some(b'U') if cmd == b"UNWATCH" => return self.unwatch(args.as_slice()),
+                _ => {}
+            }
+            return execute(store, args.as_slice());
+        }
+
+        // cold path
         match classify_transaction_command(args[0].as_slice()) {
             TransactionCommand::Multi => self.multi(args.as_slice()),
             TransactionCommand::Exec => self.exec_with(store, args.as_slice(), execute),
@@ -33,12 +52,8 @@ impl TransactionState {
             TransactionCommand::Watch => self.watch(store, args.as_slice()),
             TransactionCommand::Unwatch => self.unwatch(args.as_slice()),
             TransactionCommand::Other => {
-                if self.in_multi {
-                    self.queued.push(std::mem::take(args));
-                    RespFrame::simple_static("QUEUED")
-                } else {
-                    execute(store, args.as_slice())
-                }
+                self.queued.push(std::mem::take(args));
+                RespFrame::simple_static("QUEUED")
             }
         }
     }

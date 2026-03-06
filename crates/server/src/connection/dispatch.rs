@@ -33,6 +33,12 @@ pub(super) fn execute_regular_command(
 
     let command = args[0].as_slice();
 
+    // Hot path: already authorized
+    if auth_state.authorized() {
+        return dispatch_authorized(store, hub, push_tx, pubsub_state, profiler, command, args);
+    }
+
+    // Cold path: not yet authorized.
     if command == b"AUTH" {
         return auth_command(auth, auth_state, args);
     }
@@ -47,14 +53,32 @@ pub(super) fn execute_regular_command(
         }
     }
 
-    if !auth.is_authorized(auth_state) && !is_allowed_without_auth(command) {
+    if !auth_state.authorized() && !is_allowed_without_auth(command) {
         return auth::no_auth();
     }
 
-    if let Some(response) =
-        handle_pubsub_or_config_command(hub, push_tx, pubsub_state, command, args)
-    {
-        return response;
+    dispatch_authorized(store, hub, push_tx, pubsub_state, profiler, command, args)
+}
+
+#[inline]
+fn dispatch_authorized(
+    store: &Store,
+    hub: &PubSubHub,
+    push_tx: &UnboundedSender<RespFrame>,
+    pubsub_state: &mut ConnectionPubSub,
+    profiler: &ProfileHub,
+    command: &[u8],
+    args: &[CompactArg],
+) -> RespFrame {
+    match command.first().copied() {
+        Some(b'P' | b'S' | b'U' | b'C') => {
+            if let Some(response) =
+                handle_pubsub_or_config_command(hub, push_tx, pubsub_state, command, args)
+            {
+                return response;
+            }
+        }
+        _ => {}
     }
 
     let key = args.get(1).map(CompactArg::as_slice);
