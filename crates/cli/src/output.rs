@@ -21,6 +21,16 @@ fn render_raw(frame: &RespFrame) -> String {
             .map(|v| String::from_utf8_lossy(v.as_slice()).to_string())
             .collect::<Vec<String>>()
             .join("\n"),
+        RespFrame::BulkOptions(values) => values
+            .iter()
+            .map(|value| {
+                value
+                    .as_ref()
+                    .map(|v| String::from_utf8_lossy(v.as_slice()).to_string())
+                    .unwrap_or_default()
+            })
+            .collect::<Vec<String>>()
+            .join("\n"),
         RespFrame::Array(Some(items)) => items
             .iter()
             .map(render_raw)
@@ -55,6 +65,20 @@ fn render_human(frame: &RespFrame) -> String {
             let mut out = String::new();
             for (index, value) in values.iter().enumerate() {
                 let rendered = format!("\"{}\"", String::from_utf8_lossy(value.as_slice()));
+                out.push_str(&format!("{}) {}\n", index + 1, rendered));
+            }
+            out.trim_end().to_string()
+        }
+        RespFrame::BulkOptions(values) => {
+            if values.is_empty() {
+                return "(empty array)".to_string();
+            }
+            let mut out = String::new();
+            for (index, value) in values.iter().enumerate() {
+                let rendered = value
+                    .as_ref()
+                    .map(|v| format!("\"{}\"", String::from_utf8_lossy(v.as_slice())))
+                    .unwrap_or_else(|| "(nil)".to_string());
                 out.push_str(&format!("{}) {}\n", index + 1, rendered));
             }
             out.trim_end().to_string()
