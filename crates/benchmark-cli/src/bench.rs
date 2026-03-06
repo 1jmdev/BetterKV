@@ -336,7 +336,6 @@ fn build_setup_command(kind: BenchKind, key: &[u8], value: &[u8]) -> Option<Vec<
     match kind {
         BenchKind::Get
         | BenchKind::GetSet
-        | BenchKind::Mget
         | BenchKind::Exists
         | BenchKind::Expire
         | BenchKind::Ttl
@@ -345,7 +344,20 @@ fn build_setup_command(kind: BenchKind, key: &[u8], value: &[u8]) -> Option<Vec<
         | BenchKind::GetRange
         | BenchKind::EvalRo
         | BenchKind::EvalShaRo => Some(encode_resp_parts(&[b"SET", key, value])),
-        BenchKind::Mset => Some(encode_resp_parts(&[b"DEL", key, b"bench:m2"])),
+        BenchKind::Mget => {
+            let key2 = related_multi_key(key);
+            Some(encode_resp_parts(&[
+                b"MSET",
+                key,
+                value,
+                key2.as_slice(),
+                value,
+            ]))
+        }
+        BenchKind::Mset => {
+            let key2 = related_multi_key(key);
+            Some(encode_resp_parts(&[b"DEL", key, key2.as_slice()]))
+        }
         BenchKind::Lpop | BenchKind::Rpop | BenchKind::Llen | BenchKind::Lrange => {
             Some(encode_resp_parts(&[b"LPUSH", key, value]))
         }
@@ -363,6 +375,13 @@ fn build_setup_command(kind: BenchKind, key: &[u8], value: &[u8]) -> Option<Vec<
         | BenchKind::Zrevrank => Some(encode_resp_parts(&[b"ZADD", key, b"1", value])),
         _ => None,
     }
+}
+
+fn related_multi_key(key: &[u8]) -> Vec<u8> {
+    let mut related = Vec::with_capacity(key.len() + 3);
+    related.extend_from_slice(key);
+    related.extend_from_slice(b":m2");
+    related
 }
 
 fn build_command(
@@ -394,14 +413,12 @@ fn build_command(
         }
         BenchKind::Mset => {
             let key1 = make_key(key_base, sequence);
-            let mut key2 = key1.clone();
-            key2.extend_from_slice(b":m2");
+            let key2 = related_multi_key(&key1);
             encode_resp_parts(&[b"MSET", key1.as_slice(), value, key2.as_slice(), value])
         }
         BenchKind::Mget => {
             let key1 = make_key(key_base, sequence);
-            let mut key2 = key1.clone();
-            key2.extend_from_slice(b":m2");
+            let key2 = related_multi_key(&key1);
             encode_resp_parts(&[b"MGET", key1.as_slice(), key2.as_slice()])
         }
         BenchKind::Del => {
