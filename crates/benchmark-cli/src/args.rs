@@ -6,7 +6,7 @@ use clap::{ArgAction, Parser};
     version,
     disable_help_flag = true,
     disable_version_flag = true,
-    about = "Redis-benchmark compatible load tester for BetterKV"
+    about = "Flexible Redis-style load tester for BetterKV"
 )]
 pub struct Args {
     #[arg(short = 'h', long = "host", default_value = "127.0.0.1")]
@@ -24,7 +24,7 @@ pub struct Args {
     #[arg(short = 'n', long = "requests", default_value_t = 100_000)]
     pub requests: u64,
 
-    #[arg(short = 'd', long = "data-size", default_value_t = 3)]
+    #[arg(short = 'd', long = "data-size", default_value_t = 32)]
     pub data_size: usize,
 
     #[arg(short = 'P', long = "pipeline", default_value_t = 1)]
@@ -32,6 +32,15 @@ pub struct Args {
 
     #[arg(short = 't', long = "tests", value_delimiter = ',', num_args = 1..)]
     pub tests: Vec<String>,
+
+    #[arg(short = 's', long = "scenarios", value_delimiter = ',', num_args = 1..)]
+    pub scenarios: Vec<String>,
+
+    #[arg(long = "list-tests", default_value_t = false)]
+    pub list_tests: bool,
+
+    #[arg(long = "list-scenarios", default_value_t = false)]
+    pub list_scenarios: bool,
 
     #[arg(short = 'q', long = "quiet", default_value_t = false)]
     pub quiet: bool,
@@ -41,6 +50,12 @@ pub struct Args {
 
     #[arg(short = 'r', long = "random-keys", default_value_t = false)]
     pub random_keys: bool,
+
+    #[arg(long = "keyspace", default_value_t = 10_000)]
+    pub keyspace: u64,
+
+    #[arg(long = "key-prefix", default_value = "betterkv:bench")]
+    pub key_prefix: String,
 
     #[arg(long = "threads", default_value_t = default_threads())]
     pub threads: usize,
@@ -59,8 +74,17 @@ pub fn validate_args(args: &Args) -> Result<(), String> {
     if args.requests == 0 {
         return Err("--requests must be greater than 0".to_string());
     }
+    if args.data_size == 0 {
+        return Err("--data-size must be greater than 0".to_string());
+    }
     if args.pipeline == 0 {
         return Err("--pipeline must be greater than 0".to_string());
+    }
+    if args.keyspace == 0 {
+        return Err("--keyspace must be greater than 0".to_string());
+    }
+    if args.key_prefix.trim().is_empty() {
+        return Err("--key-prefix must not be empty".to_string());
     }
     if args.threads == 0 {
         return Err("--threads must be greater than 0".to_string());

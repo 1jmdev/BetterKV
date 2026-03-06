@@ -11,7 +11,7 @@ use clap::Parser;
 use args::{Args, validate_args};
 use bench::run_single_benchmark;
 use render::render_result;
-use spec::parse_specs;
+use spec::{resolve_workload, scenarios, tests};
 
 #[global_allocator]
 static GLOBAL_ALLOCATOR: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
@@ -44,13 +44,27 @@ fn main() -> ExitCode {
 }
 
 async fn run(args: Args) -> Result<(), String> {
-    let specs = parse_specs(&args.tests)?;
-
-    if args.csv {
-        println!("test,requests,clients,seconds,rps,avg_ms,p50_ms,p95_ms,p99_ms");
+    if args.list_tests {
+        for spec in tests() {
+            println!("{}", spec.name);
+        }
+        return Ok(());
     }
 
-    for spec in specs {
+    if args.list_scenarios {
+        for scenario in scenarios() {
+            println!("{} - {}", scenario.key, scenario.description);
+        }
+        return Ok(());
+    }
+
+    let workload = resolve_workload(&args)?;
+
+    if args.csv {
+        println!("test,scenario,requests,clients,seconds,rps,avg_ms,p50_ms,p95_ms,p99_ms,pipeline,data_size,random_keys,keyspace");
+    }
+
+    for spec in workload {
         let result = run_single_benchmark(&args, spec).await?;
         render_result(&args, &result);
     }
