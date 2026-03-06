@@ -16,6 +16,7 @@ pub async fn run(config: config::Config) -> Result<(), Box<dyn std::error::Error
     listener::run_listener(config).await
 }
 
+#[cfg(feature = "profiling")]
 pub async fn run_with_profile(
     config: config::Config,
     profile_hub: profile::ProfileHub,
