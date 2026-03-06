@@ -39,6 +39,7 @@ pub enum RespFrame {
     ErrorStatic(&'static str),
     Integer(i64),
     Bulk(Option<BulkData>),
+    BulkOptions(Vec<Option<CompactValue>>),
     BulkValues(Vec<CompactValue>),
     /// Pre-encoded RESP bytes, written directly to the output buffer.
     PreEncoded(Bytes),

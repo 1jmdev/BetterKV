@@ -49,6 +49,17 @@ impl Encoder {
             }
             RespFrame::Bulk(None) => out.put_slice(NULL_BULK),
             RespFrame::Bulk(Some(v)) => self.encode_bulk_bytes(v.as_slice(), out),
+            RespFrame::BulkOptions(values) => {
+                out.put_u8(b'*');
+                out.put_slice(self.itoa.format(values.len()).as_bytes());
+                out.put_slice(CRLF);
+                for value in values {
+                    match value {
+                        Some(v) => self.encode_bulk_bytes(v.as_slice(), out),
+                        None => out.put_slice(NULL_BULK),
+                    }
+                }
+            }
             RespFrame::BulkValues(values) => {
                 out.put_u8(b'*');
                 out.put_slice(self.itoa.format(values.len()).as_bytes());

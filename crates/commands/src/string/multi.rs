@@ -1,19 +1,14 @@
-use crate::util::{Args, wrong_args, wrong_type};
+use crate::util::{wrong_args, wrong_type, Args};
 use engine::store::Store;
-use protocol::types::{BulkData, RespFrame};
+use protocol::types::RespFrame;
 
 pub(crate) fn mget(store: &Store, args: &Args) -> RespFrame {
     let _trace = profiler::scope("commands::string::multi::mget");
     if args.len() < 2 {
         return wrong_args("MGET");
     }
-    match store.mget(&args[1..]) {
-        Ok(values) => RespFrame::Array(Some(
-            values
-                .into_iter()
-                .map(|value| RespFrame::Bulk(value.map(BulkData::Value)))
-                .collect(),
-        )),
+    match store.mget_encode(&args[1..]) {
+        Ok(bytes) => RespFrame::PreEncoded(bytes),
         Err(_) => wrong_type(),
     }
 }

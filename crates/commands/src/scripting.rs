@@ -1,5 +1,5 @@
 use crate::dispatcher;
-use crate::util::{Args, int_error, wrong_args};
+use crate::util::{int_error, wrong_args, Args};
 use engine::store::Store;
 use mlua::{HookTriggers, Lua, Table, Value, Variadic, VmState};
 use parking_lot::Mutex;
@@ -836,6 +836,16 @@ fn resp_frame_to_lua(lua: &Lua, frame: RespFrame, protected: bool) -> mlua::Resu
         RespFrame::Integer(value) => Ok(Value::Integer(value)),
         RespFrame::Bulk(Some(value)) => Ok(Value::String(lua.create_string(value.as_slice())?)),
         RespFrame::Bulk(None) => Ok(Value::Boolean(false)),
+        RespFrame::BulkOptions(values) => {
+            let table = lua.create_table()?;
+            for (idx, value) in values.into_iter().enumerate() {
+                match value {
+                    Some(value) => table.set(idx + 1, lua.create_string(value.as_slice())?)?,
+                    None => table.set(idx + 1, Value::Boolean(false))?,
+                }
+            }
+            Ok(Value::Table(table))
+        }
         RespFrame::BulkValues(values) => {
             let table = lua.create_table()?;
             for (idx, value) in values.into_iter().enumerate() {
