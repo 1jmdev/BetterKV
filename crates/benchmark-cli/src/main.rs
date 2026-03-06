@@ -23,8 +23,7 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    let runtime = match tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(args.threads)
+    let runtime = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
     {

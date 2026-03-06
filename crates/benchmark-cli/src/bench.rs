@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::thread;
 use std::time::Instant;
 
 use bytes::BytesMut;
@@ -43,10 +44,17 @@ struct Shared {
     spec: BenchSpec,
 }
 
+#[derive(Clone, Copy)]
+struct ClientPlan {
+    client_id: u64,
+    quota: u64,
+}
+
 pub async fn run_single_benchmark(args: &Args, spec: BenchSpec) -> Result<BenchResult, String> {
     let clients = args.clients.min(args.requests as usize).max(1);
     let base = args.requests / clients as u64;
     let extra = (args.requests % clients as u64) as usize;
+    let thread_count = args.threads.min(clients).max(1);
 
     let shared = Arc::new(Shared {
         host: args.host.clone(),
@@ -58,27 +66,48 @@ pub async fn run_single_benchmark(args: &Args, spec: BenchSpec) -> Result<BenchR
         spec,
     });
 
-    let mut handles = Vec::with_capacity(clients);
-    let start = Instant::now();
+    let mut plans = Vec::with_capacity(clients);
     for client_id in 0..clients {
         let quota = base + u64::from(client_id < extra);
         if quota == 0 {
             continue;
         }
+        plans.push(ClientPlan {
+            client_id: client_id as u64,
+            quota,
+        });
+    }
+
+    let mut shards = vec![Vec::new(); thread_count];
+    for (index, plan) in plans.into_iter().enumerate() {
+        shards[index % thread_count].push(plan);
+    }
+
+    let start = Instant::now();
+    let mut handles = Vec::with_capacity(thread_count);
+    for (thread_index, shard) in shards.into_iter().enumerate() {
+        if shard.is_empty() {
+            continue;
+        }
         let cfg = Arc::clone(&shared);
-        handles.push(tokio::spawn(async move {
-            run_worker(client_id as u64, quota, cfg).await
-        }));
+        handles.push(
+            thread::Builder::new()
+                .name(format!("betterkv-bench-{thread_index}"))
+                .spawn(move || run_thread_shard(cfg, shard))
+                .map_err(|err| format!("failed to spawn benchmark thread {thread_index}: {err}"))?,
+        );
     }
 
     let mut total_completed = 0u64;
     let mut samples = Vec::<u64>::new();
     for handle in handles {
-        let stats = handle
-            .await
-            .map_err(|err| format!("worker join error: {err}"))??;
-        total_completed += stats.completed;
-        samples.extend(stats.lat_samples_ns);
+        let thread_stats = handle
+            .join()
+            .map_err(|_| "benchmark thread panicked".to_string())??;
+        for stats in thread_stats {
+            total_completed += stats.completed;
+            samples.extend(stats.lat_samples_ns);
+        }
     }
 
     let elapsed = start.elapsed();
@@ -103,6 +132,33 @@ pub async fn run_single_benchmark(args: &Args, spec: BenchSpec) -> Result<BenchR
         p50_ms,
         p95_ms,
         p99_ms,
+    })
+}
+
+fn run_thread_shard(cfg: Arc<Shared>, shard: Vec<ClientPlan>) -> Result<Vec<WorkerStats>, String> {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|err| format!("failed to create worker runtime: {err}"))?;
+
+    runtime.block_on(async move {
+        let mut handles = Vec::with_capacity(shard.len());
+        for plan in shard {
+            let worker_cfg = Arc::clone(&cfg);
+            handles.push(tokio::spawn(async move {
+                run_worker(plan.client_id, plan.quota, worker_cfg).await
+            }));
+        }
+
+        let mut results = Vec::with_capacity(handles.len());
+        for handle in handles {
+            results.push(
+                handle
+                    .await
+                    .map_err(|err| format!("worker join error: {err}"))??,
+            );
+        }
+        Ok(results)
     })
 }
 
