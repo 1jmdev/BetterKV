@@ -328,7 +328,7 @@ export function Navbar() {
                                 <NavigationMenuTrigger>
                                     Product
                                 </NavigationMenuTrigger>
-                                <NavigationMenuContent className="w-[340px]">
+                                <NavigationMenuContent className="w-85">
                                     <div className="grid gap-0.5 p-1.5">
                                         {productLinks.map((item) => (
                                             <NavDropdownItem
@@ -344,7 +344,7 @@ export function Navbar() {
                                 <NavigationMenuTrigger>
                                     Developers
                                 </NavigationMenuTrigger>
-                                <NavigationMenuContent className="w-[340px]">
+                                <NavigationMenuContent className="w-85">
                                     <div className="grid gap-0.5 p-1.5">
                                         {developerLinks.map((item) => (
                                             <NavDropdownItem
@@ -360,7 +360,7 @@ export function Navbar() {
                                 <NavigationMenuTrigger>
                                     Use Cases
                                 </NavigationMenuTrigger>
-                                <NavigationMenuContent className="w-[380px]">
+                                <NavigationMenuContent className="w-95">
                                     <div className="grid grid-cols-2 gap-0.5 p-1.5">
                                         {useCaseLinks.map((item) => (
                                             <NavigationMenuLink
@@ -435,7 +435,7 @@ export function Navbar() {
                         </SheetTrigger>
                         <SheetContent
                             side="right"
-                            className="w-[280px] overflow-y-auto p-0"
+                            className="w-70 overflow-y-auto p-0"
                             showCloseButton={false}
                         >
                             {/* Header with logo + close */}

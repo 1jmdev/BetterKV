@@ -101,7 +101,7 @@ export function RoadmapPage() {
             <section className="py-24">
                 <div className="mx-auto max-w-4xl px-6">
                     <div className="relative space-y-8">
-                        <div className="absolute left-[19px] top-0 bottom-0 w-px bg-border/50" />
+                        <div className="absolute left-4.75 top-0 bottom-0 w-px bg-border/50" />
 
                         {phases.map((phase, i) => (
                             <motion.div

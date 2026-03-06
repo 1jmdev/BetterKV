@@ -197,7 +197,7 @@ export function CompatibilityPage() {
                         {...fadeUp}
                         className="mt-10 rounded-xl border border-border/50 overflow-x-auto"
                     >
-                        <table className="w-full min-w-[400px] text-sm">
+                        <table className="w-full min-w-100 text-sm">
                             <thead>
                                 <tr className="border-b border-border/50 bg-card">
                                     <th className="px-4 py-3.5 text-left font-medium text-muted-foreground sm:px-6">
