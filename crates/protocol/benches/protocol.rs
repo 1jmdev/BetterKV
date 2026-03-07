@@ -1,13 +1,13 @@
 use bytes::BytesMut;
 use criterion::{
-    BatchSize, BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main,
+    BatchSize, BenchmarkId, Criterion, Throughput, criterion_group, criterion_main,
 };
 use protocol::{
     encoder::Encoder,
     parser,
     types::{BulkData, RespFrame},
 };
-use std::hint::black_box as std_black_box;
+use std::hint::black_box;
 use types::value::{CompactArg, CompactValue};
 
 fn inline_command() -> BytesMut {
@@ -87,7 +87,7 @@ fn bench_parse_command(c: &mut Criterion) {
             || (inline.clone(), Vec::with_capacity(8)),
             |(mut src, mut args)| {
                 parser::parse_command_into(black_box(&mut src), black_box(&mut args)).unwrap();
-                std_black_box(args)
+                black_box(args)
             },
             BatchSize::SmallInput,
         )
@@ -105,7 +105,7 @@ fn bench_parse_command(c: &mut Criterion) {
                     |(mut src, mut args)| {
                         parser::parse_command_into(black_box(&mut src), black_box(&mut args))
                             .unwrap();
-                        std_black_box(args)
+                        black_box(args)
                     },
                     BatchSize::SmallInput,
                 )
@@ -130,7 +130,7 @@ fn bench_parse_frame(c: &mut Criterion) {
                 || frame.clone(),
                 |mut src| {
                     parser::parse_frame(black_box(&mut src)).unwrap();
-                    std_black_box(src)
+                    black_box(src)
                 },
                 BatchSize::SmallInput,
             )
@@ -159,7 +159,7 @@ fn bench_encode(c: &mut Criterion) {
             b.iter(|| {
                 let mut out = BytesMut::with_capacity(256);
                 encoder.encode(black_box(&frame), black_box(&mut out));
-                std_black_box(out)
+                black_box(out)
             })
         });
     }
