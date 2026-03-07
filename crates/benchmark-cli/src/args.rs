@@ -60,6 +60,9 @@ pub struct Args {
     #[arg(long = "threads", default_value_t = default_threads())]
     pub threads: usize,
 
+    #[arg(long = "strict", default_value_t = false)]
+    pub strict: bool,
+
     #[arg(long = "help", action = ArgAction::Help)]
     pub help: Option<bool>,
 

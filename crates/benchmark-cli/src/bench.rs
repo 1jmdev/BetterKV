@@ -47,7 +47,19 @@ struct Shared {
     host: String,
     port: u16,
     auth: Option<String>,
+    strict: bool,
     spec: BenchRun,
+}
+
+struct ResponseCheck {
+    strict: bool,
+    seen: u64,
+}
+
+impl ResponseCheck {
+    fn new(strict: bool) -> Self {
+        Self { strict, seen: 0 }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -65,6 +77,7 @@ pub async fn run_single_benchmark(_args: &Args, spec: BenchRun) -> Result<BenchR
         host: _args.host.clone(),
         port: _args.port,
         auth: _args.auth.clone(),
+        strict: _args.strict,
         spec,
     });
 
@@ -210,6 +223,7 @@ async fn run_worker(client_id: u64, quota: u64, cfg: Arc<Shared>) -> Result<Work
     .await?;
 
     let mut stats = WorkerStats::default();
+    let mut response_check = ResponseCheck::new(cfg.strict);
     let mut sequence = 0u64;
 
     if !cfg.spec.random_keys {
@@ -238,7 +252,14 @@ async fn run_worker(client_id: u64, quota: u64, cfg: Arc<Shared>) -> Result<Work
                     .await
                     .map_err(|err| format!("write failed: {err}"))?;
             }
-            read_batch_responses(&cfg.spec, &mut stream, &mut parse_buf, batch).await?;
+            read_batch_responses(
+                &cfg.spec,
+                &mut stream,
+                &mut parse_buf,
+                batch,
+                &mut response_check,
+            )
+            .await?;
 
             let per_req_ns =
                 (started.elapsed().as_nanos() / batch as u128).min(u128::from(u64::MAX));
@@ -271,7 +292,14 @@ async fn run_worker(client_id: u64, quota: u64, cfg: Arc<Shared>) -> Result<Work
             .write_all(&payload)
             .await
             .map_err(|err| format!("write failed: {err}"))?;
-        read_batch_responses(&cfg.spec, &mut stream, &mut parse_buf, batch).await?;
+        read_batch_responses(
+            &cfg.spec,
+            &mut stream,
+            &mut parse_buf,
+            batch,
+            &mut response_check,
+        )
+        .await?;
 
         let per_req_ns = (started.elapsed().as_nanos() / batch as u128).min(u128::from(u64::MAX));
         stats.lat_samples_ns.push(per_req_ns as u64);
@@ -287,11 +315,30 @@ async fn read_batch_responses(
     stream: &mut TcpStream,
     parse_buf: &mut BytesMut,
     batch: usize,
+    response_check: &mut ResponseCheck,
 ) -> Result<(), String> {
     match spec.kind {
-        BenchKind::Mget => read_n_fixed_mget_responses(stream, parse_buf, batch, spec.data_size).await,
+        BenchKind::Mget => {
+            read_n_fixed_mget_responses(
+                stream,
+                parse_buf,
+                batch,
+                spec.data_size,
+                response_check.strict,
+                &mut response_check.seen,
+            )
+            .await
+        }
         BenchKind::Hgetall => {
-            read_n_fixed_hgetall_responses(stream, parse_buf, batch, spec.data_size).await
+            read_n_fixed_hgetall_responses(
+                stream,
+                parse_buf,
+                batch,
+                spec.data_size,
+                response_check.strict,
+                &mut response_check.seen,
+            )
+            .await
         }
         _ => read_n_responses(stream, parse_buf, batch).await,
     }

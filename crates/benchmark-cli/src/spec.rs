@@ -937,6 +937,7 @@ mod tests {
             keyspace: 500,
             key_prefix: "bench".to_string(),
             threads: 4,
+            strict: false,
             help: None,
             version: None,
         }

@@ -47,6 +47,14 @@ pub fn render_result(args: &Args, result: &BenchResult) {
         result.random_keys, result.keyspace
     );
     println!(
+        "  validation: {}",
+        if args.strict {
+            "strict (check every response)"
+        } else {
+            "sampled (check first and periodic responses)"
+        }
+    );
+    println!(
         "  latency avg/p50/p95/p99 = {:.4}/{:.4}/{:.4}/{:.4} ms",
         result.avg_ms, result.p50_ms, result.p95_ms, result.p99_ms
     );
