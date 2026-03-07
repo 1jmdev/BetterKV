@@ -52,7 +52,7 @@ impl Config {
 
 fn default_shards() -> usize {
     let _trace = profiler::scope("server::config::default_shards");
-    default_threads().next_power_of_two()
+    default_threads() * 64
 }
 
 fn default_threads() -> usize {
