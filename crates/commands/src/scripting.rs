@@ -1,5 +1,5 @@
 use crate::dispatcher;
-use crate::util::{Args, int_error, parse_i64_bytes, wrong_args};
+use crate::util::{int_error, parse_i64_bytes, wrong_args, Args};
 use engine::store::Store;
 use mlua::{HookTriggers, Lua, Table, Value, Variadic, VmState};
 use parking_lot::Mutex;
@@ -26,7 +26,7 @@ struct RunningScript {
 
 struct ScriptRuntime {
     debug_mode: ScriptDebugMode,
-    running: Option<RunningScript>,
+    running: Vec<Arc<RunningScript>>,
 }
 
 struct ScriptRuntimeSync {
@@ -35,6 +35,7 @@ struct ScriptRuntimeSync {
 }
 
 struct ScriptExecutionGuard {
+    running: Arc<RunningScript>,
     kill_requested: Arc<AtomicBool>,
     performed_write: Arc<AtomicBool>,
     debug_mode: ScriptDebugMode,
@@ -139,9 +140,11 @@ fn script_runtime() -> &'static ScriptRuntimeSync {
     SCRIPT_RUNTIME.get_or_init(|| ScriptRuntimeSync {
         state: Mutex::new(ScriptRuntime {
             debug_mode: ScriptDebugMode::No,
-            running: None,
+            running: Vec::new(),
         }),
-        permit: Semaphore::new(1),
+        permit: Semaphore::new(
+            thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get),
+        ),
     })
 }
 
@@ -150,7 +153,9 @@ impl Drop for ScriptExecutionGuard {
         let _trace = profiler::scope("commands::scripting::ScriptExecutionGuard::drop");
         let runtime = script_runtime();
         let mut state = runtime.state.lock();
-        state.running = None;
+        state
+            .running
+            .retain(|running| !Arc::ptr_eq(running, &self.running));
     }
 }
 
@@ -358,16 +363,16 @@ fn begin_script_execution() -> Result<ScriptExecutionGuard, RespFrame> {
 
     let mut state = runtime.state.lock();
 
-    let kill_requested = Arc::new(AtomicBool::new(false));
-    let performed_write = Arc::new(AtomicBool::new(false));
-    state.running = Some(RunningScript {
-        kill_requested: kill_requested.clone(),
-        performed_write: performed_write.clone(),
+    let running = Arc::new(RunningScript {
+        kill_requested: Arc::new(AtomicBool::new(false)),
+        performed_write: Arc::new(AtomicBool::new(false)),
     });
+    state.running.push(running.clone());
 
     Ok(ScriptExecutionGuard {
-        kill_requested,
-        performed_write,
+        running: running.clone(),
+        kill_requested: running.kill_requested.clone(),
+        performed_write: running.performed_write.clone(),
         debug_mode: state.debug_mode,
         _permit: permit,
     })
@@ -377,19 +382,23 @@ fn script_kill() -> RespFrame {
     let _trace = profiler::scope("commands::scripting::script_kill");
     let runtime = script_runtime();
     let state = runtime.state.lock();
-    let Some(running) = state.running.as_ref() else {
+    if state.running.is_empty() {
         return RespFrame::Error("NOTBUSY No scripts in execution right now.".to_string());
-    };
-
-    if running.performed_write.load(Ordering::Relaxed) {
-        return RespFrame::Error(
-            "UNKILLABLE Sorry the script already executed write commands against the dataset. You can either wait the script termination or kill the server in a hard way using the SHUTDOWN NOSAVE command."
-                .to_string(),
-        );
     }
 
-    running.kill_requested.store(true, Ordering::Relaxed);
-    RespFrame::ok()
+    if let Some(running) = state
+        .running
+        .iter()
+        .find(|running| !running.performed_write.load(Ordering::Relaxed))
+    {
+        running.kill_requested.store(true, Ordering::Relaxed);
+        return RespFrame::ok();
+    }
+
+    RespFrame::Error(
+        "UNKILLABLE Sorry the script already executed write commands against the dataset. You can either wait the script termination or kill the server in a hard way using the SHUTDOWN NOSAVE command."
+            .to_string(),
+    )
 }
 
 fn run_lua_script(
@@ -401,6 +410,19 @@ fn run_lua_script(
     readonly: bool,
 ) -> RespFrame {
     let _trace = profiler::scope("commands::scripting::run_lua_script");
+    match prepare_fast_script(script, digest) {
+        Ok(Some(fast_script)) => {
+            return fast_script_response(store, keys, argv, readonly, digest, fast_script);
+        }
+        Ok(None) => {}
+        Err(message) => {
+            return RespFrame::Error(format!(
+                "ERR Error running script (call to f_{}): {message}",
+                String::from_utf8_lossy(digest)
+            ));
+        }
+    }
+
     if let Err(message) = precompile_lua_script(script, digest) {
         return RespFrame::Error(format!(
             "ERR Error running script (call to f_{}): {message}",
@@ -419,6 +441,69 @@ fn run_lua_script(
             "ERR Error running script (call to f_{}): {message}",
             String::from_utf8_lossy(digest)
         )),
+    }
+}
+
+fn prepare_fast_script(script: &[u8], digest: &[u8]) -> Result<Option<FastScript>, String> {
+    LUA_RUNTIME.with(|runtime| {
+        let mut runtime = runtime.borrow_mut();
+        let runtime = runtime.as_mut().map_err(|error| error.clone())?;
+
+        if let Some(fast_script) = runtime.fast_scripts.get(digest).copied() {
+            return Ok(Some(fast_script));
+        }
+
+        if runtime.compiled_scripts.contains_key(digest) {
+            return Ok(None);
+        }
+
+        if let Some(fast_script) = detect_fast_script(script) {
+            runtime.fast_scripts.insert(digest.to_vec(), fast_script);
+            return Ok(Some(fast_script));
+        }
+
+        Ok(None)
+    })
+}
+
+fn fast_script_response(
+    store: &Store,
+    keys: &[CompactArg],
+    argv: &[CompactArg],
+    readonly: bool,
+    digest: &[u8],
+    fast_script: FastScript,
+) -> RespFrame {
+    match execute_fast_script_without_lua(store, keys, argv, readonly, fast_script) {
+        Ok(response) => response,
+        Err(message) => RespFrame::Error(format!(
+            "ERR Error running script (call to f_{}): {message}",
+            String::from_utf8_lossy(digest)
+        )),
+    }
+}
+
+fn execute_fast_script_without_lua(
+    store: &Store,
+    keys: &[CompactArg],
+    argv: &[CompactArg],
+    readonly: bool,
+    fast_script: FastScript,
+) -> Result<RespFrame, String> {
+    match fast_script {
+        FastScript::SetKey1Arg1ReturnArg1 => {
+            if readonly {
+                return Err("ERR Write commands are not allowed from read-only scripts".to_string());
+            }
+            if keys.is_empty() || argv.is_empty() {
+                return Err(
+                    "ERR Lua redis() command arguments must be strings or integers".to_string(),
+                );
+            }
+
+            store.set(keys[0].as_slice(), argv[0].as_slice(), None);
+            Ok(RespFrame::Bulk(Some(BulkData::Arg(argv[0].clone()))))
+        }
     }
 }
 
@@ -559,19 +644,8 @@ fn execute_fast_script(
             }
 
             execution.performed_write.store(true, Ordering::Relaxed);
-            let args = vec![
-                CompactArg::from_slice(b"SET"),
-                keys[0].clone(),
-                argv[0].clone(),
-            ];
-
-            match dispatcher::dispatch_args(store, &args) {
-                RespFrame::Error(message) => Err(message),
-                RespFrame::ErrorStatic(message) => Err(message.to_string()),
-                _ => Ok(RespFrame::Bulk(Some(BulkData::from_vec(
-                    argv[0].as_slice().to_vec(),
-                )))),
-            }
+            store.set(keys[0].as_slice(), argv[0].as_slice(), None);
+            Ok(RespFrame::Bulk(Some(BulkData::Arg(argv[0].clone()))))
         }
     }
 }
