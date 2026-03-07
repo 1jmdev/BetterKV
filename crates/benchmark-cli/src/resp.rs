@@ -250,9 +250,10 @@ fn validate_response(expected: &ExpectedResponse, actual: &RespFrame) -> Result<
         (ExpectedResponse::Bulk(Some(expected)), RespFrame::Bulk(Some(BulkData::Arg(actual)))) => {
             validate_bytes(expected, actual.as_slice())
         }
-        (ExpectedResponse::Bulk(Some(expected)), RespFrame::Bulk(Some(BulkData::Value(actual)))) => {
-            validate_bytes(expected, actual.as_slice())
-        }
+        (
+            ExpectedResponse::Bulk(Some(expected)),
+            RespFrame::Bulk(Some(BulkData::Value(actual))),
+        ) => validate_bytes(expected, actual.as_slice()),
         (ExpectedResponse::Integer(expected), RespFrame::Integer(actual)) => {
             if actual == expected {
                 Ok(())
@@ -280,7 +281,9 @@ fn validate_response(expected: &ExpectedResponse, actual: &RespFrame) -> Result<
             }
             Ok(())
         }
-        _ => Err(format!("unexpected response shape: expected {expected:?}, got {actual:?}")),
+        _ => Err(format!(
+            "unexpected response shape: expected {expected:?}, got {actual:?}"
+        )),
     }
 }
 
@@ -345,7 +348,11 @@ fn bulk_frame_len(src: &[u8], start: usize) -> Result<Option<usize>, String> {
     Ok(Some(total - start))
 }
 
-fn aggregate_frame_len(src: &[u8], start: usize, multiplier: usize) -> Result<Option<usize>, String> {
+fn aggregate_frame_len(
+    src: &[u8],
+    start: usize,
+    multiplier: usize,
+) -> Result<Option<usize>, String> {
     let Some(end) = find_crlf(src, start + 1) else {
         return Ok(None);
     };

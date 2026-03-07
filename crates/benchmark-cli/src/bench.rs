@@ -109,8 +109,12 @@ impl ResponseModel {
                 ExpectedResponse::Integer(created as i64)
             }
             BenchKind::Del => ExpectedResponse::Integer(0),
-            BenchKind::Exists | BenchKind::Expire | BenchKind::Llen | BenchKind::Scard
-            | BenchKind::Sismember | BenchKind::Zcard => ExpectedResponse::Integer(1),
+            BenchKind::Exists
+            | BenchKind::Expire
+            | BenchKind::Llen
+            | BenchKind::Scard
+            | BenchKind::Sismember
+            | BenchKind::Zcard => ExpectedResponse::Integer(1),
             BenchKind::Ttl => ExpectedResponse::IntegerRange { min: 0, max: 60 },
             BenchKind::Incr => {
                 self.ints[idx] += 1;
