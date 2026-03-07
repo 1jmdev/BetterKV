@@ -18,7 +18,7 @@ impl Default for Encoder {
 }
 
 impl Encoder {
-    #[inline]
+    #[inline(always)]
     pub fn encode(&mut self, frame: &RespFrame, out: &mut BytesMut) {
         let _trace = profiler::scope("protocol::encoder::encode");
         match frame {
@@ -90,7 +90,7 @@ impl Encoder {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     fn encode_bulk_bytes(&mut self, bytes: &[u8], out: &mut BytesMut) {
         out.put_u8(b'$');
         out.put_slice(self.itoa.format(bytes.len()).as_bytes());

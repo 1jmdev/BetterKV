@@ -974,6 +974,7 @@ name = "protocol"
 version = "0.1.0"
 dependencies = [
  "bytes",
+ "criterion",
  "itoa",
  "memchr",
  "profiler",

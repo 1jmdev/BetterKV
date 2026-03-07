@@ -51,25 +51,43 @@ fn parse_inline_command_into(
     args: &mut Vec<CompactArg>,
 ) -> Result<Option<()>, ParseError> {
     let _trace = profiler::scope("protocol::parser::parse_inline_command_into");
-    let (line, consumed) = match parse_line_bytes(src, 0) {
+    let consumed = match parse_line_bytes(src, 0) {
         Ok(value) => value,
         Err(ParseError::Incomplete) => return Ok(None),
         Err(err) => return Err(err),
-    };
+    }
+    .1;
 
     args.clear();
-    for part in line
-        .split(|byte| byte.is_ascii_whitespace())
-        .filter(|part| !part.is_empty())
-    {
-        args.push(CompactArg::from_slice(part));
+
+    let line_end = consumed - 2;
+    let mut start = 0;
+    let mut saw_first = false;
+    while start < line_end {
+        while start < line_end && src[start].is_ascii_whitespace() {
+            start += 1;
+        }
+        if start == line_end {
+            break;
+        }
+
+        let mut end = start + 1;
+        while end < line_end && !src[end].is_ascii_whitespace() {
+            end += 1;
+        }
+
+        if !saw_first {
+            src[start..end].make_ascii_uppercase();
+            saw_first = true;
+        }
+        args.push(CompactArg::from_slice(&src[start..end]));
+        start = end + 1;
     }
 
     if args.is_empty() {
         return Err(ParseError::Protocol("empty inline command".to_string()));
     }
 
-    args[0].make_ascii_uppercase();
     src.advance(consumed);
     Ok(Some(()))
 }
@@ -97,7 +115,7 @@ fn parse_command_array_into(
         args.reserve(argc - args.capacity());
     }
 
-    for _ in 0..argc {
+    for index in 0..argc {
         if cursor >= src.len() {
             return Ok(None);
         }
@@ -122,10 +140,13 @@ fn parse_command_array_into(
                 }
 
                 let end = bulk_header_end + size;
-                if src.get(end) != Some(&b'\r') || src.get(end + 1) != Some(&b'\n') {
+                if src[end] != b'\r' || src[end + 1] != b'\n' {
                     return Err(ParseError::Protocol("missing bulk terminator".to_string()));
                 }
 
+                if index == 0 {
+                    src[bulk_header_end..end].make_ascii_uppercase();
+                }
                 args.push(CompactArg::from_slice(&src[bulk_header_end..end]));
                 cursor = end + 2;
             }
@@ -138,7 +159,12 @@ fn parse_command_array_into(
                 if std::str::from_utf8(simple).is_err() {
                     return Err(ParseError::Protocol("invalid utf8 line".to_string()));
                 }
-                args.push(CompactArg::from_slice(simple));
+                let simple_start = cursor + 1;
+                let simple_end = next - 2;
+                if index == 0 {
+                    src[simple_start..simple_end].make_ascii_uppercase();
+                }
+                args.push(CompactArg::from_slice(&src[simple_start..simple_end]));
                 cursor = next;
             }
             _ => {
@@ -147,9 +173,6 @@ fn parse_command_array_into(
         }
     }
 
-    if let Some(first) = args.first_mut() {
-        first.make_ascii_uppercase();
-    }
     src.advance(cursor);
     Ok(Some(()))
 }
@@ -173,11 +196,27 @@ fn parse_value(src: &[u8], offset: usize) -> Result<(RespFrame, usize), ParseErr
 fn parse_inline(src: &[u8], offset: usize) -> Result<(RespFrame, usize), ParseError> {
     let _trace = profiler::scope("protocol::parser::parse_inline");
     let (line, consumed) = parse_line_bytes(src, offset)?;
-    let parts: SmallVec<[RespFrame; 8]> = line
-        .split(|byte| byte.is_ascii_whitespace())
-        .filter(|part| !part.is_empty())
-        .map(|part| RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(part)))))
-        .collect();
+
+    let mut parts = SmallVec::<[RespFrame; 8]>::new();
+    let mut start = 0;
+    while start < line.len() {
+        while start < line.len() && line[start].is_ascii_whitespace() {
+            start += 1;
+        }
+        if start == line.len() {
+            break;
+        }
+
+        let mut end = start + 1;
+        while end < line.len() && !line[end].is_ascii_whitespace() {
+            end += 1;
+        }
+
+        parts.push(RespFrame::Bulk(Some(BulkData::Arg(
+            CompactArg::from_slice(&line[start..end]),
+        ))));
+        start = end + 1;
+    }
 
     if parts.is_empty() {
         return Err(ParseError::Protocol("empty inline command".to_string()));
@@ -230,7 +269,7 @@ fn parse_bulk(src: &[u8], offset: usize) -> Result<(RespFrame, usize), ParseErro
     let payload = BulkData::Arg(CompactArg::from_slice(&src[cursor..end]));
     cursor = end;
 
-    if src.get(cursor) != Some(&b'\r') || src.get(cursor + 1) != Some(&b'\n') {
+    if src[cursor] != b'\r' || src[cursor + 1] != b'\n' {
         return Err(ParseError::Protocol("missing bulk terminator".to_string()));
     }
 
