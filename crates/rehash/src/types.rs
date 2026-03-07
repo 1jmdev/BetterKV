@@ -1,6 +1,8 @@
 use std::mem;
 
-use super::constants::{INITIAL_BUCKETS, MAX_LOAD_FACTOR, NIL, REHASH_BUCKETS_PER_STEP};
+use super::constants::{
+    INITIAL_BUCKETS, MAX_LOAD_FACTOR, NIL, REHASH_BUCKETS_PER_STEP, SMALL_REHASH_THRESHOLD,
+};
 use super::iter::Iter;
 use super::node::NodeMeta;
 use super::table::Table;
@@ -10,7 +12,6 @@ pub struct RehashingMap<K, V> {
     pub(super) table: Table,
     pub(super) old_table: Option<Table>,
     pub(super) rehash_cursor: usize,
-    // SoA (Structure of Arrays) Layout:
     pub(super) metas: Vec<NodeMeta>,
     pub(super) keys: Vec<K>,
     pub(super) values: Vec<V>,
@@ -128,8 +129,14 @@ where
         }
     }
 
+    #[inline(always)]
     pub(super) fn rehash_write_step(&mut self) {
         self.rehash_step(REHASH_BUCKETS_PER_STEP);
+    }
+
+    #[inline(always)]
+    pub fn maintain(&mut self) {
+        self.rehash_step(1);
     }
 
     fn start_rehash(&mut self, new_bucket_count: usize) {
@@ -141,8 +148,22 @@ where
 
         let new_table = Table::with_buckets(new_bucket_count);
         let old_table = mem::replace(&mut self.table, new_table);
-        self.old_table = Some(old_table);
-        self.rehash_cursor = 0;
+
+        if old_table.len() <= SMALL_REHASH_THRESHOLD {
+            let heads_ptr = self.table.heads.as_mut_ptr();
+            let metas_ptr = self.metas.as_mut_ptr();
+            for idx in 0..self.metas.len() {
+                unsafe {
+                    let meta = &mut *metas_ptr.add(idx);
+                    let new_bucket = self.table.bucket(meta.hash);
+                    meta.next = *heads_ptr.add(new_bucket);
+                    *heads_ptr.add(new_bucket) = idx as u32;
+                }
+            }
+        } else {
+            self.old_table = Some(old_table);
+            self.rehash_cursor = 0;
+        }
     }
 
     pub(super) fn patch_swapped(&mut self, old_idx: u32, new_idx: u32) {
@@ -207,7 +228,7 @@ where
 
 fn random_seed() -> u64 {
     let _trace = profiler::scope("rehash::types::random_seed");
-    use std::collections::hash_map::RandomState;
-    use std::hash::{BuildHasher, Hasher};
-    RandomState::new().build_hasher().finish()
+    let mut buf = [0u8; 8];
+    getrandom::fill(&mut buf).expect("getrandom failed");
+    u64::from_ne_bytes(buf)
 }

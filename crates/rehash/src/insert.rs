@@ -21,6 +21,7 @@ where
         }
     }
 
+    #[inline(always)]
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
         let _trace = profiler::scope("rehash::insert::insert");
         self.rehash_write_step();
@@ -39,6 +40,7 @@ where
         None
     }
 
+    #[inline(always)]
     pub fn get_or_insert_with<F>(&mut self, key: K, default: F) -> &mut V
     where
         F: FnOnce() -> V,
@@ -59,6 +61,7 @@ where
         unsafe { &mut *self.values.as_mut_ptr().add(idx as usize) }
     }
 
+    #[inline(always)]
     fn insert_new(&mut self, key: K, value: V, hash: u32) -> u32 {
         let bucket = self.table.bucket(hash);
 
@@ -66,7 +69,7 @@ where
             let head = *self.table.heads.as_ptr().add(bucket);
             let idx = self.metas.len() as u32;
 
-            self.metas.push(NodeMeta { hash, next: head });
+            self.metas.push(NodeMeta::new(hash, head));
             self.keys.push(key);
             self.values.push(value);
 

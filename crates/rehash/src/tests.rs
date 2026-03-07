@@ -69,17 +69,36 @@ fn remove_keeps_remaining_chain_reachable() {
 }
 
 #[test]
-fn growth_uses_incremental_rehashing() {
+fn small_growth_is_immediate() {
     let mut map = RehashingMap::new();
 
     for i in 0..65u32 {
         map.insert(i.to_le_bytes().to_vec(), i);
     }
-
-    assert!(map.old_table.is_some());
-    assert_eq!(map.rehash_cursor, 0);
+    assert!(
+        map.old_table.is_none(),
+        "small growth should complete immediately"
+    );
 
     for i in 0..65u32 {
+        assert_eq!(map.get(&i.to_le_bytes()), Some(&i));
+    }
+}
+
+#[test]
+fn large_growth_uses_incremental_rehashing() {
+    let mut map = RehashingMap::new();
+
+    for i in 0..1025u32 {
+        map.insert(i.to_le_bytes().to_vec(), i);
+    }
+
+    assert!(
+        map.old_table.is_some(),
+        "large growth should use incremental rehashing"
+    );
+
+    for i in 0..1025u32 {
         assert_eq!(map.get(&i.to_le_bytes()), Some(&i));
     }
 
@@ -90,7 +109,7 @@ fn growth_uses_incremental_rehashing() {
         );
     }
 
-    for i in 0..65u32 {
+    for i in 0..1025u32 {
         assert_eq!(map.get(&i.to_le_bytes()), Some(&i));
     }
 }

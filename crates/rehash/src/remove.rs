@@ -8,6 +8,7 @@ impl<K, V> RehashingMap<K, V>
 where
     K: Eq + AsRef<[u8]>,
 {
+    #[inline(always)]
     pub fn remove<Q>(&mut self, key: &Q) -> Option<V>
     where
         Q: AsRef<[u8]> + ?Sized,

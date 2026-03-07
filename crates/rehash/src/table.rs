@@ -17,7 +17,6 @@ impl Table {
 
     #[inline(always)]
     pub(super) fn len(&self) -> usize {
-        let _trace = profiler::scope("rehash::table::len");
         self.mask + 1
     }
 

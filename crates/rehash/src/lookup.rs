@@ -7,6 +7,7 @@ impl<K, V> RehashingMap<K, V>
 where
     K: Eq + AsRef<[u8]>,
 {
+    #[inline(always)]
     pub fn contains_key<Q>(&self, key: &Q) -> bool
     where
         Q: AsRef<[u8]> + ?Sized,
@@ -15,6 +16,7 @@ where
         self.find_index(key).is_some()
     }
 
+    #[inline(always)]
     pub fn get<Q>(&self, key: &Q) -> Option<&V>
     where
         Q: AsRef<[u8]> + ?Sized,
@@ -24,6 +26,7 @@ where
         Some(unsafe { &*self.values.as_ptr().add(idx as usize) })
     }
 
+    #[inline(always)]
     pub fn get_mut<Q>(&mut self, key: &Q) -> Option<&mut V>
     where
         Q: AsRef<[u8]> + ?Sized,
@@ -33,7 +36,7 @@ where
         Some(unsafe { &mut *self.values.as_mut_ptr().add(idx as usize) })
     }
 
-    pub fn get_batch<const P: usize, Q>(&self, keys: &[&Q; P]) -> [Option<&V>; P]
+    pub fn get_batch<'a, const P: usize, Q>(&'a self, keys: &[&Q; P]) -> [Option<&'a V>; P]
     where
         Q: AsRef<[u8]> + ?Sized,
     {
@@ -66,6 +69,7 @@ where
             .and_then(|table| self.find_index_in_table(table, key_bytes, hash))
     }
 
+    #[inline(always)]
     fn find_index_in_table(&self, table: &Table, key_bytes: &[u8], hash: u32) -> Option<u32> {
         let bucket = table.bucket(hash);
 
@@ -84,6 +88,7 @@ where
                         return Some(idx);
                     }
                 }
+
                 idx = next;
             }
         }
