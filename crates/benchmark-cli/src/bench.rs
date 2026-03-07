@@ -11,8 +11,8 @@ use tokio::net::TcpStream;
 
 use crate::args::Args;
 use crate::resp::{
-    encode_resp_parts, make_key, read_n_fixed_hgetall_responses, read_n_fixed_mget_responses,
-    read_n_responses, repeat_payload,
+    ExpectedResponse, encode_expected_response, encode_resp_parts, make_key, read_n_responses,
+    read_n_strict_responses, read_n_unchecked_responses, repeat_payload,
 };
 use crate::spec::{BenchKind, BenchRun};
 
@@ -51,15 +51,156 @@ struct Shared {
     spec: BenchRun,
 }
 
-struct ResponseCheck {
-    strict: bool,
-    seen: u64,
+struct ResponseModel {
+    kind: BenchKind,
+    value: Vec<u8>,
+    flags: Vec<bool>,
+    ints: Vec<i64>,
+    lens: Vec<i64>,
 }
 
-impl ResponseCheck {
-    fn new(strict: bool) -> Self {
-        Self { strict, seen: 0 }
+impl ResponseModel {
+    fn new(spec: &BenchRun, value: Vec<u8>) -> Self {
+        let slots = if spec.random_keys {
+            spec.keyspace as usize
+        } else {
+            1
+        };
+
+        let flags = match spec.kind {
+            BenchKind::Lpop | BenchKind::Rpop | BenchKind::Srem | BenchKind::Zrem => {
+                vec![true; slots]
+            }
+            _ => vec![false; slots],
+        };
+
+        let ints = vec![0; slots];
+        let lens = vec![0; slots];
+
+        Self {
+            kind: spec.kind,
+            value,
+            flags,
+            ints,
+            lens,
+        }
     }
+
+    fn expected(&mut self, key_slot: u64) -> ExpectedResponse {
+        let idx = (key_slot as usize).min(self.flags.len().saturating_sub(1));
+        match self.kind {
+            BenchKind::PingInline | BenchKind::PingMbulk => ExpectedResponse::Simple("PONG"),
+            BenchKind::Echo
+            | BenchKind::Get
+            | BenchKind::GetSet
+            | BenchKind::Hget
+            | BenchKind::Eval
+            | BenchKind::EvalRo
+            | BenchKind::EvalSha
+            | BenchKind::EvalShaRo => ExpectedResponse::Bulk(Some(self.value.clone())),
+            BenchKind::Set | BenchKind::Mset => ExpectedResponse::Simple("OK"),
+            BenchKind::Mget => ExpectedResponse::Array(vec![
+                ExpectedResponse::Bulk(Some(self.value.clone())),
+                ExpectedResponse::Bulk(Some(self.value.clone())),
+            ]),
+            BenchKind::SetNx | BenchKind::Sadd | BenchKind::Hset | BenchKind::Zadd => {
+                let created = !self.flags[idx];
+                self.flags[idx] = true;
+                ExpectedResponse::Integer(created as i64)
+            }
+            BenchKind::Del => ExpectedResponse::Integer(0),
+            BenchKind::Exists | BenchKind::Expire | BenchKind::Llen | BenchKind::Scard
+            | BenchKind::Sismember | BenchKind::Zcard => ExpectedResponse::Integer(1),
+            BenchKind::Ttl => ExpectedResponse::IntegerRange { min: 0, max: 60 },
+            BenchKind::Incr => {
+                self.ints[idx] += 1;
+                ExpectedResponse::Integer(self.ints[idx])
+            }
+            BenchKind::IncrBy => {
+                self.ints[idx] += 3;
+                ExpectedResponse::Integer(self.ints[idx])
+            }
+            BenchKind::Decr => {
+                self.ints[idx] -= 1;
+                ExpectedResponse::Integer(self.ints[idx])
+            }
+            BenchKind::DecrBy => {
+                self.ints[idx] -= 3;
+                ExpectedResponse::Integer(self.ints[idx])
+            }
+            BenchKind::Strlen | BenchKind::SetRange => {
+                ExpectedResponse::Integer(self.value.len() as i64)
+            }
+            BenchKind::GetRange => {
+                ExpectedResponse::Bulk(Some(self.value[..self.value.len().min(3)].to_vec()))
+            }
+            BenchKind::Lpush | BenchKind::Rpush => {
+                self.lens[idx] += 1;
+                ExpectedResponse::Integer(self.lens[idx])
+            }
+            BenchKind::Lpop | BenchKind::Rpop => {
+                let popped = self.flags[idx];
+                self.flags[idx] = false;
+                if popped {
+                    ExpectedResponse::Bulk(Some(self.value.clone()))
+                } else {
+                    ExpectedResponse::Bulk(None)
+                }
+            }
+            BenchKind::Lrange => {
+                ExpectedResponse::Array(vec![ExpectedResponse::Bulk(Some(self.value.clone()))])
+            }
+            BenchKind::Srem | BenchKind::Zrem => {
+                let removed = self.flags[idx];
+                self.flags[idx] = false;
+                ExpectedResponse::Integer(removed as i64)
+            }
+            BenchKind::Hgetall => ExpectedResponse::Array(vec![
+                ExpectedResponse::Bulk(Some(b"field".to_vec())),
+                ExpectedResponse::Bulk(Some(self.value.clone())),
+            ]),
+            BenchKind::Hincrby => {
+                self.ints[idx] += 1;
+                ExpectedResponse::Integer(self.ints[idx])
+            }
+            BenchKind::Zscore => ExpectedResponse::Bulk(Some(b"1".to_vec())),
+            BenchKind::Zrank | BenchKind::Zrevrank => ExpectedResponse::Integer(0),
+        }
+    }
+}
+
+fn has_fixed_response_shape(kind: BenchKind) -> bool {
+    matches!(
+        kind,
+        BenchKind::PingInline
+            | BenchKind::PingMbulk
+            | BenchKind::Echo
+            | BenchKind::Set
+            | BenchKind::Get
+            | BenchKind::GetSet
+            | BenchKind::Mset
+            | BenchKind::Mget
+            | BenchKind::Del
+            | BenchKind::Exists
+            | BenchKind::Expire
+            | BenchKind::Strlen
+            | BenchKind::SetRange
+            | BenchKind::GetRange
+            | BenchKind::Llen
+            | BenchKind::Lrange
+            | BenchKind::Scard
+            | BenchKind::Sismember
+            | BenchKind::Hget
+            | BenchKind::Hgetall
+            | BenchKind::Zcard
+            | BenchKind::Zscore
+            | BenchKind::Zrank
+            | BenchKind::Zrevrank
+            | BenchKind::Eval
+            | BenchKind::EvalRo
+            | BenchKind::EvalSha
+            | BenchKind::EvalShaRo
+    )
 }
 
 #[derive(Clone, Copy)]
@@ -223,7 +364,7 @@ async fn run_worker(client_id: u64, quota: u64, cfg: Arc<Shared>) -> Result<Work
     .await?;
 
     let mut stats = WorkerStats::default();
-    let mut response_check = ResponseCheck::new(cfg.strict);
+    let mut response_model = ResponseModel::new(&cfg.spec, value.clone());
     let mut sequence = 0u64;
 
     if !cfg.spec.random_keys {
@@ -239,6 +380,25 @@ async fn run_worker(client_id: u64, quota: u64, cfg: Arc<Shared>) -> Result<Work
 
         while remaining > 0 {
             let batch = remaining.min(cfg.spec.pipeline as u64) as usize;
+            let expected = if cfg.strict {
+                (0..batch)
+                    .map(|_| response_model.expected(0))
+                    .collect::<Vec<_>>()
+            } else {
+                Vec::new()
+            };
+            let encoded = if has_fixed_response_shape(cfg.spec.kind) {
+                let response = response_model.expected(0);
+                let encoded = encode_expected_response(&response);
+                (0..batch).map(|_| encoded.clone()).collect::<Vec<_>>()
+            } else if cfg.strict {
+                expected
+                    .iter()
+                    .map(encode_expected_response)
+                    .collect::<Vec<_>>()
+            } else {
+                Vec::new()
+            };
             let started = Instant::now();
             if batch == cfg.spec.pipeline {
                 stream
@@ -252,14 +412,11 @@ async fn run_worker(client_id: u64, quota: u64, cfg: Arc<Shared>) -> Result<Work
                     .await
                     .map_err(|err| format!("write failed: {err}"))?;
             }
-            read_batch_responses(
-                &cfg.spec,
-                &mut stream,
-                &mut parse_buf,
-                batch,
-                &mut response_check,
-            )
-            .await?;
+            if cfg.strict {
+                read_n_strict_responses(&mut stream, &mut parse_buf, &expected, &encoded).await?;
+            } else {
+                read_n_unchecked_responses(&mut stream, &mut parse_buf, &encoded).await?;
+            }
 
             let per_req_ns =
                 (started.elapsed().as_nanos() / batch as u128).min(u128::from(u64::MAX));
@@ -274,6 +431,8 @@ async fn run_worker(client_id: u64, quota: u64, cfg: Arc<Shared>) -> Result<Work
     while remaining > 0 {
         let batch = remaining.min(cfg.spec.pipeline as u64) as usize;
         let mut payload = Vec::with_capacity(batch * (cfg.spec.data_size + 128));
+        let mut expected = Vec::with_capacity(batch);
+        let mut encoded = Vec::with_capacity(batch);
         for _ in 0..batch {
             let key_slot = random_slot(client_id, sequence, cfg.spec.keyspace);
             let command = build_command(
@@ -284,6 +443,9 @@ async fn run_worker(client_id: u64, quota: u64, cfg: Arc<Shared>) -> Result<Work
                 script_sha.as_deref(),
             );
             payload.extend_from_slice(&command);
+            let response = response_model.expected(key_slot);
+            encoded.push(encode_expected_response(&response));
+            expected.push(response);
             sequence = sequence.wrapping_add(1);
         }
 
@@ -292,14 +454,11 @@ async fn run_worker(client_id: u64, quota: u64, cfg: Arc<Shared>) -> Result<Work
             .write_all(&payload)
             .await
             .map_err(|err| format!("write failed: {err}"))?;
-        read_batch_responses(
-            &cfg.spec,
-            &mut stream,
-            &mut parse_buf,
-            batch,
-            &mut response_check,
-        )
-        .await?;
+        if cfg.strict {
+            read_n_strict_responses(&mut stream, &mut parse_buf, &expected, &encoded).await?;
+        } else {
+            read_n_unchecked_responses(&mut stream, &mut parse_buf, &encoded).await?;
+        }
 
         let per_req_ns = (started.elapsed().as_nanos() / batch as u128).min(u128::from(u64::MAX));
         stats.lat_samples_ns.push(per_req_ns as u64);
@@ -308,40 +467,6 @@ async fn run_worker(client_id: u64, quota: u64, cfg: Arc<Shared>) -> Result<Work
     }
 
     Ok(stats)
-}
-
-async fn read_batch_responses(
-    spec: &BenchRun,
-    stream: &mut TcpStream,
-    parse_buf: &mut BytesMut,
-    batch: usize,
-    response_check: &mut ResponseCheck,
-) -> Result<(), String> {
-    match spec.kind {
-        BenchKind::Mget => {
-            read_n_fixed_mget_responses(
-                stream,
-                parse_buf,
-                batch,
-                spec.data_size,
-                response_check.strict,
-                &mut response_check.seen,
-            )
-            .await
-        }
-        BenchKind::Hgetall => {
-            read_n_fixed_hgetall_responses(
-                stream,
-                parse_buf,
-                batch,
-                spec.data_size,
-                response_check.strict,
-                &mut response_check.seen,
-            )
-            .await
-        }
-        _ => read_n_responses(stream, parse_buf, batch).await,
-    }
 }
 
 async fn setup_worker_state(

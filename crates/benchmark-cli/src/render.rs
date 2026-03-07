@@ -51,7 +51,7 @@ pub fn render_result(args: &Args, result: &BenchResult) {
         if args.strict {
             "strict (check every response)"
         } else {
-            "sampled (check first and periodic responses)"
+            "none (throughput only)"
         }
     );
     println!(
