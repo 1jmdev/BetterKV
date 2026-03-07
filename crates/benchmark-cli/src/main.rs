@@ -61,7 +61,9 @@ async fn run(args: Args) -> Result<(), String> {
     let workload = resolve_workload(&args)?;
 
     if args.csv {
-        println!("test,scenario,requests,clients,seconds,rps,avg_ms,p50_ms,p95_ms,p99_ms,pipeline,data_size,random_keys,keyspace");
+        println!(
+            "test,scenario,requests,clients,seconds,rps,avg_ms,p50_ms,p95_ms,p99_ms,pipeline,data_size,random_keys,keyspace"
+        );
     }
 
     for spec in workload {

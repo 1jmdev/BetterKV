@@ -10,7 +10,9 @@ use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
 
 use crate::args::Args;
-use crate::resp::{encode_resp_parts, make_key, read_n_fixed_mget_responses, read_n_responses, repeat_payload};
+use crate::resp::{
+    encode_resp_parts, make_key, read_n_fixed_mget_responses, read_n_responses, repeat_payload,
+};
 use crate::spec::{BenchKind, BenchRun};
 
 const SCRIPT_SET_BODY: &[u8] = b"redis.call('SET', KEYS[1], ARGV[1]); return ARGV[1]";
@@ -191,7 +193,10 @@ async fn run_worker(client_id: u64, quota: u64, cfg: Arc<Shared>) -> Result<Work
     let key_base = format!(
         "{}:{}:{client_id}",
         cfg.spec.key_prefix,
-        cfg.spec.name.to_ascii_lowercase().replace([' ', '/', '[', ']'], ":")
+        cfg.spec
+            .name
+            .to_ascii_lowercase()
+            .replace([' ', '/', '[', ']'], ":")
     );
 
     let script_sha = setup_worker_state(
@@ -207,7 +212,13 @@ async fn run_worker(client_id: u64, quota: u64, cfg: Arc<Shared>) -> Result<Work
     let mut sequence = 0u64;
 
     if !cfg.spec.random_keys {
-        let one = build_command(cfg.spec.kind, key_base.as_bytes(), &value, 0, script_sha.as_deref());
+        let one = build_command(
+            cfg.spec.kind,
+            key_base.as_bytes(),
+            &value,
+            0,
+            script_sha.as_deref(),
+        );
         let full_batch = repeat_payload(&one, cfg.spec.pipeline);
         let mut remaining = quota;
 
@@ -228,7 +239,8 @@ async fn run_worker(client_id: u64, quota: u64, cfg: Arc<Shared>) -> Result<Work
             }
             read_batch_responses(&cfg.spec, &mut stream, &mut parse_buf, batch).await?;
 
-            let per_req_ns = (started.elapsed().as_nanos() / batch as u128).min(u128::from(u64::MAX));
+            let per_req_ns =
+                (started.elapsed().as_nanos() / batch as u128).min(u128::from(u64::MAX));
             stats.lat_samples_ns.push(per_req_ns as u64);
             stats.completed += batch as u64;
             remaining -= batch as u64;
@@ -404,7 +416,13 @@ fn build_setup_command(kind: BenchKind, key: &[u8], value: &[u8]) -> Option<Vec<
         | BenchKind::EvalShaRo => Some(encode_resp_parts(&[b"SET", key, value])),
         BenchKind::Mget => {
             let key2 = related_multi_key(key);
-            Some(encode_resp_parts(&[b"MSET", key, value, key2.as_slice(), value]))
+            Some(encode_resp_parts(&[
+                b"MSET",
+                key,
+                value,
+                key2.as_slice(),
+                value,
+            ]))
         }
         BenchKind::Mset => {
             let key2 = related_multi_key(key);
@@ -416,7 +434,9 @@ fn build_setup_command(kind: BenchKind, key: &[u8], value: &[u8]) -> Option<Vec<
         BenchKind::Srem | BenchKind::Scard | BenchKind::Sismember => {
             Some(encode_resp_parts(&[b"SADD", key, value]))
         }
-        BenchKind::Hget | BenchKind::Hgetall => Some(encode_resp_parts(&[b"HSET", key, b"field", value])),
+        BenchKind::Hget | BenchKind::Hgetall => {
+            Some(encode_resp_parts(&[b"HSET", key, b"field", value]))
+        }
         BenchKind::Hincrby => Some(encode_resp_parts(&[b"HSET", key, b"field", b"0"])),
         BenchKind::Zrem
         | BenchKind::Zcard

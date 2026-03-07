@@ -1,5 +1,5 @@
-use crate::store::{XAddId, XTrimMode};
 use crate::Store;
+use crate::store::{XAddId, XTrimMode};
 use types::value::{CompactArg, CompactKey, Entry, StreamId, StreamValue};
 
 use super::super::helpers::{is_expired, monotonic_now_ms, purge_if_expired};

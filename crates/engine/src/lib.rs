@@ -25,8 +25,8 @@ pub mod store {
     };
 }
 
-use std::sync::Arc;
 use std::ops::{Deref, DerefMut};
+use std::sync::Arc;
 
 use ahash::RandomState;
 use hashbrown::HashMap;

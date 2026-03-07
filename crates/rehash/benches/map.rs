@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 use rehash::RehashingMap;
 
 fn make_keys(n: usize, key_len: usize) -> Vec<Vec<u8>> {

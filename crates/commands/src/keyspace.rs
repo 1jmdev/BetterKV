@@ -1,6 +1,6 @@
 use crate::util::{
-    eq_ascii, int_error, parse_i64_bytes, parse_u64_bytes, u64_to_bytes, wrong_args, wrong_type,
-    Args,
+    Args, eq_ascii, int_error, parse_i64_bytes, parse_u64_bytes, u64_to_bytes, wrong_args,
+    wrong_type,
 };
 use engine::store::{RestoreError, SortError, SortOptions, SortOrder, SortResult, Store};
 use protocol::types::{BulkData, RespFrame};

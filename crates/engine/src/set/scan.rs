@@ -2,7 +2,7 @@ use crate::store::Store;
 use types::value::CompactKey;
 
 use super::super::helpers::{is_expired, monotonic_now_ms};
-use super::super::pattern::{wildcard_match, CompiledPattern};
+use super::super::pattern::{CompiledPattern, wildcard_match};
 use super::get_set;
 
 impl Store {

@@ -1,5 +1,5 @@
 use commands::dispatcher::{dispatch_args, parse_command_into};
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use engine::store::Store;
 use protocol::types::{BulkData, RespFrame};
 use std::hint::black_box;

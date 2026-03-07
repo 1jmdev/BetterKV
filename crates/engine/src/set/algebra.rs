@@ -1,7 +1,7 @@
 use parking_lot::RwLockReadGuard;
 
-use crate::store::Store;
 use crate::Shard;
+use crate::store::Store;
 use types::value::{CompactArg, CompactKey, Entry, SetValue};
 
 use super::super::helpers::{is_expired, monotonic_now_ms, purge_if_expired};
