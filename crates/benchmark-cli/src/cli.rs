@@ -31,6 +31,7 @@ Options:
  -I                 Idle mode. Just open N idle connections and wait.
  -x                 Read last argument from STDIN.
  --seed <num>       Set the seed for random number generator.
+ --fire-and-forget  Skip reading replies and only push writes.
  --help             Output this help and exit.
  --version          Output version and exit.
 "#;
@@ -61,6 +62,7 @@ pub struct Config {
     pub idle_mode: bool,
     pub stdin_last_arg: bool,
     pub seed: u64,
+    pub fire_and_forget: bool,
     pub command: Vec<String>,
 }
 
@@ -114,6 +116,7 @@ impl Config {
                 "-I" => config.idle_mode = true,
                 "-x" => config.stdin_last_arg = true,
                 "--seed" => config.seed = parse(next(&mut args, "--seed")?, "seed")?,
+                "--fire-and-forget" | "--no-check-responses" => config.fire_and_forget = true,
                 _ if arg.starts_with('-') => return Err(format!("Unrecognized option: {arg}")),
                 _ => {
                     config.command.push(arg);
@@ -164,6 +167,7 @@ impl Default for Config {
             idle_mode: false,
             stdin_last_arg: false,
             seed: default_seed(),
+            fire_and_forget: false,
             command: Vec::new(),
         }
     }

@@ -113,6 +113,7 @@ version = "0.1.0"
 dependencies = [
  "bytes",
  "itoa",
+ "memchr",
  "protocol",
  "rand 0.10.0",
  "tikv-jemallocator",

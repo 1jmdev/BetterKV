@@ -65,6 +65,7 @@ pub fn print(
     quiet: bool,
     precision: usize,
     csv: bool,
+    fire_and_forget: bool,
 ) {
     let rps = if elapsed.is_zero() {
         f64::INFINITY
@@ -113,6 +114,9 @@ pub fn print(
     println!("  {data_size} bytes payload");
     println!("  keep alive: {}", if keep_alive { 1 } else { 0 });
     println!("  multi-thread: {}", if threads > 1 { "yes" } else { "no" });
+    if fire_and_forget {
+        println!("  response handling: skipped");
+    }
     if stats.errors != 0 {
         println!("  errors: {}", stats.errors);
     }

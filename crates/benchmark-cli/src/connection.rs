@@ -1,4 +1,5 @@
 use bytes::{Buf, BytesMut};
+use memchr::memchr;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpStream, UnixStream};
 
@@ -21,7 +22,13 @@ impl RedisConnection {
             Stream::Unix(UnixStream::connect(path).await.map_err(|err| format!("Unix socket connection failed: {err}"))?)
         } else {
             let address = format!("{}:{}", config.host, config.port);
-            Stream::Tcp(TcpStream::connect(address).await.map_err(|err| format!("Connection failed: {err}"))?)
+            let stream = TcpStream::connect(address)
+                .await
+                .map_err(|err| format!("Connection failed: {err}"))?;
+            stream
+                .set_nodelay(true)
+                .map_err(|err| format!("Failed to enable TCP_NODELAY: {err}"))?;
+            Stream::Tcp(stream)
         };
 
         let mut connection = Self { stream, read_buf: BytesMut::with_capacity(8192) };
@@ -174,12 +181,14 @@ fn skip_aggregate(src: &[u8], from: usize, multiplier: usize) -> Result<Option<(
 }
 
 fn find_crlf(src: &[u8], from: usize) -> Option<usize> {
-    let mut index = from;
-    while index + 1 < src.len() {
-        if src[index] == b'\r' && src[index + 1] == b'\n' {
+    let mut cursor = from;
+    while cursor + 1 < src.len() {
+        let rel = memchr(b'\r', &src[cursor..])?;
+        let index = cursor + rel;
+        if src.get(index + 1) == Some(&b'\n') {
             return Some(index);
         }
-        index += 1;
+        cursor = index + 1;
     }
     None
 }

@@ -35,6 +35,11 @@ pub struct CommandState {
     itoa: itoa::Buffer,
 }
 
+pub struct PreparedBatch {
+    bytes: Vec<u8>,
+    offsets: Box<[usize]>,
+}
+
 impl CommandState {
     pub fn new(seed: u64, data_size: usize) -> Self {
         Self {
@@ -84,6 +89,33 @@ impl CommandState {
                 out.extend_from_slice(CRLF);
             }
         }
+    }
+}
+
+impl PreparedBatch {
+    pub fn from_template(template: &CommandTemplate, count: usize) -> Option<Self> {
+        let command = match template {
+            CommandTemplate::Inline(bytes) | CommandTemplate::Encoded(bytes) => bytes,
+            CommandTemplate::Resp(_) => return None,
+        };
+
+        let mut bytes = Vec::with_capacity(command.len() * count);
+        let mut offsets = Vec::with_capacity(count + 1);
+        offsets.push(0);
+
+        for _ in 0..count {
+            bytes.extend_from_slice(command);
+            offsets.push(bytes.len());
+        }
+
+        Some(Self {
+            bytes,
+            offsets: offsets.into_boxed_slice(),
+        })
+    }
+
+    pub fn slice(&self, count: usize) -> &[u8] {
+        &self.bytes[..self.offsets[count]]
     }
 }
 
