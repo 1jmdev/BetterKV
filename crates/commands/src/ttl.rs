@@ -1,4 +1,4 @@
-use crate::util::{Args, int_error, parse_u64_bytes, wrong_args};
+use crate::util::{int_error, parse_i64_bytes, parse_u64_bytes, wrong_args, Args};
 use engine::store::Store;
 use protocol::types::RespFrame;
 
@@ -8,12 +8,16 @@ pub(crate) fn expire(store: &Store, args: &Args) -> RespFrame {
         return wrong_args("EXPIRE");
     }
 
-    let seconds = match parse_u64(&args[2]) {
+    let seconds = match parse_i64(&args[2]) {
         Ok(value) => value,
         Err(response) => return response,
     };
 
-    RespFrame::Integer(store.expire(&args[1], seconds))
+    if seconds <= 0 {
+        return RespFrame::Integer(store.del(&[args[1].to_vec()]));
+    }
+
+    RespFrame::Integer(store.expire(&args[1], seconds as u64))
 }
 
 pub(crate) fn ttl(store: &Store, args: &Args) -> RespFrame {
@@ -29,11 +33,14 @@ pub(crate) fn pexpire(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 3 {
         return wrong_args("PEXPIRE");
     }
-    let millis = match parse_u64(&args[2]) {
+    let millis = match parse_i64(&args[2]) {
         Ok(value) => value,
         Err(response) => return response,
     };
-    RespFrame::Integer(store.pexpire(&args[1], millis))
+    if millis <= 0 {
+        return RespFrame::Integer(store.del(&[args[1].to_vec()]));
+    }
+    RespFrame::Integer(store.pexpire(&args[1], millis as u64))
 }
 
 pub(crate) fn expireat(store: &Store, args: &Args) -> RespFrame {
@@ -78,4 +85,8 @@ pub(crate) fn pttl(store: &Store, args: &Args) -> RespFrame {
 
 fn parse_u64(raw: &[u8]) -> Result<u64, RespFrame> {
     parse_u64_bytes(raw).ok_or_else(int_error)
+}
+
+fn parse_i64(raw: &[u8]) -> Result<i64, RespFrame> {
+    parse_i64_bytes(raw).ok_or_else(int_error)
 }

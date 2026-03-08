@@ -40,6 +40,7 @@ pub async fn handle_connection(
 
     let (push_tx, mut push_rx) = unbounded_channel::<RespFrame>();
     let mut pubsub_state = ConnectionPubSub::new(pubsub_hub.next_connection_id());
+    let mut client_state = dispatch::ClientState::default();
     let mut auth_state = auth.new_session();
 
     let result = loop {
@@ -98,6 +99,7 @@ pub async fn handle_connection(
                             &pubsub_hub,
                             &push_tx,
                             &mut pubsub_state,
+                            &mut client_state,
                             &auth,
                             &mut auth_state,
                             &profiler,
@@ -106,7 +108,9 @@ pub async fn handle_connection(
                         )
                     });
 
-                    encoder.encode(&response, &mut write_buf);
+                    if !client_state.take_suppress_current_reply() {
+                        encoder.encode(&response, &mut write_buf);
+                    }
                 }
 
                 if let Err(err) = flush_write_buf(&mut stream, &mut write_buf).await {

@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::util::{Args, eq_ascii, parse_u64_bytes, wrong_args, wrong_type};
+use crate::util::{eq_ascii, parse_i64_bytes, wrong_args, wrong_type, Args};
 use engine::store::{GetExMode, Store};
 use protocol::types::{BulkData, RespFrame};
 use types::value::CompactArg;
@@ -84,14 +84,14 @@ fn parse_getex_mode(args: &Args) -> Result<GetExMode, RespFrame> {
 }
 
 fn parse_positive_u64(raw: &[u8], command: &str) -> Result<u64, RespFrame> {
-    let value = parse_u64_bytes(raw)
+    let value = parse_i64_bytes(raw)
         .ok_or_else(|| RespFrame::error_static("ERR value is not an integer or out of range"))?;
 
-    if value == 0 {
+    if value <= 0 {
         return Err(RespFrame::Error(format!(
             "ERR invalid expire time in '{command}' command"
         )));
     }
 
-    Ok(value)
+    Ok(value as u64)
 }

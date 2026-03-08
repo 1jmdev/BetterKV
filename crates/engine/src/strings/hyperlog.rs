@@ -63,6 +63,10 @@ impl Store {
     pub fn pfmerge(&self, destination: &[u8], keys: &[CompactArg]) -> Result<(), ()> {
         let _trace = profiler::scope("engine::strings::hyperlog::pfmerge");
         let mut union = HashSet::with_hasher(RandomState::new());
+        if let Some(value) = self.get(destination)? {
+            let decoded = decode_hll(value.as_slice()).ok_or(())?;
+            union.extend(decoded);
+        }
         for key in keys {
             let Some(value) = self.get(key.as_slice())? else {
                 continue;

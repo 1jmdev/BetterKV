@@ -237,6 +237,7 @@ pub fn eq_ascii(command: &[u8], expected: &[u8]) -> bool {
 
 #[cold]
 pub fn wrong_args(command: &str) -> RespFrame {
+    let command = command.to_ascii_lowercase();
     RespFrame::Error(format!(
         "ERR wrong number of arguments for '{command}' command"
     ))
@@ -266,7 +267,12 @@ pub fn u64_to_bytes(value: u64) -> Vec<u8> {
 pub fn f64_to_bytes(value: f64) -> Vec<u8> {
     let _trace = profiler::scope("commands::util::f64_to_bytes");
     let mut buffer = ryu::Buffer::new();
-    buffer.format(value).as_bytes().to_vec()
+    let formatted = buffer.format(value);
+    if let Some(trimmed) = formatted.strip_suffix(".0") {
+        trimmed.as_bytes().to_vec()
+    } else {
+        formatted.as_bytes().to_vec()
+    }
 }
 
 pub fn parse_i64_bytes(raw: &[u8]) -> Option<i64> {

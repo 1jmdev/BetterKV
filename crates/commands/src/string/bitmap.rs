@@ -1,4 +1,4 @@
-use crate::util::{Args, int_error, parse_i64_bytes, parse_u64_bytes, wrong_args, wrong_type};
+use crate::util::{int_error, parse_i64_bytes, parse_u64_bytes, wrong_args, wrong_type, Args};
 use engine::store::{BitFieldEncoding, BitFieldOp, BitFieldOverflow, BitOp, Store};
 use protocol::types::RespFrame;
 
@@ -23,7 +23,10 @@ pub(crate) fn setbit(store: &Store, args: &Args) -> RespFrame {
     if args.len() != 4 {
         return wrong_args("SETBIT");
     }
-    let offset = match parse_non_negative_usize(&args[2], int_error()) {
+    let offset = match parse_non_negative_usize(
+        &args[2],
+        RespFrame::Error("ERR bit offset is not an integer or out of range".to_string()),
+    ) {
         Ok(value) => value,
         Err(response) => return response,
     };

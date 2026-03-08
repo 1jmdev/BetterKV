@@ -12,6 +12,18 @@ use super::util::{collapse_pubsub_responses, wrong_args};
 use crate::auth::{self, no_perm, AuthError, AuthService, SessionAuth};
 use crate::profile::ProfileHub;
 
+#[derive(Default)]
+pub(super) struct ClientState {
+    name: Option<CompactArg>,
+    suppress_current_reply: bool,
+}
+
+impl ClientState {
+    pub(super) fn take_suppress_current_reply(&mut self) -> bool {
+        std::mem::take(&mut self.suppress_current_reply)
+    }
+}
+
 #[inline]
 fn bulk_static(value: &'static [u8]) -> RespFrame {
     RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(value))))
@@ -22,6 +34,7 @@ pub(super) fn execute_regular_command(
     hub: &PubSubHub,
     push_tx: &UnboundedSender<RespFrame>,
     pubsub_state: &mut ConnectionPubSub,
+    client_state: &mut ClientState,
     auth: &AuthService,
     auth_state: &mut SessionAuth,
     profiler: &ProfileHub,
@@ -65,14 +78,32 @@ pub(super) fn execute_regular_command(
                 return no_perm(error);
             }
         }
-        return dispatch_authorized(store, hub, push_tx, pubsub_state, profiler, command, args);
+        return dispatch_authorized(
+            store,
+            hub,
+            push_tx,
+            pubsub_state,
+            client_state,
+            profiler,
+            command,
+            args,
+        );
     }
 
     if !is_allowed_without_auth(command) {
         return auth::no_auth();
     }
 
-    dispatch_authorized(store, hub, push_tx, pubsub_state, profiler, command, args)
+    dispatch_authorized(
+        store,
+        hub,
+        push_tx,
+        pubsub_state,
+        client_state,
+        profiler,
+        command,
+        args,
+    )
 }
 
 #[inline]
@@ -81,10 +112,15 @@ fn dispatch_authorized(
     hub: &PubSubHub,
     push_tx: &UnboundedSender<RespFrame>,
     pubsub_state: &mut ConnectionPubSub,
+    client_state: &mut ClientState,
     profiler: &ProfileHub,
     command: CommandId,
     args: &[CompactArg],
 ) -> RespFrame {
+    if command == CommandId::Client {
+        return client_command(client_state, args);
+    }
+
     if let Some(response) =
         handle_pubsub_or_config_command(hub, push_tx, pubsub_state, command, args)
     {
@@ -99,6 +135,76 @@ fn dispatch_authorized(
         }
         response
     })
+}
+
+fn client_command(client_state: &mut ClientState, args: &[CompactArg]) -> RespFrame {
+    let _trace = profiler::scope("server::connection::dispatch::client_command");
+    if args.len() < 2 {
+        return RespFrame::error_static("ERR wrong number of arguments for 'client' command");
+    }
+
+    let sub = args[1].as_slice();
+    if sub.eq_ignore_ascii_case(b"SETNAME") {
+        if args.len() != 3 {
+            return RespFrame::error_static("ERR wrong number of arguments for 'client' command");
+        }
+        client_state.name = Some(args[2].clone());
+        return RespFrame::ok();
+    }
+    if sub.eq_ignore_ascii_case(b"GETNAME") {
+        if args.len() != 2 {
+            return RespFrame::error_static("ERR wrong number of arguments for 'client' command");
+        }
+        return RespFrame::Bulk(client_state.name.clone().map(BulkData::Arg));
+    }
+    if sub.eq_ignore_ascii_case(b"SETINFO") {
+        return RespFrame::ok();
+    }
+    if sub.eq_ignore_ascii_case(b"ID") {
+        if args.len() != 2 {
+            return RespFrame::error_static("ERR wrong number of arguments for 'client' command");
+        }
+        return RespFrame::Integer(1);
+    }
+    if sub.eq_ignore_ascii_case(b"LIST") || sub.eq_ignore_ascii_case(b"INFO") {
+        return RespFrame::Bulk(Some(BulkData::from_vec(Vec::new())));
+    }
+    if sub.eq_ignore_ascii_case(b"PAUSE") {
+        if args.len() != 3 {
+            return RespFrame::error_static("ERR wrong number of arguments for 'client' command");
+        }
+        return RespFrame::ok();
+    }
+    if sub.eq_ignore_ascii_case(b"UNPAUSE") {
+        if args.len() != 2 {
+            return RespFrame::error_static("ERR wrong number of arguments for 'client' command");
+        }
+        return RespFrame::ok();
+    }
+    if sub.eq_ignore_ascii_case(b"TRACKING") {
+        if args.len() < 3 {
+            return RespFrame::error_static("ERR wrong number of arguments for 'client' command");
+        }
+        return RespFrame::ok();
+    }
+    if sub.eq_ignore_ascii_case(b"TRACKINGINFO") {
+        return RespFrame::Array(Some(vec![]));
+    }
+    if sub.eq_ignore_ascii_case(b"REPLY") {
+        if args.len() != 3 {
+            return RespFrame::error_static("ERR wrong number of arguments for 'client' command");
+        }
+        if args[2].eq_ignore_ascii_case(b"ON") {
+            return RespFrame::ok();
+        }
+        if args[2].eq_ignore_ascii_case(b"OFF") || args[2].eq_ignore_ascii_case(b"SKIP") {
+            client_state.suppress_current_reply = true;
+            return RespFrame::ok();
+        }
+        return RespFrame::error_static("ERR syntax error");
+    }
+
+    RespFrame::error_static("ERR unknown subcommand for CLIENT")
 }
 
 fn auth_command(

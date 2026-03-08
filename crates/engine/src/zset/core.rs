@@ -110,7 +110,14 @@ impl Store {
         Ok(zset.len() as i64)
     }
 
-    pub fn zcount(&self, key: &[u8], min: f64, max: f64) -> Result<i64, ()> {
+    pub fn zcount(
+        &self,
+        key: &[u8],
+        min: f64,
+        min_exclusive: bool,
+        max: f64,
+        max_exclusive: bool,
+    ) -> Result<i64, ()> {
         let _trace = profiler::scope("engine::zset::core::zcount");
         if min > max {
             return Ok(0);
@@ -128,7 +135,19 @@ impl Store {
         let zset = get_zset(entry).ok_or(())?;
         Ok(zset
             .iter_member_scores()
-            .filter(|(_, score)| *score >= min && *score <= max)
+            .filter(|(_, score)| {
+                let above_min = if min_exclusive {
+                    *score > min
+                } else {
+                    *score >= min
+                };
+                let below_max = if max_exclusive {
+                    *score < max
+                } else {
+                    *score <= max
+                };
+                above_min && below_max
+            })
             .count() as i64)
     }
 

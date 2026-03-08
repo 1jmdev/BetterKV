@@ -36,7 +36,9 @@ impl Store {
         &self,
         key: &[u8],
         min: f64,
+        min_exclusive: bool,
         max: f64,
+        max_exclusive: bool,
         reverse: bool,
         offset: usize,
         count: Option<usize>,
@@ -56,7 +58,19 @@ impl Store {
 
         let filtered: Vec<_> = zset
             .iter_ordered(reverse)
-            .filter(|(_, score)| *score >= min && *score <= max)
+            .filter(|(_, score)| {
+                let above_min = if min_exclusive {
+                    *score > min
+                } else {
+                    *score >= min
+                };
+                let below_max = if max_exclusive {
+                    *score < max
+                } else {
+                    *score <= max
+                };
+                above_min && below_max
+            })
             .map(|(member, score)| (member.clone(), score))
             .collect();
 

@@ -1,7 +1,8 @@
 use crate::util::{
-    Args, eq_ascii, f64_to_bytes, int_error, parse_i64_bytes, parse_u64_bytes, wrong_args,
-    wrong_type,
+    eq_ascii, f64_to_bytes, int_error, parse_i64_bytes, parse_u64_bytes, wrong_args, wrong_type,
+    Args,
 };
+use crate::zset::parse::parse_score_bound;
 use engine::store::Store;
 use protocol::types::{BulkData, RespFrame};
 use types::value::CompactKey;
@@ -51,11 +52,11 @@ pub(crate) fn zrange_by_score(store: &Store, args: &Args, reverse: bool) -> Resp
         });
     }
 
-    let first = match parse_f64(&args[2]) {
+    let first = match parse_score_bound(&args[2]) {
         Ok(value) => value,
         Err(response) => return response,
     };
-    let second = match parse_f64(&args[3]) {
+    let second = match parse_score_bound(&args[3]) {
         Ok(value) => value,
         Err(response) => return response,
     };
@@ -93,7 +94,7 @@ pub(crate) fn zrange_by_score(store: &Store, args: &Args, reverse: bool) -> Resp
         return crate::util::syntax_error();
     }
 
-    match store.zrange_by_score(&args[1], min, max, reverse, offset, count) {
+    match store.zrange_by_score(&args[1], min.0, min.1, max.0, max.1, reverse, offset, count) {
         Ok(items) => RespFrame::Array(Some(format_items(items, withscores))),
         Err(_) => wrong_type(),
     }
@@ -125,18 +126,4 @@ fn parse_i64(raw: &[u8]) -> Result<i64, RespFrame> {
 fn parse_usize(raw: &[u8]) -> Result<usize, RespFrame> {
     let v = parse_u64_bytes(raw).ok_or_else(int_error)?;
     usize::try_from(v).map_err(|_| int_error())
-}
-
-fn parse_f64(raw: &[u8]) -> Result<f64, RespFrame> {
-    let _trace = profiler::scope("commands::zset::range::parse_f64");
-    match std::str::from_utf8(raw) {
-        Ok(value) => value
-            .parse::<f64>()
-            .ok()
-            .filter(|value| value.is_finite())
-            .ok_or_else(|| RespFrame::Error("ERR value is not a valid float".to_string())),
-        Err(_) => Err(RespFrame::Error(
-            "ERR value is not a valid float".to_string(),
-        )),
-    }
 }

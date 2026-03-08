@@ -1,4 +1,4 @@
-use crate::command::{CommandId, identify};
+use crate::command::{identify, CommandId};
 use crate::{connection, geo, hash, keyspace, list, scripting, set, stream, string, ttl, zset};
 use engine::store::Store;
 use protocol::types::{BulkData, RespFrame};
@@ -41,7 +41,13 @@ pub fn dispatch_with_id(store: &Store, command: CommandId, args: &[CompactArg]) 
         CommandId::Auth => connection::auth(args),
         CommandId::Hello => connection::hello(args),
         CommandId::Client => connection::client(args),
-        CommandId::Command => RespFrame::Array(Some(vec![])),
+        CommandId::Command => {
+            if args.len() == 2 && args[1].eq_ignore_ascii_case(b"COUNT") {
+                RespFrame::Integer(0)
+            } else {
+                RespFrame::Array(Some(vec![]))
+            }
+        }
         CommandId::Select => connection::select_db(args),
         CommandId::Quit => connection::quit(args),
         CommandId::Echo => connection::echo(args),

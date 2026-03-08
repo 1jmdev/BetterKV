@@ -1,5 +1,6 @@
 mod algebra;
 mod core;
+mod parse;
 mod pop;
 mod random;
 mod range;

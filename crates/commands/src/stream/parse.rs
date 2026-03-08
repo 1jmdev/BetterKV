@@ -1,4 +1,4 @@
-use crate::util::{Args, int_error, parse_u64_bytes};
+use crate::util::{int_error, parse_u64_bytes, Args};
 use engine::store::{XAddId, XTrimMode};
 use protocol::types::RespFrame;
 use types::value::StreamId;
@@ -15,7 +15,16 @@ pub(super) fn parse_stream_id(raw: &[u8]) -> Result<StreamId, RespFrame> {
             seq: u64::MAX,
         });
     }
-    let dash = memchr::memchr(b'-', raw).ok_or_else(|| RespFrame::error_static(ERR_STREAM_ID))?;
+    if raw == b"$" {
+        return Ok(StreamId {
+            ms: u64::MAX,
+            seq: u64::MAX,
+        });
+    }
+    let Some(dash) = memchr::memchr(b'-', raw) else {
+        let ms = parse_u64_bytes(raw).ok_or_else(|| RespFrame::error_static(ERR_STREAM_ID))?;
+        return Ok(StreamId { ms, seq: 0 });
+    };
     let ms = parse_u64_bytes(&raw[..dash]).ok_or_else(|| RespFrame::error_static(ERR_STREAM_ID))?;
     let seq =
         parse_u64_bytes(&raw[dash + 1..]).ok_or_else(|| RespFrame::error_static(ERR_STREAM_ID))?;
