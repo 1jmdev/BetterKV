@@ -1,0 +1,19 @@
+# Basic string command coverage
+
+@name SET-GET
+@group strings
+@since 1.0.0
+
+=== TEST: SET returns OK
+RUN:
+SET sample value
+EXPECT:
+OK
+
+=== TEST: GET returns stored value
+SETUP:
+SET sample value
+RUN:
+GET sample
+EXPECT:
+"value"
