@@ -1,210 +1,67 @@
+use std::collections::VecDeque;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::thread;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use bytes::BytesMut;
-use protocol::parser::{self, ParseError};
-use protocol::types::{BulkData, RespFrame};
-use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
 
 use crate::args::Args;
+use crate::render::progress_line;
 use crate::resp::{
-    ExpectedResponse, encode_expected_response, encode_resp_parts, make_key, read_n_responses,
-    read_n_strict_responses, read_n_unchecked_responses, repeat_payload,
+    ExpectedResponse, consume_response, encode_expected_response, encode_resp_parts,
 };
-use crate::spec::{BenchKind, BenchRun};
+use crate::spec::{ArgTemplate, BenchKind, BenchRun, CommandTemplate};
 
-const SCRIPT_SET_BODY: &[u8] = b"redis.call('SET', KEYS[1], ARGV[1]); return ARGV[1]";
-const SCRIPT_GET_BODY: &[u8] = b"return redis.call('GET', KEYS[1])";
 const SETUP_BATCH: usize = 64;
+const LIST_ITEM_COUNT: usize = 600;
+const MSET_KEYS: usize = 10;
 
 #[derive(Default)]
 struct WorkerStats {
     completed: u64,
-    lat_samples_ns: Vec<u64>,
+    latencies_ns: Vec<u64>,
+}
+
+pub struct CumulativeBucket {
+    pub percent: f64,
+    pub latency_ms: f64,
+    pub cumulative_count: u64,
 }
 
 pub struct BenchResult {
     pub name: String,
-    pub scenario: Option<&'static str>,
     pub requests: u64,
     pub clients: usize,
     pub elapsed_secs: f64,
     pub req_per_sec: f64,
     pub avg_ms: f64,
+    pub min_ms: f64,
     pub p50_ms: f64,
     pub p95_ms: f64,
     pub p99_ms: f64,
+    pub max_ms: f64,
     pub data_size: usize,
-    pub pipeline: usize,
-    pub random_keys: bool,
-    pub keyspace: u64,
+    pub keep_alive: bool,
+    pub multi_thread: bool,
+    samples_ns: Vec<u64>,
+    pub cumulative_distribution: Vec<CumulativeBucket>,
 }
 
 struct Shared {
     host: String,
     port: u16,
-    auth: Option<String>,
+    user: Option<String>,
+    password: Option<String>,
+    run: BenchRun,
     strict: bool,
-    spec: BenchRun,
 }
 
-struct ResponseModel {
-    kind: BenchKind,
-    value: Vec<u8>,
-    flags: Vec<bool>,
-    ints: Vec<i64>,
-    lens: Vec<i64>,
-}
-
-impl ResponseModel {
-    fn new(spec: &BenchRun, value: Vec<u8>) -> Self {
-        let slots = if spec.random_keys {
-            spec.keyspace as usize
-        } else {
-            1
-        };
-
-        let flags = match spec.kind {
-            BenchKind::Lpop | BenchKind::Rpop | BenchKind::Srem | BenchKind::Zrem => {
-                vec![true; slots]
-            }
-            _ => vec![false; slots],
-        };
-
-        let ints = vec![0; slots];
-        let lens = vec![0; slots];
-
-        Self {
-            kind: spec.kind,
-            value,
-            flags,
-            ints,
-            lens,
-        }
-    }
-
-    fn expected(&mut self, key_slot: u64) -> ExpectedResponse {
-        let idx = (key_slot as usize).min(self.flags.len().saturating_sub(1));
-        match self.kind {
-            BenchKind::PingInline | BenchKind::PingMbulk => ExpectedResponse::Simple("PONG"),
-            BenchKind::Echo
-            | BenchKind::Get
-            | BenchKind::GetSet
-            | BenchKind::Hget
-            | BenchKind::Eval
-            | BenchKind::EvalRo
-            | BenchKind::EvalSha
-            | BenchKind::EvalShaRo => ExpectedResponse::Bulk(Some(self.value.clone())),
-            BenchKind::Set | BenchKind::Mset => ExpectedResponse::Simple("OK"),
-            BenchKind::Mget => ExpectedResponse::Array(vec![
-                ExpectedResponse::Bulk(Some(self.value.clone())),
-                ExpectedResponse::Bulk(Some(self.value.clone())),
-            ]),
-            BenchKind::SetNx | BenchKind::Sadd | BenchKind::Hset | BenchKind::Zadd => {
-                let created = !self.flags[idx];
-                self.flags[idx] = true;
-                ExpectedResponse::Integer(created as i64)
-            }
-            BenchKind::Del => ExpectedResponse::Integer(0),
-            BenchKind::Exists
-            | BenchKind::Expire
-            | BenchKind::Llen
-            | BenchKind::Scard
-            | BenchKind::Sismember
-            | BenchKind::Zcard => ExpectedResponse::Integer(1),
-            BenchKind::Ttl => ExpectedResponse::IntegerRange { min: 0, max: 60 },
-            BenchKind::Incr => {
-                self.ints[idx] += 1;
-                ExpectedResponse::Integer(self.ints[idx])
-            }
-            BenchKind::IncrBy => {
-                self.ints[idx] += 3;
-                ExpectedResponse::Integer(self.ints[idx])
-            }
-            BenchKind::Decr => {
-                self.ints[idx] -= 1;
-                ExpectedResponse::Integer(self.ints[idx])
-            }
-            BenchKind::DecrBy => {
-                self.ints[idx] -= 3;
-                ExpectedResponse::Integer(self.ints[idx])
-            }
-            BenchKind::Strlen | BenchKind::SetRange => {
-                ExpectedResponse::Integer(self.value.len() as i64)
-            }
-            BenchKind::GetRange => {
-                ExpectedResponse::Bulk(Some(self.value[..self.value.len().min(3)].to_vec()))
-            }
-            BenchKind::Lpush | BenchKind::Rpush => {
-                self.lens[idx] += 1;
-                ExpectedResponse::Integer(self.lens[idx])
-            }
-            BenchKind::Lpop | BenchKind::Rpop => {
-                let popped = self.flags[idx];
-                self.flags[idx] = false;
-                if popped {
-                    ExpectedResponse::Bulk(Some(self.value.clone()))
-                } else {
-                    ExpectedResponse::Bulk(None)
-                }
-            }
-            BenchKind::Lrange => {
-                ExpectedResponse::Array(vec![ExpectedResponse::Bulk(Some(self.value.clone()))])
-            }
-            BenchKind::Srem | BenchKind::Zrem => {
-                let removed = self.flags[idx];
-                self.flags[idx] = false;
-                ExpectedResponse::Integer(removed as i64)
-            }
-            BenchKind::Hgetall => ExpectedResponse::Array(vec![
-                ExpectedResponse::Bulk(Some(b"field".to_vec())),
-                ExpectedResponse::Bulk(Some(self.value.clone())),
-            ]),
-            BenchKind::Hincrby => {
-                self.ints[idx] += 1;
-                ExpectedResponse::Integer(self.ints[idx])
-            }
-            BenchKind::Zscore => ExpectedResponse::Bulk(Some(b"1".to_vec())),
-            BenchKind::Zrank | BenchKind::Zrevrank => ExpectedResponse::Integer(0),
-        }
-    }
-}
-
-fn has_fixed_response_shape(kind: BenchKind) -> bool {
-    matches!(
-        kind,
-        BenchKind::PingInline
-            | BenchKind::PingMbulk
-            | BenchKind::Echo
-            | BenchKind::Set
-            | BenchKind::Get
-            | BenchKind::GetSet
-            | BenchKind::Mset
-            | BenchKind::Mget
-            | BenchKind::Del
-            | BenchKind::Exists
-            | BenchKind::Expire
-            | BenchKind::Strlen
-            | BenchKind::SetRange
-            | BenchKind::GetRange
-            | BenchKind::Llen
-            | BenchKind::Lrange
-            | BenchKind::Scard
-            | BenchKind::Sismember
-            | BenchKind::Hget
-            | BenchKind::Hgetall
-            | BenchKind::Zcard
-            | BenchKind::Zscore
-            | BenchKind::Zrank
-            | BenchKind::Zrevrank
-            | BenchKind::Eval
-            | BenchKind::EvalRo
-            | BenchKind::EvalSha
-            | BenchKind::EvalShaRo
-    )
+struct Progress {
+    completed: AtomicU64,
+    finished: AtomicBool,
 }
 
 #[derive(Clone, Copy)]
@@ -213,36 +70,99 @@ struct ClientPlan {
     quota: u64,
 }
 
-pub async fn run_single_benchmark(_args: &Args, spec: BenchRun) -> Result<BenchResult, String> {
-    let clients = spec.clients.min(spec.requests as usize).max(1);
-    let base = spec.requests / clients as u64;
-    let extra = (spec.requests % clients as u64) as usize;
+#[derive(Clone, Copy)]
+struct RandomSource {
+    state: u64,
+}
+
+impl RandomSource {
+    fn new(seed: u64) -> Self {
+        Self { state: seed }
+    }
+
+    fn next(&mut self) -> u64 {
+        self.state = self.state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut value = self.state;
+        value = (value ^ (value >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        value = (value ^ (value >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        value ^ (value >> 31)
+    }
+}
+
+pub async fn maybe_warn_about_server_config(args: &Args) {
+    match try_fetch_server_config(args).await {
+        Ok(()) => {}
+        Err(_) => eprintln!("WARNING: Could not fetch server CONFIG"),
+    }
+}
+
+async fn try_fetch_server_config(args: &Args) -> Result<(), String> {
+    let addr = format!("{}:{}", args.host, args.port);
+    let mut stream = TcpStream::connect(&addr)
+        .await
+        .map_err(|err| format!("connect {addr}: {err}"))?;
+    stream
+        .set_nodelay(true)
+        .map_err(|err| format!("set_nodelay: {err}"))?;
+
+    let mut parse_buf = BytesMut::with_capacity(1024);
+    authenticate_and_select(
+        &mut stream,
+        &mut parse_buf,
+        args.user.as_deref(),
+        args.password.as_deref(),
+        args.dbnum,
+    )
+    .await?;
+    let payload = encode_resp_parts(&[b"CONFIG", b"GET", b"save"]);
+    stream
+        .write_all(&payload)
+        .await
+        .map_err(|err| format!("CONFIG write failed: {err}"))?;
+    consume_response(&mut stream, &mut parse_buf, None, None, false).await
+}
+
+pub async fn run_single_benchmark(args: &Args, run: BenchRun) -> Result<BenchResult, String> {
+    let clients = run.clients.min(run.requests as usize).max(1);
+    let base = run.requests / clients as u64;
+    let extra = (run.requests % clients as u64) as usize;
+    let thread_count = args.thread_count().min(clients).max(1);
 
     let shared = Arc::new(Shared {
-        host: _args.host.clone(),
-        port: _args.port,
-        auth: _args.auth.clone(),
-        strict: _args.strict,
-        spec,
+        host: args.host.clone(),
+        port: args.port,
+        user: args.user.clone(),
+        password: args.password.clone(),
+        run,
+        strict: args.strict,
     });
 
-    let thread_count = _args.threads.min(clients).max(1);
-    let mut plans = Vec::with_capacity(clients);
+    let mut shards = vec![Vec::new(); thread_count];
     for client_id in 0..clients {
         let quota = base + u64::from(client_id < extra);
         if quota == 0 {
             continue;
         }
-        plans.push(ClientPlan {
+        shards[client_id % thread_count].push(ClientPlan {
             client_id: client_id as u64,
             quota,
         });
     }
 
-    let mut shards = vec![Vec::new(); thread_count];
-    for (index, plan) in plans.into_iter().enumerate() {
-        shards[index % thread_count].push(plan);
-    }
+    let progress = Arc::new(Progress {
+        completed: AtomicU64::new(0),
+        finished: AtomicBool::new(false),
+    });
+
+    let reporter = if args.quiet || args.csv {
+        None
+    } else {
+        Some(spawn_progress_reporter(
+            shared.run.name.clone(),
+            shared.run.requests,
+            Arc::clone(&progress),
+        ))
+    };
 
     let start = Instant::now();
     let mut handles = Vec::with_capacity(thread_count);
@@ -250,58 +170,152 @@ pub async fn run_single_benchmark(_args: &Args, spec: BenchRun) -> Result<BenchR
         if shard.is_empty() {
             continue;
         }
+
         let cfg = Arc::clone(&shared);
+        let progress = Arc::clone(&progress);
         handles.push(
             thread::Builder::new()
                 .name(format!("betterkv-bench-{thread_index}"))
-                .spawn(move || run_thread_shard(cfg, shard))
+                .spawn(move || run_thread_shard(cfg, shard, progress))
                 .map_err(|err| format!("failed to spawn benchmark thread {thread_index}: {err}"))?,
         );
     }
 
+    let mut samples = Vec::new();
     let mut total_completed = 0u64;
-    let mut samples = Vec::<u64>::new();
     for handle in handles {
         let thread_stats = handle
             .join()
             .map_err(|_| "benchmark thread panicked".to_string())??;
         for stats in thread_stats {
             total_completed += stats.completed;
-            samples.extend(stats.lat_samples_ns);
+            samples.extend(stats.latencies_ns);
         }
     }
 
-    let elapsed = start.elapsed();
-    let elapsed_secs = elapsed.as_secs_f64();
+    progress.finished.store(true, Ordering::Relaxed);
+    if let Some(reporter) = reporter {
+        let _ = reporter.join();
+        eprintln!();
+    }
+
+    let elapsed_secs = start.elapsed().as_secs_f64();
     if total_completed == 0 || elapsed_secs == 0.0 {
         return Err("benchmark completed with zero successful requests".to_string());
     }
 
     samples.sort_unstable();
-    let avg_ms = elapsed_secs * 1000.0 / total_completed as f64;
-    let p50_ms = percentile_ms(&samples, 0.50);
-    let p95_ms = percentile_ms(&samples, 0.95);
-    let p99_ms = percentile_ms(&samples, 0.99);
+    let avg_ms = samples.iter().copied().map(ns_to_ms).sum::<f64>() / samples.len() as f64;
+    let min_ms = ns_to_ms(samples[0]);
+    let p50_ms = percentile_ms(&samples, 50.0);
+    let p95_ms = percentile_ms(&samples, 95.0);
+    let p99_ms = percentile_ms(&samples, 99.0);
+    let max_ms = ns_to_ms(*samples.last().unwrap_or(&0));
 
     Ok(BenchResult {
-        name: shared.spec.name.clone(),
-        scenario: shared.spec.scenario,
+        name: shared.run.name.clone(),
         requests: total_completed,
         clients,
         elapsed_secs,
         req_per_sec: total_completed as f64 / elapsed_secs,
         avg_ms,
+        min_ms,
         p50_ms,
         p95_ms,
         p99_ms,
-        data_size: shared.spec.data_size,
-        pipeline: shared.spec.pipeline,
-        random_keys: shared.spec.random_keys,
-        keyspace: shared.spec.keyspace,
+        max_ms,
+        data_size: shared.run.data_size,
+        keep_alive: shared.run.keep_alive,
+        multi_thread: args.multi_thread_enabled(),
+        cumulative_distribution: build_cumulative_distribution(&samples),
+        samples_ns: samples,
     })
 }
 
-fn run_thread_shard(cfg: Arc<Shared>, shard: Vec<ClientPlan>) -> Result<Vec<WorkerStats>, String> {
+pub async fn run_idle_mode(args: &Args) -> Result<(), String> {
+    let addr = format!("{}:{}", args.host, args.port);
+    let mut handles = Vec::with_capacity(args.clients);
+    for _ in 0..args.clients {
+        let addr = addr.clone();
+        let user = args.user.clone();
+        let password = args.password.clone();
+        let dbnum = args.dbnum;
+        handles.push(tokio::spawn(async move {
+            let mut stream = TcpStream::connect(&addr)
+                .await
+                .map_err(|err| format!("connect {addr}: {err}"))?;
+            stream
+                .set_nodelay(true)
+                .map_err(|err| format!("set_nodelay: {err}"))?;
+            let mut parse_buf = BytesMut::with_capacity(256);
+            authenticate_and_select(
+                &mut stream,
+                &mut parse_buf,
+                user.as_deref(),
+                password.as_deref(),
+                dbnum,
+            )
+            .await?;
+            tokio::time::sleep(Duration::from_secs(u64::MAX / 4)).await;
+            Ok::<(), String>(())
+        }));
+    }
+
+    for handle in handles {
+        handle
+            .await
+            .map_err(|err| format!("idle worker failed: {err}"))??;
+    }
+
+    Ok(())
+}
+
+impl BenchResult {
+    pub fn latency_for_percentile(&self, percentile: f64) -> f64 {
+        percentile_ms(&self.samples_ns, percentile)
+    }
+
+    pub fn cumulative_count_for_percentile(&self, percentile: f64) -> u64 {
+        if self.samples_ns.is_empty() {
+            return 0;
+        }
+        if percentile <= 0.0 {
+            return 1;
+        }
+        let index = percentile_index(self.samples_ns.len(), percentile);
+        (index + 1) as u64
+    }
+}
+
+fn spawn_progress_reporter(
+    name: String,
+    total: u64,
+    progress: Arc<Progress>,
+) -> thread::JoinHandle<()> {
+    thread::spawn(move || {
+        let started = Instant::now();
+        while !progress.finished.load(Ordering::Relaxed) {
+            let completed = progress.completed.load(Ordering::Relaxed);
+            eprint!(
+                "\r{}",
+                progress_line(&name, completed, total, started.elapsed().as_secs_f64())
+            );
+            thread::sleep(Duration::from_millis(200));
+        }
+
+        let completed = progress.completed.load(Ordering::Relaxed);
+        eprint!(
+            "\r{}",
+            progress_line(&name, completed, total, started.elapsed().as_secs_f64())
+        );
+    })
+}
+
+fn run_thread_shard(
+    cfg: Arc<Shared>,
+    shard: Vec<ClientPlan>,
+    progress: Arc<Progress>,
+) -> Result<Vec<WorkerStats>, String> {
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -311,8 +325,9 @@ fn run_thread_shard(cfg: Arc<Shared>, shard: Vec<ClientPlan>) -> Result<Vec<Work
         let mut handles = Vec::with_capacity(shard.len());
         for plan in shard {
             let worker_cfg = Arc::clone(&cfg);
+            let worker_progress = Arc::clone(&progress);
             handles.push(tokio::spawn(async move {
-                run_worker(plan.client_id, plan.quota, worker_cfg).await
+                run_worker(plan.client_id, plan.quota, worker_cfg, worker_progress).await
             }));
         }
 
@@ -328,7 +343,79 @@ fn run_thread_shard(cfg: Arc<Shared>, shard: Vec<ClientPlan>) -> Result<Vec<Work
     })
 }
 
-async fn run_worker(client_id: u64, quota: u64, cfg: Arc<Shared>) -> Result<WorkerStats, String> {
+async fn run_worker(
+    client_id: u64,
+    quota: u64,
+    cfg: Arc<Shared>,
+    progress: Arc<Progress>,
+) -> Result<WorkerStats, String> {
+    let mut connection = open_connection(&cfg).await?;
+    let value = vec![b'x'; cfg.run.data_size];
+    let key_base = format!(
+        "{}:{}:{client_id}",
+        cfg.run.key_prefix,
+        cfg.run.name.to_ascii_lowercase()
+    );
+    let mut random = RandomSource::new(cfg.run.seed ^ client_id.rotate_left(17));
+
+    setup_connection_state(&mut connection, &cfg.run, key_base.as_bytes(), &value).await?;
+
+    let mut stats = WorkerStats {
+        latencies_ns: Vec::with_capacity(quota as usize),
+        ..WorkerStats::default()
+    };
+    let mut remaining = quota;
+    while remaining > 0 {
+        let batch = remaining.min(cfg.run.pipeline as u64) as usize;
+        if !cfg.run.keep_alive && stats.completed > 0 {
+            connection = open_connection(&cfg).await?;
+            setup_connection_state(&mut connection, &cfg.run, key_base.as_bytes(), &value).await?;
+        }
+
+        let request_group =
+            build_request_group(&cfg.run, key_base.as_bytes(), &value, batch, &mut random)?;
+        let sent_at = Instant::now();
+        connection
+            .stream
+            .write_all(&request_group.payload)
+            .await
+            .map_err(|err| format!("write failed: {err}"))?;
+
+        let mut pending = VecDeque::from(vec![sent_at; batch]);
+        for index in 0..batch {
+            let expected = request_group.expected[index].as_ref();
+            let encoded = request_group.encoded[index].as_deref();
+            consume_response(
+                &mut connection.stream,
+                &mut connection.parse_buf,
+                expected,
+                encoded,
+                cfg.strict,
+            )
+            .await?;
+
+            let started = pending.pop_front().expect("pending request timestamp");
+            stats
+                .latencies_ns
+                .push(started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64);
+        }
+
+        stats.completed += batch as u64;
+        progress
+            .completed
+            .fetch_add(batch as u64, Ordering::Relaxed);
+        remaining -= batch as u64;
+    }
+
+    Ok(stats)
+}
+
+struct Connection {
+    stream: TcpStream,
+    parse_buf: BytesMut,
+}
+
+async fn open_connection(cfg: &Shared) -> Result<Connection, String> {
     let addr = format!("{}:{}", cfg.host, cfg.port);
     let mut stream = TcpStream::connect(&addr)
         .await
@@ -338,201 +425,115 @@ async fn run_worker(client_id: u64, quota: u64, cfg: Arc<Shared>) -> Result<Work
         .map_err(|err| format!("set_nodelay: {err}"))?;
 
     let mut parse_buf = BytesMut::with_capacity(8192);
+    authenticate_and_select(
+        &mut stream,
+        &mut parse_buf,
+        cfg.user.as_deref(),
+        cfg.password.as_deref(),
+        cfg.run.dbnum,
+    )
+    .await?;
 
-    if let Some(pass) = cfg.auth.as_deref() {
-        let auth = encode_resp_parts(&[b"AUTH", pass.as_bytes()]);
+    Ok(Connection { stream, parse_buf })
+}
+
+async fn authenticate_and_select(
+    stream: &mut TcpStream,
+    parse_buf: &mut BytesMut,
+    user: Option<&str>,
+    password: Option<&str>,
+    dbnum: u32,
+) -> Result<(), String> {
+    if let Some(password) = password {
+        let auth = match user {
+            Some(user) => encode_resp_parts(&[b"AUTH", user.as_bytes(), password.as_bytes()]),
+            None => encode_resp_parts(&[b"AUTH", password.as_bytes()]),
+        };
         stream
             .write_all(&auth)
             .await
             .map_err(|err| format!("AUTH write failed: {err}"))?;
-        read_n_responses(&mut stream, &mut parse_buf, 1).await?;
+        consume_response(
+            stream,
+            parse_buf,
+            Some(&ExpectedResponse::Simple("OK")),
+            Some(b"+OK\r\n"),
+            true,
+        )
+        .await?;
     }
 
-    let value = vec![b'x'; cfg.spec.data_size];
-    let key_base = format!(
-        "{}:{}:{client_id}",
-        cfg.spec.key_prefix,
-        cfg.spec
-            .name
-            .to_ascii_lowercase()
-            .replace([' ', '/', '[', ']'], ":")
-    );
-
-    let script_sha = setup_worker_state(
-        &mut stream,
-        &mut parse_buf,
-        &cfg.spec,
-        key_base.as_bytes(),
-        &value,
-    )
-    .await?;
-
-    let mut stats = WorkerStats::default();
-    let mut response_model = ResponseModel::new(&cfg.spec, value.clone());
-    let mut sequence = 0u64;
-
-    if !cfg.spec.random_keys {
-        let one = build_command(
-            cfg.spec.kind,
-            key_base.as_bytes(),
-            &value,
-            0,
-            script_sha.as_deref(),
-        );
-        let full_batch = repeat_payload(&one, cfg.spec.pipeline);
-        let mut remaining = quota;
-
-        while remaining > 0 {
-            let batch = remaining.min(cfg.spec.pipeline as u64) as usize;
-            let expected = if cfg.strict {
-                (0..batch)
-                    .map(|_| response_model.expected(0))
-                    .collect::<Vec<_>>()
-            } else {
-                Vec::new()
-            };
-            let encoded = if has_fixed_response_shape(cfg.spec.kind) {
-                let response = response_model.expected(0);
-                let encoded = encode_expected_response(&response);
-                (0..batch).map(|_| encoded.clone()).collect::<Vec<_>>()
-            } else if cfg.strict {
-                expected
-                    .iter()
-                    .map(encode_expected_response)
-                    .collect::<Vec<_>>()
-            } else {
-                Vec::new()
-            };
-            let started = Instant::now();
-            if batch == cfg.spec.pipeline {
-                stream
-                    .write_all(&full_batch)
-                    .await
-                    .map_err(|err| format!("write failed: {err}"))?;
-            } else {
-                let tail = repeat_payload(&one, batch);
-                stream
-                    .write_all(&tail)
-                    .await
-                    .map_err(|err| format!("write failed: {err}"))?;
-            }
-            if cfg.strict {
-                read_n_strict_responses(&mut stream, &mut parse_buf, &expected, &encoded).await?;
-            } else {
-                read_n_unchecked_responses(&mut stream, &mut parse_buf, &encoded).await?;
-            }
-
-            let per_req_ns =
-                (started.elapsed().as_nanos() / batch as u128).min(u128::from(u64::MAX));
-            stats.lat_samples_ns.push(per_req_ns as u64);
-            stats.completed += batch as u64;
-            remaining -= batch as u64;
-        }
-        return Ok(stats);
-    }
-
-    let mut remaining = quota;
-    while remaining > 0 {
-        let batch = remaining.min(cfg.spec.pipeline as u64) as usize;
-        let mut payload = Vec::with_capacity(batch * (cfg.spec.data_size + 128));
-        let mut expected = Vec::with_capacity(batch);
-        let mut encoded = Vec::with_capacity(batch);
-        for _ in 0..batch {
-            let key_slot = random_slot(client_id, sequence, cfg.spec.keyspace);
-            let command = build_command(
-                cfg.spec.kind,
-                key_base.as_bytes(),
-                &value,
-                key_slot,
-                script_sha.as_deref(),
-            );
-            payload.extend_from_slice(&command);
-            let response = response_model.expected(key_slot);
-            encoded.push(encode_expected_response(&response));
-            expected.push(response);
-            sequence = sequence.wrapping_add(1);
-        }
-
-        let started = Instant::now();
+    if dbnum != 0 {
+        let db = dbnum.to_string();
+        let select = encode_resp_parts(&[b"SELECT", db.as_bytes()]);
         stream
-            .write_all(&payload)
+            .write_all(&select)
             .await
-            .map_err(|err| format!("write failed: {err}"))?;
-        if cfg.strict {
-            read_n_strict_responses(&mut stream, &mut parse_buf, &expected, &encoded).await?;
-        } else {
-            read_n_unchecked_responses(&mut stream, &mut parse_buf, &encoded).await?;
-        }
-
-        let per_req_ns = (started.elapsed().as_nanos() / batch as u128).min(u128::from(u64::MAX));
-        stats.lat_samples_ns.push(per_req_ns as u64);
-        stats.completed += batch as u64;
-        remaining -= batch as u64;
+            .map_err(|err| format!("SELECT write failed: {err}"))?;
+        consume_response(
+            stream,
+            parse_buf,
+            Some(&ExpectedResponse::Simple("OK")),
+            Some(b"+OK\r\n"),
+            true,
+        )
+        .await?;
     }
 
-    Ok(stats)
+    Ok(())
 }
 
-async fn setup_worker_state(
-    stream: &mut TcpStream,
-    parse_buf: &mut BytesMut,
-    spec: &BenchRun,
+async fn setup_connection_state(
+    connection: &mut Connection,
+    run: &BenchRun,
     key_base: &[u8],
     value: &[u8],
-) -> Result<Option<Vec<u8>>, String> {
-    if spec.random_keys {
-        prime_keyspace(stream, parse_buf, spec.kind, key_base, value, spec.keyspace).await?;
-    } else if let Some(setup) = build_setup_command(spec.kind, key_base, value) {
-        stream
-            .write_all(&setup)
+) -> Result<(), String> {
+    match run.kind {
+        BenchKind::Get
+        | BenchKind::Lpop
+        | BenchKind::Rpop
+        | BenchKind::Spop
+        | BenchKind::ZpopMin => {
+            prime_keyspace(
+                &mut connection.stream,
+                &mut connection.parse_buf,
+                run,
+                key_base,
+                value,
+            )
             .await
-            .map_err(|err| format!("setup write failed: {err}"))?;
-        read_n_responses(stream, parse_buf, 1).await?;
-    }
-
-    let script = match spec.kind {
-        BenchKind::EvalSha => Some(SCRIPT_SET_BODY),
-        BenchKind::EvalShaRo => Some(SCRIPT_GET_BODY),
-        _ => None,
-    };
-
-    let Some(script) = script else {
-        return Ok(None);
-    };
-
-    let load = encode_resp_parts(&[b"SCRIPT", b"LOAD", script]);
-    stream
-        .write_all(&load)
-        .await
-        .map_err(|err| format!("script load write failed: {err}"))?;
-    let frame = read_one_response(stream, parse_buf).await?;
-    match frame {
-        RespFrame::Bulk(Some(BulkData::Arg(value))) => Ok(Some(value.to_vec())),
-        RespFrame::Bulk(Some(BulkData::Value(value))) => Ok(Some(value.to_vec())),
-        RespFrame::Error(message) => Err(format!("script load failed: {message}")),
-        RespFrame::ErrorStatic(message) => Err(format!("script load failed: {message}")),
-        other => Err(format!("unexpected SCRIPT LOAD response: {other:?}")),
+        }
+        BenchKind::Lrange100
+        | BenchKind::Lrange300
+        | BenchKind::Lrange500
+        | BenchKind::Lrange600 => {
+            prime_keyspace(
+                &mut connection.stream,
+                &mut connection.parse_buf,
+                run,
+                key_base,
+                value,
+            )
+            .await
+        }
+        _ => Ok(()),
     }
 }
 
 async fn prime_keyspace(
     stream: &mut TcpStream,
     parse_buf: &mut BytesMut,
-    kind: BenchKind,
+    run: &BenchRun,
     key_base: &[u8],
     value: &[u8],
-    keyspace: u64,
 ) -> Result<(), String> {
-    if !requires_existing_state(kind) {
-        return Ok(());
-    }
-
+    let keyspace = run.random_keyspace_len.unwrap_or(1);
     let mut payload = Vec::new();
     let mut pending = 0usize;
     for slot in 0..keyspace {
-        let key = make_key(key_base, slot);
-        if let Some(setup) = build_setup_command(kind, &key, value) {
-            payload.extend_from_slice(&setup);
+        if let Some(command) = build_setup_command(run.kind, key_base, slot, value) {
+            payload.extend_from_slice(&command);
             pending += 1;
         }
 
@@ -541,7 +542,9 @@ async fn prime_keyspace(
                 .write_all(&payload)
                 .await
                 .map_err(|err| format!("setup write failed: {err}"))?;
-            read_n_responses(stream, parse_buf, pending).await?;
+            for _ in 0..pending {
+                consume_response(stream, parse_buf, None, None, false).await?;
+            }
             payload.clear();
             pending = 0;
         }
@@ -552,321 +555,314 @@ async fn prime_keyspace(
             .write_all(&payload)
             .await
             .map_err(|err| format!("setup write failed: {err}"))?;
-        read_n_responses(stream, parse_buf, pending).await?;
+        for _ in 0..pending {
+            consume_response(stream, parse_buf, None, None, false).await?;
+        }
     }
 
     Ok(())
 }
 
-async fn read_one_response(
-    stream: &mut TcpStream,
-    parse_buf: &mut BytesMut,
-) -> Result<RespFrame, String> {
-    let mut chunk = [0u8; 8192];
-    loop {
-        match parser::parse_frame(parse_buf) {
-            Ok(Some(frame)) => return Ok(frame),
-            Ok(None) | Err(ParseError::Incomplete) => {}
-            Err(ParseError::Protocol(err)) => return Err(format!("protocol error: {err}")),
-        }
+struct RequestGroup {
+    payload: Vec<u8>,
+    expected: Vec<Option<ExpectedResponse>>,
+    encoded: Vec<Option<Vec<u8>>>,
+}
 
-        let read = stream
-            .read(&mut chunk)
-            .await
-            .map_err(|err| format!("read failed: {err}"))?;
-        if read == 0 {
-            return Err("connection closed by server".to_string());
-        }
-        parse_buf.extend_from_slice(&chunk[..read]);
+fn build_request_group(
+    run: &BenchRun,
+    key_base: &[u8],
+    value: &[u8],
+    batch: usize,
+    random: &mut RandomSource,
+) -> Result<RequestGroup, String> {
+    let mut payload = Vec::new();
+    let mut expected = Vec::with_capacity(batch);
+    let mut encoded = Vec::with_capacity(batch);
+    for _ in 0..batch {
+        let slot = pick_key_slot(random, run.random_keyspace_len);
+        let frame = build_command(run, key_base, slot, value, random)?;
+        payload.extend_from_slice(&frame);
+
+        let expected_response = expected_response(run.kind, value);
+        encoded.push(
+            expected_response
+                .as_ref()
+                .and_then(encode_expected_response),
+        );
+        expected.push(expected_response);
+    }
+
+    Ok(RequestGroup {
+        payload,
+        expected,
+        encoded,
+    })
+}
+
+fn pick_key_slot(random: &mut RandomSource, keyspace: Option<u64>) -> u64 {
+    match keyspace {
+        Some(0) | None => 0,
+        Some(1) => 0,
+        Some(keyspace) => random.next() % keyspace,
     }
 }
 
-fn build_setup_command(kind: BenchKind, key: &[u8], value: &[u8]) -> Option<Vec<u8>> {
+fn build_setup_command(
+    kind: BenchKind,
+    key_base: &[u8],
+    slot: u64,
+    value: &[u8],
+) -> Option<Vec<u8>> {
+    let key = make_key(key_base, slot);
     match kind {
-        BenchKind::Get
-        | BenchKind::GetSet
-        | BenchKind::Exists
-        | BenchKind::Expire
-        | BenchKind::Ttl
-        | BenchKind::Strlen
-        | BenchKind::SetRange
-        | BenchKind::GetRange
-        | BenchKind::EvalRo
-        | BenchKind::EvalShaRo => Some(encode_resp_parts(&[b"SET", key, value])),
-        BenchKind::Mget => {
-            let key2 = related_multi_key(key);
-            Some(encode_resp_parts(&[
-                b"MSET",
-                key,
-                value,
-                key2.as_slice(),
-                value,
-            ]))
+        BenchKind::Get => Some(encode_resp_parts(&[b"SET", key.as_slice(), value])),
+        BenchKind::Lpop | BenchKind::Rpop => {
+            Some(encode_resp_parts(&[b"LPUSH", key.as_slice(), value]))
         }
-        BenchKind::Mset => {
-            let key2 = related_multi_key(key);
-            Some(encode_resp_parts(&[b"DEL", key, key2.as_slice()]))
+        BenchKind::Spop => Some(encode_resp_parts(&[b"SADD", key.as_slice(), value])),
+        BenchKind::ZpopMin => Some(encode_resp_parts(&[b"ZADD", key.as_slice(), b"1", value])),
+        BenchKind::Lrange100
+        | BenchKind::Lrange300
+        | BenchKind::Lrange500
+        | BenchKind::Lrange600 => {
+            let mut parts = Vec::with_capacity(2 + LIST_ITEM_COUNT);
+            parts.push(b"LPUSH".as_slice());
+            parts.push(key.as_slice());
+            let list_len = lrange_target(kind);
+            let mut items = Vec::with_capacity(list_len);
+            for index in 0..list_len {
+                items.push(format!("item:{index}").into_bytes());
+            }
+            for item in &items {
+                parts.push(item.as_slice());
+            }
+            Some(encode_resp_parts(&parts))
         }
-        BenchKind::Lpop | BenchKind::Rpop | BenchKind::Llen | BenchKind::Lrange => {
-            Some(encode_resp_parts(&[b"LPUSH", key, value]))
-        }
-        BenchKind::Srem | BenchKind::Scard | BenchKind::Sismember => {
-            Some(encode_resp_parts(&[b"SADD", key, value]))
-        }
-        BenchKind::Hget | BenchKind::Hgetall => {
-            Some(encode_resp_parts(&[b"HSET", key, b"field", value]))
-        }
-        BenchKind::Hincrby => Some(encode_resp_parts(&[b"HSET", key, b"field", b"0"])),
-        BenchKind::Zrem
-        | BenchKind::Zcard
-        | BenchKind::Zscore
-        | BenchKind::Zrank
-        | BenchKind::Zrevrank => Some(encode_resp_parts(&[b"ZADD", key, b"1", value])),
         _ => None,
     }
 }
 
-fn requires_existing_state(kind: BenchKind) -> bool {
-    matches!(
-        kind,
-        BenchKind::Get
-            | BenchKind::GetSet
-            | BenchKind::Exists
-            | BenchKind::Expire
-            | BenchKind::Ttl
-            | BenchKind::Strlen
-            | BenchKind::SetRange
-            | BenchKind::GetRange
-            | BenchKind::EvalRo
-            | BenchKind::EvalShaRo
-            | BenchKind::Mget
-            | BenchKind::Lpop
-            | BenchKind::Rpop
-            | BenchKind::Llen
-            | BenchKind::Lrange
-            | BenchKind::Srem
-            | BenchKind::Scard
-            | BenchKind::Sismember
-            | BenchKind::Hget
-            | BenchKind::Hgetall
-            | BenchKind::Hincrby
-            | BenchKind::Zrem
-            | BenchKind::Zcard
-            | BenchKind::Zscore
-            | BenchKind::Zrank
-            | BenchKind::Zrevrank
-    )
-}
-
-fn related_multi_key(key: &[u8]) -> Vec<u8> {
-    let mut related = Vec::with_capacity(key.len() + 3);
-    related.extend_from_slice(key);
-    related.extend_from_slice(b":m2");
-    related
-}
-
 fn build_command(
-    kind: BenchKind,
+    run: &BenchRun,
     key_base: &[u8],
+    slot: u64,
     value: &[u8],
-    key_slot: u64,
-    script_sha: Option<&[u8]>,
-) -> Vec<u8> {
-    match kind {
+    random: &mut RandomSource,
+) -> Result<Vec<u8>, String> {
+    Ok(match run.kind {
         BenchKind::PingInline => b"PING\r\n".to_vec(),
         BenchKind::PingMbulk => encode_resp_parts(&[b"PING"]),
-        BenchKind::Echo => encode_resp_parts(&[b"ECHO", value]),
         BenchKind::Set => {
-            let key = make_key(key_base, key_slot);
+            let key = make_key(key_base, slot);
             encode_resp_parts(&[b"SET", key.as_slice(), value])
         }
-        BenchKind::SetNx => {
-            let key = make_key(key_base, key_slot);
-            encode_resp_parts(&[b"SETNX", key.as_slice(), value])
-        }
         BenchKind::Get => {
-            let key = make_key(key_base, key_slot);
+            let key = make_key(key_base, slot);
             encode_resp_parts(&[b"GET", key.as_slice()])
         }
-        BenchKind::GetSet => {
-            let key = make_key(key_base, key_slot);
-            encode_resp_parts(&[b"GETSET", key.as_slice(), value])
-        }
-        BenchKind::Mset => {
-            let key1 = make_key(key_base, key_slot);
-            let key2 = related_multi_key(&key1);
-            encode_resp_parts(&[b"MSET", key1.as_slice(), value, key2.as_slice(), value])
-        }
-        BenchKind::Mget => {
-            let key1 = make_key(key_base, key_slot);
-            let key2 = related_multi_key(&key1);
-            encode_resp_parts(&[b"MGET", key1.as_slice(), key2.as_slice()])
-        }
-        BenchKind::Del => {
-            let key = make_key(key_base, key_slot);
-            encode_resp_parts(&[b"DEL", key.as_slice()])
-        }
-        BenchKind::Exists => {
-            let key = make_key(key_base, key_slot);
-            encode_resp_parts(&[b"EXISTS", key.as_slice()])
-        }
-        BenchKind::Expire => {
-            let key = make_key(key_base, key_slot);
-            encode_resp_parts(&[b"EXPIRE", key.as_slice(), b"60"])
-        }
-        BenchKind::Ttl => {
-            let key = make_key(key_base, key_slot);
-            encode_resp_parts(&[b"TTL", key.as_slice()])
-        }
         BenchKind::Incr => {
-            let key = make_key(key_base, key_slot);
+            let key = make_key(key_base, slot);
             encode_resp_parts(&[b"INCR", key.as_slice()])
         }
-        BenchKind::IncrBy => {
-            let key = make_key(key_base, key_slot);
-            encode_resp_parts(&[b"INCRBY", key.as_slice(), b"3"])
-        }
-        BenchKind::Decr => {
-            let key = make_key(key_base, key_slot);
-            encode_resp_parts(&[b"DECR", key.as_slice()])
-        }
-        BenchKind::DecrBy => {
-            let key = make_key(key_base, key_slot);
-            encode_resp_parts(&[b"DECRBY", key.as_slice(), b"3"])
-        }
-        BenchKind::Strlen => {
-            let key = make_key(key_base, key_slot);
-            encode_resp_parts(&[b"STRLEN", key.as_slice()])
-        }
-        BenchKind::SetRange => {
-            let key = make_key(key_base, key_slot);
-            encode_resp_parts(&[b"SETRANGE", key.as_slice(), b"0", value])
-        }
-        BenchKind::GetRange => {
-            let key = make_key(key_base, key_slot);
-            encode_resp_parts(&[b"GETRANGE", key.as_slice(), b"0", b"2"])
-        }
         BenchKind::Lpush => {
-            let key = make_key(key_base, key_slot);
+            let key = make_key(key_base, slot);
             encode_resp_parts(&[b"LPUSH", key.as_slice(), value])
         }
         BenchKind::Rpush => {
-            let key = make_key(key_base, key_slot);
+            let key = make_key(key_base, slot);
             encode_resp_parts(&[b"RPUSH", key.as_slice(), value])
         }
         BenchKind::Lpop => {
-            let key = make_key(key_base, key_slot);
+            let key = make_key(key_base, slot);
             encode_resp_parts(&[b"LPOP", key.as_slice()])
         }
         BenchKind::Rpop => {
-            let key = make_key(key_base, key_slot);
+            let key = make_key(key_base, slot);
             encode_resp_parts(&[b"RPOP", key.as_slice()])
         }
-        BenchKind::Llen => {
-            let key = make_key(key_base, key_slot);
-            encode_resp_parts(&[b"LLEN", key.as_slice()])
-        }
-        BenchKind::Lrange => {
-            let key = make_key(key_base, key_slot);
-            encode_resp_parts(&[b"LRANGE", key.as_slice(), b"0", b"9"])
-        }
         BenchKind::Sadd => {
-            let key = make_key(key_base, key_slot);
-            encode_resp_parts(&[b"SADD", key.as_slice(), value])
-        }
-        BenchKind::Srem => {
-            let key = make_key(key_base, key_slot);
-            encode_resp_parts(&[b"SREM", key.as_slice(), value])
-        }
-        BenchKind::Scard => {
-            let key = make_key(key_base, key_slot);
-            encode_resp_parts(&[b"SCARD", key.as_slice()])
-        }
-        BenchKind::Sismember => {
-            let key = make_key(key_base, key_slot);
-            encode_resp_parts(&[b"SISMEMBER", key.as_slice(), value])
+            let key = make_key(key_base, slot);
+            let member = if run.random_keyspace_len.is_some() {
+                random.next().to_string().into_bytes()
+            } else {
+                value.to_vec()
+            };
+            encode_resp_parts(&[b"SADD", key.as_slice(), member.as_slice()])
         }
         BenchKind::Hset => {
-            let key = make_key(key_base, key_slot);
+            let key = make_key(key_base, slot);
             encode_resp_parts(&[b"HSET", key.as_slice(), b"field", value])
         }
-        BenchKind::Hget => {
-            let key = make_key(key_base, key_slot);
-            encode_resp_parts(&[b"HGET", key.as_slice(), b"field"])
-        }
-        BenchKind::Hgetall => {
-            let key = make_key(key_base, key_slot);
-            encode_resp_parts(&[b"HGETALL", key.as_slice()])
-        }
-        BenchKind::Hincrby => {
-            let key = make_key(key_base, key_slot);
-            encode_resp_parts(&[b"HINCRBY", key.as_slice(), b"field", b"1"])
+        BenchKind::Spop => {
+            let key = make_key(key_base, slot);
+            encode_resp_parts(&[b"SPOP", key.as_slice()])
         }
         BenchKind::Zadd => {
-            let key = make_key(key_base, key_slot);
+            let key = make_key(key_base, slot);
             encode_resp_parts(&[b"ZADD", key.as_slice(), b"1", value])
         }
-        BenchKind::Zrem => {
-            let key = make_key(key_base, key_slot);
-            encode_resp_parts(&[b"ZREM", key.as_slice(), value])
+        BenchKind::ZpopMin => {
+            let key = make_key(key_base, slot);
+            encode_resp_parts(&[b"ZPOPMIN", key.as_slice()])
         }
-        BenchKind::Zcard => {
-            let key = make_key(key_base, key_slot);
-            encode_resp_parts(&[b"ZCARD", key.as_slice()])
+        BenchKind::Lrange100
+        | BenchKind::Lrange300
+        | BenchKind::Lrange500
+        | BenchKind::Lrange600 => {
+            let key = make_key(key_base, slot);
+            let stop = (lrange_target(run.kind) - 1).to_string();
+            encode_resp_parts(&[b"LRANGE", key.as_slice(), b"0", stop.as_bytes()])
         }
-        BenchKind::Zscore => {
-            let key = make_key(key_base, key_slot);
-            encode_resp_parts(&[b"ZSCORE", key.as_slice(), value])
+        BenchKind::Mset => build_mset_command(key_base, slot, value),
+        BenchKind::Custom => build_custom_command(
+            run.command.as_ref().expect("custom command"),
+            random,
+            run.random_keyspace_len,
+        )?,
+    })
+}
+
+fn build_custom_command(
+    template: &CommandTemplate,
+    random: &mut RandomSource,
+    keyspace: Option<u64>,
+) -> Result<Vec<u8>, String> {
+    let mut parts = Vec::with_capacity(template.parts.len());
+    let mut owned = Vec::with_capacity(template.parts.len());
+    for part in &template.parts {
+        match part {
+            ArgTemplate::Literal(value) => {
+                owned.push(value.clone());
+            }
+            ArgTemplate::RandomInt => {
+                let range =
+                    keyspace.ok_or_else(|| "__rand_int__ requires -r <keyspacelen>".to_string())?;
+                owned.push((random.next() % range).to_string().into_bytes());
+            }
         }
-        BenchKind::Zrank => {
-            let key = make_key(key_base, key_slot);
-            encode_resp_parts(&[b"ZRANK", key.as_slice(), value])
+    }
+
+    for item in &owned {
+        parts.push(item.as_slice());
+    }
+    Ok(encode_resp_parts(&parts))
+}
+
+fn build_mset_command(key_base: &[u8], slot: u64, value: &[u8]) -> Vec<u8> {
+    let mut owned = Vec::with_capacity(MSET_KEYS * 2);
+    let mut parts = Vec::with_capacity(1 + MSET_KEYS * 2);
+    parts.push(b"MSET".as_slice());
+    for index in 0..MSET_KEYS {
+        let key = format!("{}:{}:{}", String::from_utf8_lossy(key_base), slot, index).into_bytes();
+        owned.push(key);
+        owned.push(value.to_vec());
+    }
+    for item in &owned {
+        parts.push(item.as_slice());
+    }
+    encode_resp_parts(&parts)
+}
+
+fn expected_response(kind: BenchKind, value: &[u8]) -> Option<ExpectedResponse> {
+    match kind {
+        BenchKind::PingInline | BenchKind::PingMbulk => Some(ExpectedResponse::Simple("PONG")),
+        BenchKind::Set | BenchKind::Mset => Some(ExpectedResponse::Simple("OK")),
+        BenchKind::Get | BenchKind::Lpop | BenchKind::Rpop => {
+            Some(ExpectedResponse::Bulk(Some(value.to_vec())))
         }
-        BenchKind::Zrevrank => {
-            let key = make_key(key_base, key_slot);
-            encode_resp_parts(&[b"ZREVRANK", key.as_slice(), value])
-        }
-        BenchKind::Eval => {
-            let key = make_key(key_base, key_slot);
-            encode_resp_parts(&[b"EVAL", SCRIPT_SET_BODY, b"1", key.as_slice(), value])
-        }
-        BenchKind::EvalRo => {
-            let key = make_key(key_base, key_slot);
-            encode_resp_parts(&[b"EVAL_RO", SCRIPT_GET_BODY, b"1", key.as_slice()])
-        }
-        BenchKind::EvalSha => {
-            let key = make_key(key_base, key_slot);
-            let sha = script_sha.expect("missing script sha for EVALSHA benchmark");
-            encode_resp_parts(&[b"EVALSHA", sha, b"1", key.as_slice(), value])
-        }
-        BenchKind::EvalShaRo => {
-            let key = make_key(key_base, key_slot);
-            let sha = script_sha.expect("missing script sha for EVALSHA_RO benchmark");
-            encode_resp_parts(&[b"EVALSHA_RO", sha, b"1", key.as_slice()])
-        }
+        BenchKind::Incr => None,
+        BenchKind::Lpush
+        | BenchKind::Rpush
+        | BenchKind::Sadd
+        | BenchKind::Hset
+        | BenchKind::Zadd => None,
+        BenchKind::Spop => Some(ExpectedResponse::Bulk(Some(value.to_vec()))),
+        BenchKind::ZpopMin => Some(ExpectedResponse::Array(vec![
+            ExpectedResponse::Bulk(Some(value.to_vec())),
+            ExpectedResponse::Bulk(Some(b"1".to_vec())),
+        ])),
+        BenchKind::Lrange100
+        | BenchKind::Lrange300
+        | BenchKind::Lrange500
+        | BenchKind::Lrange600 => None,
+        BenchKind::Custom => None,
     }
 }
 
-fn random_slot(client_id: u64, sequence: u64, keyspace: u64) -> u64 {
-    if keyspace <= 1 {
-        return 0;
+fn lrange_target(kind: BenchKind) -> usize {
+    match kind {
+        BenchKind::Lrange100 => 100,
+        BenchKind::Lrange300 => 300,
+        BenchKind::Lrange500 => 500,
+        BenchKind::Lrange600 => 600,
+        _ => LIST_ITEM_COUNT,
     }
-
-    splitmix64((client_id << 32) ^ sequence) % keyspace
 }
 
-fn splitmix64(mut value: u64) -> u64 {
-    value = value.wrapping_add(0x9E37_79B9_7F4A_7C15);
-    value = (value ^ (value >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-    value = (value ^ (value >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-    value ^ (value >> 31)
+fn make_key(base: &[u8], slot: u64) -> Vec<u8> {
+    if slot == 0 {
+        return base.to_vec();
+    }
+    let mut key = Vec::with_capacity(base.len() + 24);
+    key.extend_from_slice(base);
+    key.push(b':');
+    key.extend_from_slice(slot.to_string().as_bytes());
+    key
+}
+
+fn build_cumulative_distribution(samples: &[u64]) -> Vec<CumulativeBucket> {
+    if samples.is_empty() {
+        return Vec::new();
+    }
+
+    let max_ms = ns_to_ms(*samples.last().unwrap_or(&0));
+    let mut buckets = Vec::new();
+    let mut threshold = rounded_threshold(max_ms / 8.0).max(0.001);
+    while threshold < max_ms {
+        let count = samples.partition_point(|value| ns_to_ms(*value) <= threshold) as u64;
+        if count > 0 {
+            buckets.push(CumulativeBucket {
+                percent: count as f64 * 100.0 / samples.len() as f64,
+                latency_ms: threshold,
+                cumulative_count: count,
+            });
+        }
+        threshold += rounded_threshold(max_ms / 8.0).max(0.001);
+    }
+    buckets.push(CumulativeBucket {
+        percent: 100.0,
+        latency_ms: rounded_threshold(max_ms + rounded_threshold(max_ms / 8.0).max(0.001)),
+        cumulative_count: samples.len() as u64,
+    });
+    buckets
+}
+
+fn rounded_threshold(value: f64) -> f64 {
+    if value <= 0.001 {
+        0.001
+    } else if value < 0.01 {
+        (value * 1000.0).ceil() / 1000.0
+    } else {
+        (value * 1000.0).ceil() / 1000.0
+    }
 }
 
 fn percentile_ms(samples_ns: &[u64], percentile: f64) -> f64 {
     if samples_ns.is_empty() {
         return 0.0;
     }
-    let max_index = samples_ns.len() - 1;
-    let rank = (max_index as f64 * percentile).round() as usize;
-    samples_ns[rank.min(max_index)] as f64 / 1_000_000.0
+    ns_to_ms(samples_ns[percentile_index(samples_ns.len(), percentile)])
+}
+
+fn percentile_index(len: usize, percentile: f64) -> usize {
+    if len <= 1 || percentile <= 0.0 {
+        return 0;
+    }
+    let rank = ((percentile / 100.0) * (len.saturating_sub(1)) as f64).round() as usize;
+    rank.min(len.saturating_sub(1))
+}
+
+fn ns_to_ms(value: u64) -> f64 {
+    value as f64 / 1_000_000.0
 }

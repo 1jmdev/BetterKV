@@ -4,20 +4,35 @@ mod render;
 mod resp;
 mod spec;
 
+use std::io::Read;
 use std::process::ExitCode;
 
 use clap::Parser;
 
-use args::{Args, validate_args};
-use bench::run_single_benchmark;
+use args::{Args, help_text, validate_args};
+use bench::{maybe_warn_about_server_config, run_idle_mode, run_single_benchmark};
 use render::render_result;
-use spec::{resolve_workload, scenarios, tests};
+use spec::resolve_workload;
 
 #[global_allocator]
 static GLOBAL_ALLOCATOR: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 fn main() -> ExitCode {
-    let args = Args::parse();
+    let mut args = Args::parse();
+
+    if args.show_help {
+        println!("{}", help_text(env!("CARGO_BIN_NAME")));
+        return ExitCode::SUCCESS;
+    }
+    if args.show_version {
+        println!("{} {}", env!("CARGO_BIN_NAME"), env!("CARGO_PKG_VERSION"));
+        return ExitCode::SUCCESS;
+    }
+
+    if let Err(err) = args.apply_connection_overrides() {
+        eprintln!("betterkv-benchmark: {err}");
+        return ExitCode::FAILURE;
+    }
     if let Err(err) = validate_args(&args) {
         eprintln!("betterkv-benchmark: {err}");
         return ExitCode::FAILURE;
@@ -44,32 +59,46 @@ fn main() -> ExitCode {
 }
 
 async fn run(args: Args) -> Result<(), String> {
-    if args.list_tests {
-        for spec in tests() {
-            println!("{}", spec.name);
+    let stdin_last_arg = read_stdin_if_requested(&args)?;
+
+    if args.idle_mode {
+        return run_idle_mode(&args).await;
+    }
+
+    maybe_warn_about_server_config(&args).await;
+
+    let workload = resolve_workload(&args, stdin_last_arg)?;
+    loop {
+        for run in workload.clone() {
+            let result = run_single_benchmark(&args, run).await?;
+            render_result(&args, &result);
         }
-        return Ok(());
-    }
 
-    if args.list_scenarios {
-        for scenario in scenarios() {
-            println!("{} - {}", scenario.key, scenario.description);
+        if !args.loop_forever {
+            break;
         }
-        return Ok(());
-    }
-
-    let workload = resolve_workload(&args)?;
-
-    if args.csv {
-        println!(
-            "test,scenario,requests,clients,seconds,rps,avg_ms,p50_ms,p95_ms,p99_ms,pipeline,data_size,random_keys,keyspace"
-        );
-    }
-
-    for spec in workload {
-        let result = run_single_benchmark(&args, spec).await?;
-        render_result(&args, &result);
     }
 
     Ok(())
+}
+
+fn read_stdin_if_requested(args: &Args) -> Result<Option<Vec<u8>>, String> {
+    if !args.read_last_arg_from_stdin {
+        return Ok(None);
+    }
+
+    let mut stdin = Vec::new();
+    std::io::stdin()
+        .read_to_end(&mut stdin)
+        .map_err(|err| format!("failed to read stdin: {err}"))?;
+
+    while stdin
+        .last()
+        .copied()
+        .is_some_and(|byte| matches!(byte, b'\n' | b'\r'))
+    {
+        stdin.pop();
+    }
+
+    Ok(Some(stdin))
 }

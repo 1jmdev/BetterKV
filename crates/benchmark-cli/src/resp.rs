@@ -8,8 +8,6 @@ use tokio::net::TcpStream;
 pub enum ExpectedResponse {
     Simple(&'static str),
     Bulk(Option<Vec<u8>>),
-    Integer(i64),
-    IntegerRange { min: i64, max: i64 },
     Array(Vec<ExpectedResponse>),
 }
 
@@ -29,75 +27,28 @@ pub fn encode_resp_parts(parts: &[&[u8]]) -> Vec<u8> {
     out
 }
 
-pub fn make_key(base: &[u8], sequence: u64) -> Vec<u8> {
-    if sequence == 0 {
-        return base.to_vec();
-    }
-
-    let mut key = Vec::with_capacity(base.len() + 1 + 20);
-    key.extend_from_slice(base);
-    key.push(b':');
-    append_u64(&mut key, sequence);
-    key
-}
-
-pub fn repeat_payload(one: &[u8], count: usize) -> Vec<u8> {
-    let mut out = Vec::with_capacity(one.len() * count);
-    for _ in 0..count {
-        out.extend_from_slice(one);
-    }
-    out
-}
-
-pub async fn read_n_responses(
+pub async fn consume_response(
     stream: &mut TcpStream,
     parse_buf: &mut BytesMut,
-    expected: usize,
+    expected: Option<&ExpectedResponse>,
+    encoded: Option<&[u8]>,
+    strict: bool,
 ) -> Result<(), String> {
-    for _ in 0..expected {
-        let frame = read_one_response(stream, parse_buf).await?;
-        if let RespFrame::Error(message) = frame {
-            return Err(format!("server returned error: {message}"));
+    if strict {
+        if let Some(encoded) = encoded {
+            return validate_exact_response(stream, parse_buf, encoded).await;
         }
-        if let RespFrame::ErrorStatic(message) = frame {
-            return Err(format!("server returned error: {message}"));
-        }
-    }
-    Ok(())
-}
-
-pub async fn read_n_strict_responses(
-    stream: &mut TcpStream,
-    parse_buf: &mut BytesMut,
-    expected: &[ExpectedResponse],
-    encoded: &[Option<Vec<u8>>],
-) -> Result<(), String> {
-    for (expected_response, encoded_response) in expected.iter().zip(encoded.iter()) {
-        if let Some(encoded_response) = encoded_response {
-            validate_exact_response(stream, parse_buf, encoded_response).await?;
-        } else {
+        if let Some(expected) = expected {
             let frame = read_one_response(stream, parse_buf).await?;
-            validate_response(expected_response, &frame)?;
+            return validate_response(expected, &frame);
         }
     }
 
-    Ok(())
-}
-
-pub async fn read_n_unchecked_responses(
-    stream: &mut TcpStream,
-    parse_buf: &mut BytesMut,
-    encoded: &[Option<Vec<u8>>],
-) -> Result<(), String> {
-    for encoded_response in encoded {
-        if let Some(encoded) = encoded_response {
-            skip_exact_response(stream, parse_buf, encoded).await?;
-        } else {
-            skip_one_response(stream, parse_buf).await?;
-        }
+    if let Some(encoded) = encoded {
+        return skip_exact_response(stream, parse_buf, encoded).await;
     }
 
-    Ok(())
+    skip_one_response(stream, parse_buf).await
 }
 
 pub async fn read_one_response(
@@ -212,12 +163,6 @@ fn append_expected_response(out: &mut Vec<u8>, expected: &ExpectedResponse) -> O
             out.extend_from_slice(value);
             out.extend_from_slice(b"\r\n");
         }
-        ExpectedResponse::Integer(value) => {
-            out.push(b':');
-            append_i64(out, *value);
-            out.extend_from_slice(b"\r\n");
-        }
-        ExpectedResponse::IntegerRange { .. } => return None,
         ExpectedResponse::Array(items) => {
             out.push(b'*');
             append_u64(out, items.len() as u64);
@@ -254,20 +199,6 @@ fn validate_response(expected: &ExpectedResponse, actual: &RespFrame) -> Result<
             ExpectedResponse::Bulk(Some(expected)),
             RespFrame::Bulk(Some(BulkData::Value(actual))),
         ) => validate_bytes(expected, actual.as_slice()),
-        (ExpectedResponse::Integer(expected), RespFrame::Integer(actual)) => {
-            if actual == expected {
-                Ok(())
-            } else {
-                Err(format!("expected integer {expected}, got {actual}"))
-            }
-        }
-        (ExpectedResponse::IntegerRange { min, max }, RespFrame::Integer(actual)) => {
-            if (*min..=*max).contains(actual) {
-                Ok(())
-            } else {
-                Err(format!("expected integer in [{min}, {max}], got {actual}"))
-            }
-        }
         (ExpectedResponse::Array(expected_items), RespFrame::Array(Some(actual_items))) => {
             if expected_items.len() != actual_items.len() {
                 return Err(format!(
@@ -297,11 +228,6 @@ fn validate_bytes(expected: &[u8], actual: &[u8]) -> Result<(), String> {
             String::from_utf8_lossy(actual)
         ))
     }
-}
-
-fn append_i64(out: &mut Vec<u8>, value: i64) {
-    let mut tmp = itoa::Buffer::new();
-    out.extend_from_slice(tmp.format(value).as_bytes());
 }
 
 fn try_skip_frame(buf: &mut BytesMut) -> Result<Option<()>, String> {
