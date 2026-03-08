@@ -7,6 +7,8 @@ mod scan;
 
 use types::value::{CompactKey, Entry, ZSetValueMap};
 
+pub use range::LexBound;
+
 fn get_zset(entry: &Entry) -> Option<&ZSetValueMap> {
     let _trace = profiler::scope("engine::zset::get_zset");
     entry.as_zset()

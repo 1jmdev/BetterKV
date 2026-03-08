@@ -28,9 +28,19 @@ impl Store {
         self.push_with_side(key, values, ListSide::Left)
     }
 
+    pub fn lpushx(&self, key: &[u8], values: &[CompactArg]) -> Result<i64, ()> {
+        let _trace = profiler::scope("engine::list::core::lpushx");
+        self.push_existing_with_side(key, values, ListSide::Left)
+    }
+
     pub fn rpush(&self, key: &[u8], values: &[CompactArg]) -> Result<i64, ()> {
         let _trace = profiler::scope("engine::list::core::rpush");
         self.push_with_side(key, values, ListSide::Right)
+    }
+
+    pub fn rpushx(&self, key: &[u8], values: &[CompactArg]) -> Result<i64, ()> {
+        let _trace = profiler::scope("engine::list::core::rpushx");
+        self.push_existing_with_side(key, values, ListSide::Right)
     }
 
     pub fn lpop(&self, key: &[u8], count: usize) -> Result<Option<Vec<CompactValue>>, ()> {
@@ -57,6 +67,32 @@ impl Store {
         };
         let list = get_list(entry).ok_or(())?;
         Ok(list.len() as i64)
+    }
+
+    pub fn lrem(&self, key: &[u8], count: i64, value: &[u8]) -> Result<i64, ()> {
+        let _trace = profiler::scope("engine::list::core::lrem");
+        let idx = self.shard_index(key);
+        let mut shard = self.shards[idx].write();
+        let now_ms = monotonic_now_ms();
+        if purge_if_expired(&mut shard, key, now_ms) {
+            return Ok(0);
+        }
+
+        let Some(entry) = shard.entries.get_mut(key) else {
+            return Ok(0);
+        };
+        let list = get_list_mut(entry).ok_or(())?;
+
+        let removed = if count >= 0 {
+            remove_from_head(list, count as usize, value)
+        } else {
+            remove_from_tail(list, count.unsigned_abs() as usize, value)
+        };
+
+        if list.is_empty() {
+            let _ = shard.remove_key(key);
+        }
+        Ok(removed)
     }
 
     pub fn lindex(&self, key: &[u8], index: i64) -> Result<Option<CompactValue>, ()> {
@@ -384,6 +420,41 @@ impl Store {
         Ok(list.len() as i64)
     }
 
+    fn push_existing_with_side(
+        &self,
+        key: &[u8],
+        values: &[CompactArg],
+        side: ListSide,
+    ) -> Result<i64, ()> {
+        let _trace = profiler::scope("engine::list::core::push_existing_with_side");
+        let idx = self.shard_index(key);
+        let mut shard = self.shards[idx].write();
+        let now_ms = monotonic_now_ms();
+        if purge_if_expired(&mut shard, key, now_ms) {
+            return Ok(0);
+        }
+
+        let Some(entry) = shard.entries.get_mut(key) else {
+            return Ok(0);
+        };
+        let list = get_list_mut(entry).ok_or(())?;
+
+        match side {
+            ListSide::Left => {
+                for value in values {
+                    list.push_front(CompactValue::from_slice(value.as_slice()));
+                }
+            }
+            ListSide::Right => {
+                for value in values {
+                    list.push_back(CompactValue::from_slice(value.as_slice()));
+                }
+            }
+        }
+
+        Ok(list.len() as i64)
+    }
+
     fn pop_with_side(
         &self,
         key: &[u8],
@@ -465,4 +536,49 @@ fn normalize_range(start: i64, stop: i64, len: usize) -> Option<(usize, usize)> 
     }
 
     Some((from as usize, (to as usize) + 1))
+}
+
+fn remove_from_head(
+    list: &mut std::collections::VecDeque<CompactValue>,
+    count: usize,
+    value: &[u8],
+) -> i64 {
+    let _trace = profiler::scope("engine::list::core::remove_from_head");
+    let limit = if count == 0 { None } else { Some(count as i64) };
+    let mut removed = 0i64;
+    let mut kept = std::collections::VecDeque::with_capacity(list.len());
+
+    while let Some(item) = list.pop_front() {
+        if limit.is_none_or(|limit| removed < limit) && item.as_slice() == value {
+            removed += 1;
+        } else {
+            kept.push_back(item);
+        }
+    }
+
+    *list = kept;
+    removed
+}
+
+fn remove_from_tail(
+    list: &mut std::collections::VecDeque<CompactValue>,
+    count: usize,
+    value: &[u8],
+) -> i64 {
+    let _trace = profiler::scope("engine::list::core::remove_from_tail");
+    let mut removed = 0i64;
+    let mut kept = Vec::with_capacity(list.len());
+
+    while let Some(item) = list.pop_back() {
+        if removed < count as i64 && item.as_slice() == value {
+            removed += 1;
+        } else {
+            kept.push(item);
+        }
+    }
+
+    for item in kept.into_iter().rev() {
+        list.push_back(item);
+    }
+    removed
 }

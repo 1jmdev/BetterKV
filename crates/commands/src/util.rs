@@ -106,6 +106,9 @@ pub mod cmd {
     pub const INCRBY: u64 = pack8(b"INCRBY");
     pub const DECR: u64 = pack8(b"DECR");
     pub const DECRBY: u64 = pack8(b"DECRBY");
+    pub const LPUSHX: u64 = pack8(b"LPUSHX");
+    pub const RPUSHX: u64 = pack8(b"RPUSHX");
+    pub const LREM: u64 = pack8(b"LREM");
     pub const SETBIT: u64 = pack8(b"SETBIT");
     pub const GETBIT: u64 = pack8(b"GETBIT");
     pub const BITCOUNT: u64 = pack8(b"BITCOUNT");
@@ -164,6 +167,7 @@ pub mod cmd {
     pub const SDIFF: u64 = pack8(b"SDIFF");
     pub const SUNION: u64 = pack8(b"SUNION");
     pub const SSCAN: u64 = pack8(b"SSCAN");
+    pub const ZLEXCOUNT: u64 = pack8(b"ZLEXCOUNT");
     // SMEMBERS is 8 bytes
     pub const SMEMBERS: u64 = pack8(b"SMEMBERS");
     // SISMEMBER is 9 bytes — handled in dispatch_long
@@ -197,9 +201,17 @@ pub mod cmd {
     pub const ZREVRANK: u64 = pack8(b"ZREVRANK");
     // ZREVRANGE is 9 bytes — handled in dispatch_long
     // ZRANGEBYSCORE is 13 bytes — handled in dispatch_long
+    // ZRANGEBYLEX is 11 bytes — handled in dispatch_long
     // ZREVRANGEBYSCORE is 16 bytes — handled in dispatch_long
+    // ZREVRANGEBYLEX is 14 bytes — handled in dispatch_long
     // ZRANDMEMBER is 11 bytes — handled in dispatch_long
+    // ZRANGESTORE is 11 bytes — handled in dispatch_long
+    // ZINTERSTORE is 11 bytes — handled in dispatch_long
+    // ZUNIONSTORE is 11 bytes — handled in dispatch_long
+    // ZDIFFSTORE is 10 bytes — handled in dispatch_long
+    // ZREMRANGEBYLEX is 15 bytes — handled in dispatch_long
     // ZREMRANGEBYRANK is 15 bytes — handled in dispatch_long
+    // ZREMRANGEBYSCORE is 17 bytes — handled in dispatch_long
 
     // ── GEO ───────────────────────────────────────────────────────────────────
     pub const GEOADD: u64 = pack8(b"GEOADD");

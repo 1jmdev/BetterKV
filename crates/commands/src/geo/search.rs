@@ -1,7 +1,7 @@
 use crate::geo::parse::{
-    SearchOptions, SortOrder, parse_distance_unit, parse_f64, parse_search_options,
+    parse_distance_unit, parse_f64, parse_search_options, SearchOptions, SortOrder,
 };
-use crate::util::{Args, f64_to_bytes, wrong_args, wrong_type};
+use crate::util::{f64_to_bytes, wrong_args, wrong_type, Args};
 use engine::store::{GeoSearchMatch, Store};
 use protocol::types::{BulkData, RespFrame};
 
@@ -46,7 +46,7 @@ pub(crate) fn geosearch(store: &Store, args: &Args) -> RespFrame {
 
 pub(crate) fn geosearchstore(store: &Store, args: &Args) -> RespFrame {
     let _trace = profiler::scope("commands::geo::search::geosearchstore");
-    if args.len() < 9 {
+    if args.len() < 8 {
         return wrong_args("GEOSEARCHSTORE");
     }
 

@@ -1,6 +1,7 @@
 use ahash::RandomState;
 use hashbrown::HashMap;
 
+use crate::helpers::purge_if_expired;
 use crate::store::Store;
 use types::value::{CompactArg, CompactKey, ZSetValueMap};
 
@@ -55,6 +56,29 @@ impl Store {
             }
         }
         Ok(sort_snapshot(&out, false))
+    }
+
+    pub fn zstore_items(&self, destination: &[u8], items: &[(CompactKey, f64)]) -> Result<i64, ()> {
+        let _trace = profiler::scope("engine::zset::algebra::zstore_items");
+        let idx = self.shard_index(destination);
+        let mut shard = self.shards[idx].write();
+        let _ = purge_if_expired(&mut shard, destination, monotonic_now_ms());
+
+        if items.is_empty() {
+            let _ = shard.remove_key(destination);
+            return Ok(0);
+        }
+
+        let mut zset = ZSetValueMap::with_capacity(items.len());
+        for (member, score) in items {
+            zset.insert(member.clone(), *score);
+        }
+        shard.insert_entry(
+            CompactKey::from_slice(destination),
+            types::value::Entry::ZSet(Box::new(zset)),
+            None,
+        );
+        Ok(items.len() as i64)
     }
 
     fn zset_snapshots(&self, keys: &[CompactArg]) -> Result<Vec<ZSetValueMap>, ()> {

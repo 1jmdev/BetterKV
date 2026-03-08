@@ -1,4 +1,4 @@
-use crate::util::{Args, wrong_args, wrong_type};
+use crate::util::{wrong_args, wrong_type, Args};
 use engine::store::Store;
 use protocol::types::{BulkData, RespFrame};
 
@@ -47,6 +47,17 @@ pub(crate) fn sismember(store: &Store, args: &Args) -> RespFrame {
     }
     match store.sismember(&args[1], &args[2]) {
         Ok(found) => RespFrame::Integer(found),
+        Err(_) => wrong_type(),
+    }
+}
+
+pub(crate) fn smismember(store: &Store, args: &Args) -> RespFrame {
+    let _trace = profiler::scope("commands::set::core::smismember");
+    if args.len() < 3 {
+        return wrong_args("SMISMEMBER");
+    }
+    match store.smismember(&args[1], &args[2..]) {
+        Ok(found) => RespFrame::Array(Some(found.into_iter().map(RespFrame::Integer).collect())),
         Err(_) => wrong_type(),
     }
 }

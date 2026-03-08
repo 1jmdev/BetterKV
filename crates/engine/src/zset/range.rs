@@ -1,8 +1,8 @@
 use crate::store::Store;
 use types::value::CompactKey;
 
-use super::super::helpers::{is_expired, monotonic_now_ms};
-use super::{get_zset, normalize_range, sorted_by_score};
+use super::super::helpers::{is_expired, monotonic_now_ms, purge_if_expired};
+use super::{get_zset, get_zset_mut, normalize_range, sorted_by_score};
 
 impl Store {
     pub fn zrange(
@@ -86,4 +86,111 @@ impl Store {
         };
         Ok(out)
     }
+
+    pub fn zrange_by_lex(
+        &self,
+        key: &[u8],
+        min: LexBound<'_>,
+        max: LexBound<'_>,
+        reverse: bool,
+        offset: usize,
+        count: Option<usize>,
+    ) -> Result<Vec<CompactKey>, ()> {
+        let _trace = profiler::scope("engine::zset::range::zrange_by_lex");
+        let idx = self.shard_index(key);
+        let shard = self.shards[idx].read();
+        let now_ms = monotonic_now_ms();
+        if is_expired(&shard, key, now_ms) {
+            return Ok(Vec::new());
+        }
+
+        let Some(entry) = shard.entries.get(key) else {
+            return Ok(Vec::new());
+        };
+        let zset = get_zset(entry).ok_or(())?;
+
+        let mut members: Vec<_> = zset
+            .iter_member_scores()
+            .map(|(member, _)| member.clone())
+            .collect();
+        members.sort_by(|left, right| left.as_slice().cmp(right.as_slice()));
+        if reverse {
+            members.reverse();
+        }
+
+        let filtered: Vec<_> = members
+            .into_iter()
+            .filter(|member| in_lex_range(member.as_slice(), min, max))
+            .collect();
+
+        if offset >= filtered.len() {
+            return Ok(Vec::new());
+        }
+
+        let mut sliced = filtered.into_iter().skip(offset);
+        Ok(if let Some(limit) = count {
+            sliced.by_ref().take(limit).collect()
+        } else {
+            sliced.collect()
+        })
+    }
+
+    pub fn zlexcount(&self, key: &[u8], min: LexBound<'_>, max: LexBound<'_>) -> Result<i64, ()> {
+        let _trace = profiler::scope("engine::zset::range::zlexcount");
+        Ok(self.zrange_by_lex(key, min, max, false, 0, None)?.len() as i64)
+    }
+
+    pub fn zremrangebylex(
+        &self,
+        key: &[u8],
+        min: LexBound<'_>,
+        max: LexBound<'_>,
+    ) -> Result<i64, ()> {
+        let _trace = profiler::scope("engine::zset::range::zremrangebylex");
+        let idx = self.shard_index(key);
+        let mut shard = self.shards[idx].write();
+        let now_ms = monotonic_now_ms();
+        if purge_if_expired(&mut shard, key, now_ms) {
+            return Ok(0);
+        }
+
+        let Some(entry) = shard.entries.get_mut(key) else {
+            return Ok(0);
+        };
+        let zset = get_zset_mut(entry).ok_or(())?;
+        let members: Vec<_> = zset
+            .iter_member_scores()
+            .map(|(member, _)| member.clone())
+            .filter(|member| in_lex_range(member.as_slice(), min, max))
+            .collect();
+
+        for member in &members {
+            let _ = zset.remove(member.as_slice());
+        }
+        if zset.is_empty() {
+            let _ = shard.remove_key(key);
+        }
+        Ok(members.len() as i64)
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct LexBound<'a> {
+    pub value: Option<&'a [u8]>,
+    pub inclusive: bool,
+}
+
+fn in_lex_range(member: &[u8], min: LexBound<'_>, max: LexBound<'_>) -> bool {
+    let _trace = profiler::scope("engine::zset::range::in_lex_range");
+    let above_min = match min.value {
+        None => true,
+        Some(value) if min.inclusive => member >= value,
+        Some(value) => member > value,
+    };
+    let below_max = match max.value {
+        None => true,
+        Some(value) if max.inclusive => member <= value,
+        Some(value) => member < value,
+    };
+    above_min && below_max
 }

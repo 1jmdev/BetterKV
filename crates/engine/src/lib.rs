@@ -18,6 +18,7 @@ pub mod store {
         PreDecodedRestoreEntry, RestoreError, SortError, SortOptions, SortOrder, SortResult,
     };
     pub use super::stream::{StreamRangeItem, XPendingSummary};
+    pub use super::zset::LexBound;
     pub use super::{
         BitFieldEncoding, BitFieldOp, BitFieldOverflow, BitOp, GetExMode, HashFloatOpError,
         HashIntOpError, ListInsertPosition, ListSetError, ListSide, Shard, Store, XAddId,

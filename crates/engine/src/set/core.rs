@@ -90,6 +90,25 @@ impl Store {
         Ok(set.contains(member) as i64)
     }
 
+    pub fn smismember(&self, key: &[u8], members: &[CompactArg]) -> Result<Vec<i64>, ()> {
+        let _trace = profiler::scope("engine::set::core::smismember");
+        let idx = self.shard_index(key);
+        let shard = self.shards[idx].read();
+        let now_ms = monotonic_now_ms();
+        if is_expired(&shard, key, now_ms) {
+            return Ok(vec![0; members.len()]);
+        }
+
+        let Some(entry) = shard.entries.get(key) else {
+            return Ok(vec![0; members.len()]);
+        };
+        let set = get_set(entry).ok_or(())?;
+        Ok(members
+            .iter()
+            .map(|member| i64::from(set.contains(member.as_slice())))
+            .collect())
+    }
+
     pub fn scard(&self, key: &[u8]) -> Result<i64, ()> {
         let _trace = profiler::scope("engine::set::core::scard");
         let idx = self.shard_index(key);

@@ -3,7 +3,7 @@ use crate::util::{
     Args,
 };
 use crate::zset::parse::parse_score_bound;
-use engine::store::Store;
+use engine::store::{LexBound, Store};
 use protocol::types::{BulkData, RespFrame};
 use types::value::CompactKey;
 
@@ -100,6 +100,80 @@ pub(crate) fn zrange_by_score(store: &Store, args: &Args, reverse: bool) -> Resp
     }
 }
 
+pub(crate) fn zrange_by_lex(store: &Store, args: &Args, reverse: bool) -> RespFrame {
+    let _trace = profiler::scope("commands::zset::range::zrange_by_lex");
+    if args.len() < 4 {
+        return wrong_args(if reverse {
+            "ZREVRANGEBYLEX"
+        } else {
+            "ZRANGEBYLEX"
+        });
+    }
+
+    let (min, max) = if reverse {
+        match (parse_lex_bound(&args[3]), parse_lex_bound(&args[2])) {
+            (Ok(min), Ok(max)) => (min, max),
+            (Err(response), _) | (_, Err(response)) => return response,
+        }
+    } else {
+        match (parse_lex_bound(&args[2]), parse_lex_bound(&args[3])) {
+            (Ok(min), Ok(max)) => (min, max),
+            (Err(response), _) | (_, Err(response)) => return response,
+        }
+    };
+
+    let mut offset = 0usize;
+    let mut count = None;
+    let mut index = 4;
+    while index < args.len() {
+        if !eq_ascii(&args[index], b"LIMIT") || index + 2 >= args.len() {
+            return crate::util::syntax_error();
+        }
+        offset = match parse_usize(&args[index + 1]) {
+            Ok(value) => value,
+            Err(response) => return response,
+        };
+        count = Some(match parse_usize(&args[index + 2]) {
+            Ok(value) => value,
+            Err(response) => return response,
+        });
+        index += 3;
+    }
+
+    match store.zrange_by_lex(&args[1], min, max, reverse, offset, count) {
+        Ok(items) => RespFrame::Array(Some(
+            items
+                .into_iter()
+                .map(|member| RespFrame::Bulk(Some(BulkData::Arg(member))))
+                .collect(),
+        )),
+        Err(_) => wrong_type(),
+    }
+}
+
+pub(crate) fn zrangestore(store: &Store, args: &Args) -> RespFrame {
+    let _trace = profiler::scope("commands::zset::range::zrangestore");
+    if args.len() != 5 {
+        return wrong_args("ZRANGESTORE");
+    }
+    let start = match parse_i64(&args[3]) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    let stop = match parse_i64(&args[4]) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+
+    match store
+        .zrange(&args[2], start, stop, false)
+        .and_then(|items| store.zstore_items(&args[1], &items))
+    {
+        Ok(value) => RespFrame::Integer(value),
+        Err(_) => wrong_type(),
+    }
+}
+
 fn format_items(items: Vec<(CompactKey, f64)>, withscores: bool) -> Vec<RespFrame> {
     let _trace = profiler::scope("commands::zset::range::format_items");
     if withscores {
@@ -126,4 +200,34 @@ fn parse_i64(raw: &[u8]) -> Result<i64, RespFrame> {
 fn parse_usize(raw: &[u8]) -> Result<usize, RespFrame> {
     let v = parse_u64_bytes(raw).ok_or_else(int_error)?;
     usize::try_from(v).map_err(|_| int_error())
+}
+
+fn parse_lex_bound(raw: &[u8]) -> Result<LexBound<'_>, RespFrame> {
+    if raw == b"-" {
+        return Ok(LexBound {
+            value: None,
+            inclusive: true,
+        });
+    }
+    if raw == b"+" {
+        return Ok(LexBound {
+            value: None,
+            inclusive: true,
+        });
+    }
+    if let Some(value) = raw.strip_prefix(b"[") {
+        return Ok(LexBound {
+            value: Some(value),
+            inclusive: true,
+        });
+    }
+    if let Some(value) = raw.strip_prefix(b"(") {
+        return Ok(LexBound {
+            value: Some(value),
+            inclusive: false,
+        });
+    }
+    Err(RespFrame::Error(
+        "ERR min or max not valid string range item".to_string(),
+    ))
 }

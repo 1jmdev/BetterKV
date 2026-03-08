@@ -1,4 +1,4 @@
-use crate::util::{Args, eq_ascii, int_error, parse_u64_bytes, wrong_args, wrong_type};
+use crate::util::{eq_ascii, int_error, parse_u64_bytes, wrong_args, wrong_type, Args};
 use engine::store::{ListSide, Store};
 use protocol::types::{BulkData, RespFrame};
 
@@ -30,6 +30,18 @@ pub(crate) fn brpoplpush(store: &Store, args: &Args) -> RespFrame {
     }
     if parse_timeout(&args[3]).is_err() {
         return int_error();
+    }
+
+    match store.rpoplpush(&args[1], &args[2]) {
+        Ok(value) => RespFrame::Bulk(value.map(BulkData::Value)),
+        Err(_) => wrong_type(),
+    }
+}
+
+pub(crate) fn rpoplpush(store: &Store, args: &Args) -> RespFrame {
+    let _trace = profiler::scope("commands::list::moves::rpoplpush");
+    if args.len() != 3 {
+        return wrong_args("RPOPLPUSH");
     }
 
     match store.rpoplpush(&args[1], &args[2]) {

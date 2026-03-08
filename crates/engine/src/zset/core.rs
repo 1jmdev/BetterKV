@@ -255,6 +255,53 @@ impl Store {
         }
         Ok(removed)
     }
+
+    pub fn zremrangebyscore(
+        &self,
+        key: &[u8],
+        min: f64,
+        min_exclusive: bool,
+        max: f64,
+        max_exclusive: bool,
+    ) -> Result<i64, ()> {
+        let _trace = profiler::scope("engine::zset::core::zremrangebyscore");
+        let idx = self.shard_index(key);
+        let mut shard = self.shards[idx].write();
+        let now_ms = monotonic_now_ms();
+        if purge_if_expired(&mut shard, key, now_ms) {
+            return Ok(0);
+        }
+
+        let Some(entry) = shard.entries.get_mut(key) else {
+            return Ok(0);
+        };
+        let zset = get_zset_mut(entry).ok_or(())?;
+        let members: Vec<_> = zset
+            .iter_member_scores()
+            .filter(|(_, score)| {
+                let above_min = if min_exclusive {
+                    *score > min
+                } else {
+                    *score >= min
+                };
+                let below_max = if max_exclusive {
+                    *score < max
+                } else {
+                    *score <= max
+                };
+                above_min && below_max
+            })
+            .map(|(member, _)| member.clone())
+            .collect();
+
+        for member in &members {
+            let _ = zset.remove(member.as_slice());
+        }
+        if zset.is_empty() {
+            let _ = shard.remove_key(key);
+        }
+        Ok(members.len() as i64)
+    }
 }
 
 fn new_zset() -> ZSetValueMap {

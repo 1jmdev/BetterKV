@@ -1,5 +1,5 @@
 use crate::util::{
-    Args, eq_ascii, f64_to_bytes, int_error, parse_u64_bytes, wrong_args, wrong_type,
+    eq_ascii, f64_to_bytes, int_error, parse_u64_bytes, wrong_args, wrong_type, Args,
 };
 use engine::store::Store;
 use protocol::types::{BulkData, RespFrame};
@@ -59,6 +59,35 @@ pub(crate) fn zop(store: &Store, args: &Args, command: &str) -> RespFrame {
                 ))
             }
         }
+        Err(_) => wrong_type(),
+    }
+}
+
+pub(crate) fn zop_store(store: &Store, args: &Args, command: &str) -> RespFrame {
+    let _trace = profiler::scope("commands::zset::algebra::zop_store");
+    if args.len() < 4 {
+        return wrong_args(command);
+    }
+    let num_keys = match parse_usize(&args[2]) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    if num_keys == 0 {
+        return RespFrame::Error("ERR numkeys should be greater than 0".to_string());
+    }
+    if args.len() != 3 + num_keys {
+        return crate::util::syntax_error();
+    }
+
+    let items = match command {
+        "ZINTERSTORE" => store.zinter(&args[3..]),
+        "ZUNIONSTORE" => store.zunion(&args[3..]),
+        "ZDIFFSTORE" => store.zdiff(&args[3..]),
+        _ => unreachable!(),
+    };
+
+    match items.and_then(|items| store.zstore_items(&args[1], &items)) {
+        Ok(value) => RespFrame::Integer(value),
         Err(_) => wrong_type(),
     }
 }

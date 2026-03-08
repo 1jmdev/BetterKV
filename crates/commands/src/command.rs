@@ -57,6 +57,7 @@ pub enum CommandId {
     MSetNx,
     Incr,
     IncrBy,
+    IncrByFloat,
     Decr,
     DecrBy,
     SetBit,
@@ -86,9 +87,12 @@ pub enum CommandId {
     HScan,
     HRandField,
     LPush,
+    LPushX,
     RPush,
+    RPushX,
     LPop,
     RPop,
+    LRem,
     LLen,
     LIndex,
     LRange,
@@ -102,6 +106,7 @@ pub enum CommandId {
     BRPop,
     BLMPop,
     BRPopLPush,
+    RPopLPush,
     SAdd,
     SRem,
     SMembers,
@@ -113,6 +118,7 @@ pub enum CommandId {
     SDiff,
     SScan,
     SIsMember,
+    SMIsMember,
     SDiffStore,
     SInterCard,
     SInterStore,
@@ -136,13 +142,22 @@ pub enum CommandId {
     ZMPop,
     BZMPop,
     ZInter,
+    ZInterStore,
     ZUnion,
+    ZUnionStore,
     ZDiff,
+    ZDiffStore,
     ZScan,
     ZRandMember,
+    ZRangeStore,
     ZRangeByScore,
+    ZRangeByLex,
     ZRevRangeByScore,
+    ZRevRangeByLex,
+    ZLexCount,
+    ZRemRangeByLex,
     ZRemRangeByRank,
+    ZRemRangeByScore,
     GeoAdd,
     GeoPos,
     GeoDist,
@@ -240,6 +255,7 @@ impl CommandId {
             Self::MSetNx => "MSETNX",
             Self::Incr => "INCR",
             Self::IncrBy => "INCRBY",
+            Self::IncrByFloat => "INCRBYFLOAT",
             Self::Decr => "DECR",
             Self::DecrBy => "DECRBY",
             Self::SetBit => "SETBIT",
@@ -269,9 +285,12 @@ impl CommandId {
             Self::HScan => "HSCAN",
             Self::HRandField => "HRANDFIELD",
             Self::LPush => "LPUSH",
+            Self::LPushX => "LPUSHX",
             Self::RPush => "RPUSH",
+            Self::RPushX => "RPUSHX",
             Self::LPop => "LPOP",
             Self::RPop => "RPOP",
+            Self::LRem => "LREM",
             Self::LLen => "LLEN",
             Self::LIndex => "LINDEX",
             Self::LRange => "LRANGE",
@@ -285,6 +304,7 @@ impl CommandId {
             Self::BRPop => "BRPOP",
             Self::BLMPop => "BLMPOP",
             Self::BRPopLPush => "BRPOPLPUSH",
+            Self::RPopLPush => "RPOPLPUSH",
             Self::SAdd => "SADD",
             Self::SRem => "SREM",
             Self::SMembers => "SMEMBERS",
@@ -296,6 +316,7 @@ impl CommandId {
             Self::SDiff => "SDIFF",
             Self::SScan => "SSCAN",
             Self::SIsMember => "SISMEMBER",
+            Self::SMIsMember => "SMISMEMBER",
             Self::SDiffStore => "SDIFFSTORE",
             Self::SInterCard => "SINTERCARD",
             Self::SInterStore => "SINTERSTORE",
@@ -319,13 +340,22 @@ impl CommandId {
             Self::ZMPop => "ZMPOP",
             Self::BZMPop => "BZMPOP",
             Self::ZInter => "ZINTER",
+            Self::ZInterStore => "ZINTERSTORE",
             Self::ZUnion => "ZUNION",
+            Self::ZUnionStore => "ZUNIONSTORE",
             Self::ZDiff => "ZDIFF",
+            Self::ZDiffStore => "ZDIFFSTORE",
             Self::ZScan => "ZSCAN",
             Self::ZRandMember => "ZRANDMEMBER",
+            Self::ZRangeStore => "ZRANGESTORE",
             Self::ZRangeByScore => "ZRANGEBYSCORE",
+            Self::ZRangeByLex => "ZRANGEBYLEX",
             Self::ZRevRangeByScore => "ZREVRANGEBYSCORE",
+            Self::ZRevRangeByLex => "ZREVRANGEBYLEX",
+            Self::ZLexCount => "ZLEXCOUNT",
+            Self::ZRemRangeByLex => "ZREMRANGEBYLEX",
             Self::ZRemRangeByRank => "ZREMRANGEBYRANK",
+            Self::ZRemRangeByScore => "ZREMRANGEBYSCORE",
             Self::GeoAdd => "GEOADD",
             Self::GeoPos => "GEOPOS",
             Self::GeoDist => "GEODIST",
@@ -430,6 +460,9 @@ fn identify_short(key: u64) -> CommandId {
         cmd::MSETNX => CommandId::MSetNx,
         cmd::INCR => CommandId::Incr,
         cmd::INCRBY => CommandId::IncrBy,
+        cmd::LPUSHX => CommandId::LPushX,
+        cmd::RPUSHX => CommandId::RPushX,
+        cmd::LREM => CommandId::LRem,
         cmd::DECR => CommandId::Decr,
         cmd::DECRBY => CommandId::DecrBy,
         cmd::SETBIT => CommandId::SetBit,
@@ -481,6 +514,7 @@ fn identify_short(key: u64) -> CommandId {
         cmd::SUNION => CommandId::SUnion,
         cmd::SDIFF => CommandId::SDiff,
         cmd::SSCAN => CommandId::SScan,
+        cmd::ZLEXCOUNT => CommandId::ZLexCount,
         cmd::ZADD => CommandId::ZAdd,
         cmd::ZREM => CommandId::ZRem,
         cmd::ZCARD => CommandId::ZCard,
@@ -532,11 +566,17 @@ fn identify_short(key: u64) -> CommandId {
 fn identify_long(command: &[u8]) -> CommandId {
     match command.len() {
         9 => {
+            if command.eq_ignore_ascii_case(b"RPOPLPUSH") {
+                return CommandId::RPopLPush;
+            }
             if command.eq_ignore_ascii_case(b"PEXPIREAT") {
                 return CommandId::PExpireAt;
             }
             if command.eq_ignore_ascii_case(b"SISMEMBER") {
                 return CommandId::SIsMember;
+            }
+            if command.eq_ignore_ascii_case(b"ZLEXCOUNT") {
+                return CommandId::ZLexCount;
             }
             if command.eq_ignore_ascii_case(b"ZREVRANGE") {
                 return CommandId::ZRevRange;
@@ -561,8 +601,14 @@ fn identify_long(command: &[u8]) -> CommandId {
             if command.eq_ignore_ascii_case(b"BRPOPLPUSH") {
                 return CommandId::BRPopLPush;
             }
+            if command.eq_ignore_ascii_case(b"SMISMEMBER") {
+                return CommandId::SMIsMember;
+            }
             if command.eq_ignore_ascii_case(b"SDIFFSTORE") {
                 return CommandId::SDiffStore;
+            }
+            if command.eq_ignore_ascii_case(b"ZDIFFSTORE") {
+                return CommandId::ZDiffStore;
             }
             if command.eq_ignore_ascii_case(b"SINTERCARD") {
                 return CommandId::SInterCard;
@@ -584,6 +630,9 @@ fn identify_long(command: &[u8]) -> CommandId {
             if command.eq_ignore_ascii_case(b"BITFIELD_RO") {
                 return CommandId::BitFieldRo;
             }
+            if command.eq_ignore_ascii_case(b"INCRBYFLOAT") {
+                return CommandId::IncrByFloat;
+            }
             if command.eq_ignore_ascii_case(b"SINTERSTORE") {
                 return CommandId::SInterStore;
             }
@@ -595,6 +644,18 @@ fn identify_long(command: &[u8]) -> CommandId {
             }
             if command.eq_ignore_ascii_case(b"ZRANDMEMBER") {
                 return CommandId::ZRandMember;
+            }
+            if command.eq_ignore_ascii_case(b"ZINTERSTORE") {
+                return CommandId::ZInterStore;
+            }
+            if command.eq_ignore_ascii_case(b"ZUNIONSTORE") {
+                return CommandId::ZUnionStore;
+            }
+            if command.eq_ignore_ascii_case(b"ZRANGESTORE") {
+                return CommandId::ZRangeStore;
+            }
+            if command.eq_ignore_ascii_case(b"ZRANGEBYLEX") {
+                return CommandId::ZRangeByLex;
             }
             if command.eq_ignore_ascii_case(b"UNSUBSCRIBE") {
                 return CommandId::Unsubscribe;
@@ -615,8 +676,16 @@ fn identify_long(command: &[u8]) -> CommandId {
             if command.eq_ignore_ascii_case(b"ZRANGEBYSCORE") {
                 return CommandId::ZRangeByScore;
             }
+        }
+        14 => {
             if command.eq_ignore_ascii_case(b"GEOSEARCHSTORE") {
                 return CommandId::GeoSearchStore;
+            }
+            if command.eq_ignore_ascii_case(b"ZREVRANGEBYLEX") {
+                return CommandId::ZRevRangeByLex;
+            }
+            if command.eq_ignore_ascii_case(b"ZREMRANGEBYLEX") {
+                return CommandId::ZRemRangeByLex;
             }
         }
         15 => {
@@ -627,6 +696,9 @@ fn identify_long(command: &[u8]) -> CommandId {
         16 => {
             if command.eq_ignore_ascii_case(b"ZREVRANGEBYSCORE") {
                 return CommandId::ZRevRangeByScore;
+            }
+            if command.eq_ignore_ascii_case(b"ZREMRANGEBYSCORE") {
+                return CommandId::ZRemRangeByScore;
             }
         }
         17 => {

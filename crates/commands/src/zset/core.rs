@@ -2,7 +2,7 @@ use crate::util::{
     f64_to_bytes, parse_i64_bytes, preencode_bulk_str, wrong_args, wrong_type, Args,
 };
 use crate::zset::parse::{parse_score, parse_score_bound};
-use engine::store::Store;
+use engine::store::{LexBound, Store};
 use protocol::types::{BulkData, RespFrame};
 use types::value::CompactArg;
 
@@ -234,7 +234,94 @@ pub(crate) fn zremrangebyrank(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
+pub(crate) fn zlexcount(store: &Store, args: &Args) -> RespFrame {
+    let _trace = profiler::scope("commands::zset::core::zlexcount");
+    if args.len() != 4 {
+        return wrong_args("ZLEXCOUNT");
+    }
+    let min = match parse_lex_bound(&args[2]) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    let max = match parse_lex_bound(&args[3]) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    match store.zlexcount(&args[1], min, max) {
+        Ok(value) => RespFrame::Integer(value),
+        Err(_) => wrong_type(),
+    }
+}
+
+pub(crate) fn zremrangebylex(store: &Store, args: &Args) -> RespFrame {
+    let _trace = profiler::scope("commands::zset::core::zremrangebylex");
+    if args.len() != 4 {
+        return wrong_args("ZREMRANGEBYLEX");
+    }
+    let min = match parse_lex_bound(&args[2]) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    let max = match parse_lex_bound(&args[3]) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    match store.zremrangebylex(&args[1], min, max) {
+        Ok(value) => RespFrame::Integer(value),
+        Err(_) => wrong_type(),
+    }
+}
+
+pub(crate) fn zremrangebyscore(store: &Store, args: &Args) -> RespFrame {
+    let _trace = profiler::scope("commands::zset::core::zremrangebyscore");
+    if args.len() != 4 {
+        return wrong_args("ZREMRANGEBYSCORE");
+    }
+    let min = match parse_score_bound(&args[2]) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    let max = match parse_score_bound(&args[3]) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    match store.zremrangebyscore(&args[1], min.0, min.1, max.0, max.1) {
+        Ok(value) => RespFrame::Integer(value),
+        Err(_) => wrong_type(),
+    }
+}
+
 fn parse_i64(raw: &[u8]) -> Result<i64, RespFrame> {
     let _trace = profiler::scope("commands::zset::core::parse_i64");
     parse_i64_bytes(raw).ok_or_else(crate::util::int_error)
+}
+
+fn parse_lex_bound(raw: &[u8]) -> Result<LexBound<'_>, RespFrame> {
+    if raw == b"-" {
+        return Ok(LexBound {
+            value: None,
+            inclusive: true,
+        });
+    }
+    if raw == b"+" {
+        return Ok(LexBound {
+            value: None,
+            inclusive: true,
+        });
+    }
+    if let Some(value) = raw.strip_prefix(b"[") {
+        return Ok(LexBound {
+            value: Some(value),
+            inclusive: true,
+        });
+    }
+    if let Some(value) = raw.strip_prefix(b"(") {
+        return Ok(LexBound {
+            value: Some(value),
+            inclusive: false,
+        });
+    }
+    Err(RespFrame::Error(
+        "ERR min or max not valid string range item".to_string(),
+    ))
 }

@@ -1,4 +1,4 @@
-use crate::util::{Args, int_error, parse_u64_bytes, wrong_args, wrong_type};
+use crate::util::{int_error, parse_u64_bytes, wrong_args, wrong_type, Args};
 use engine::store::Store;
 use protocol::types::{BulkData, RespFrame};
 
@@ -13,12 +13,34 @@ pub(crate) fn lpush(store: &Store, args: &Args) -> RespFrame {
     }
 }
 
+pub(crate) fn lpushx(store: &Store, args: &Args) -> RespFrame {
+    let _trace = profiler::scope("commands::list::core::lpushx");
+    if args.len() < 3 {
+        return wrong_args("LPUSHX");
+    }
+    match store.lpushx(&args[1], &args[2..]) {
+        Ok(len) => RespFrame::Integer(len),
+        Err(_) => wrong_type(),
+    }
+}
+
 pub(crate) fn rpush(store: &Store, args: &Args) -> RespFrame {
     let _trace = profiler::scope("commands::list::core::rpush");
     if args.len() < 3 {
         return wrong_args("RPUSH");
     }
     match store.rpush(&args[1], &args[2..]) {
+        Ok(len) => RespFrame::Integer(len),
+        Err(_) => wrong_type(),
+    }
+}
+
+pub(crate) fn rpushx(store: &Store, args: &Args) -> RespFrame {
+    let _trace = profiler::scope("commands::list::core::rpushx");
+    if args.len() < 3 {
+        return wrong_args("RPUSHX");
+    }
+    match store.rpushx(&args[1], &args[2..]) {
         Ok(len) => RespFrame::Integer(len),
         Err(_) => wrong_type(),
     }
@@ -76,6 +98,21 @@ pub(crate) fn llen(store: &Store, args: &Args) -> RespFrame {
     }
     match store.llen(&args[1]) {
         Ok(len) => RespFrame::Integer(len),
+        Err(_) => wrong_type(),
+    }
+}
+
+pub(crate) fn lrem(store: &Store, args: &Args) -> RespFrame {
+    let _trace = profiler::scope("commands::list::core::lrem");
+    if args.len() != 4 {
+        return wrong_args("LREM");
+    }
+    let count = match crate::util::parse_i64_bytes(&args[2]) {
+        Some(value) => value,
+        None => return int_error(),
+    };
+    match store.lrem(&args[1], count, &args[3]) {
+        Ok(removed) => RespFrame::Integer(removed),
         Err(_) => wrong_type(),
     }
 }
