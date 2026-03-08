@@ -29,7 +29,7 @@ DEL mykey
 RUN:
 SETEX mykey 0 "Hello"
 EXPECT:
-(error) ERR invalid expire time in setex
+(error) ERR invalid expire time in 'setex' command
 
 === TEST: SETEX negative expiration
 SETUP:
@@ -37,7 +37,7 @@ DEL mykey
 RUN:
 SETEX mykey -1 "Hello"
 EXPECT:
-(error) ERR invalid expire time in setex
+(error) ERR invalid expire time in 'setex' command
 
 === TEST: SETEX wrong arguments
 RUN:

@@ -61,7 +61,17 @@ impl Client {
         self.execute(parts).await
     }
 
+    pub async fn execute_raw_no_reply(&mut self, command: &str) -> Result<(), String> {
+        let parts = parse_command_line(command)?;
+        self.send(parts).await
+    }
+
     pub async fn execute(&mut self, command: Vec<Vec<u8>>) -> Result<RespFrame, String> {
+        self.send(command).await?;
+        self.read_frame().await
+    }
+
+    async fn send(&mut self, command: Vec<Vec<u8>>) -> Result<(), String> {
         let frame = RespFrame::Array(Some(
             command
                 .into_iter()
@@ -75,7 +85,7 @@ impl Client {
             .write_all(&out)
             .await
             .map_err(|err| format!("write error: {err}"))?;
-        self.read_frame().await
+        Ok(())
     }
 
     async fn read_frame(&mut self) -> Result<RespFrame, String> {

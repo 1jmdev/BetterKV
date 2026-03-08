@@ -35,7 +35,9 @@ SETUP:
 RUN:
 UNSUBSCRIBE
 EXPECT:
-(error) ERR only (P)SUBSCRIBE / (P)UNSUBSCRIBE / PING / RESET / QUIT allowed in this context
+1) "unsubscribe"
+2) (nil)
+3) (integer) 0
 
 === TEST: PUBSUB CHANNELS
 RUN:

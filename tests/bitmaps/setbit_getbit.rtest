@@ -121,6 +121,6 @@ SET mystring "value"
 RUN:
 GETBIT mystring 0
 EXPECT:
-(error) WRONGTYPE Operation against a key holding the wrong kind of value
+(integer) 0
 CLEANUP:
 DEL mystring

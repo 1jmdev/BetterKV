@@ -164,6 +164,48 @@ pub fn render_frame(frame: &RespFrame) -> String {
     }
 }
 
+pub fn render_frame_raw(frame: &RespFrame) -> String {
+    match frame {
+        RespFrame::Simple(value) => value.clone(),
+        RespFrame::SimpleStatic(value) => (*value).to_string(),
+        RespFrame::Error(value) => value.clone(),
+        RespFrame::ErrorStatic(value) => (*value).to_string(),
+        RespFrame::Integer(value) => value.to_string(),
+        RespFrame::Bulk(None) => "".to_string(),
+        RespFrame::Bulk(Some(BulkData::Arg(value))) => {
+            String::from_utf8_lossy(value.as_slice()).into_owned()
+        }
+        RespFrame::Bulk(Some(BulkData::Value(value))) => {
+            String::from_utf8_lossy(value.as_slice()).into_owned()
+        }
+        RespFrame::Array(None) => "".to_string(),
+        RespFrame::Array(Some(items)) => items
+            .iter()
+            .map(render_frame_raw)
+            .collect::<Vec<_>>()
+            .join("\n"),
+        RespFrame::BulkOptions(items) => items
+            .iter()
+            .map(|item| match item {
+                Some(value) => String::from_utf8_lossy(value.as_slice()).into_owned(),
+                None => String::new(),
+            })
+            .collect::<Vec<_>>()
+            .join("\n"),
+        RespFrame::BulkValues(items) => items
+            .iter()
+            .map(|item| String::from_utf8_lossy(item.as_slice()).into_owned())
+            .collect::<Vec<_>>()
+            .join("\n"),
+        RespFrame::Map(items) => items
+            .iter()
+            .map(|(key, value)| format!("{} {}", render_frame_raw(key), render_frame_raw(value)))
+            .collect::<Vec<_>>()
+            .join("\n"),
+        RespFrame::PreEncoded(bytes) => String::from_utf8_lossy(bytes.as_ref()).into_owned(),
+    }
+}
+
 fn quote_bytes(bytes: &[u8]) -> String {
     let mut out = String::from("\"");
     for byte in bytes {

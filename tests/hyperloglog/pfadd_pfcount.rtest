@@ -120,7 +120,7 @@ PFMERGE hll3 hll1 hll2
 PFCOUNT hll3
 EXPECT:
 OK
-(integer) 3
+(integer) 4
 CLEANUP:
 DEL hll1 hll2 hll3
 

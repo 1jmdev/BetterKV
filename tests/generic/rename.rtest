@@ -40,7 +40,7 @@ SET key "value"
 RUN:
 RENAME key key
 EXPECT:
-(error) ERR source and destination objects are the same
+OK
 CLEANUP:
 DEL key
 

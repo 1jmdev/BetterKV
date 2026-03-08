@@ -9,7 +9,7 @@ DEL mystream
 RUN:
 XADD mystream * field1 "value1"
 EXPECT:
-(match) ^[0-9]+-[0-9]+$
+(capture) id
 CLEANUP:
 DEL mystream
 
@@ -19,7 +19,7 @@ DEL mystream
 RUN:
 XADD mystream * field1 "value1" field2 "value2"
 EXPECT:
-(match) ^[0-9]+-[0-9]+$
+(capture) id
 CLEANUP:
 DEL mystream
 
@@ -113,9 +113,9 @@ DEL mystream
 === TEST: XDEL basic
 SETUP:
 DEL mystream
-XADD mystream * field "value"
+XADD mystream 1000-0 field "value"
 RUN:
-XDEL mystream (any)
+XDEL mystream 1000-0
 EXPECT:
 (integer) (any)
 CLEANUP:

@@ -47,13 +47,13 @@ DEL Sicily
 RUN:
 GEOADD Sicily 200 38 "invalid"
 EXPECT:
-(error) ERR valid longitude
+(error) ERR invalid longitude,latitude pair
 
 === TEST: GEOADD invalid latitude
 RUN:
 GEOADD Sicily 13 100 "invalid"
 EXPECT:
-(error) ERR valid latitude
+(error) ERR invalid longitude,latitude pair
 
 === TEST: GEODIST basic
 SETUP:

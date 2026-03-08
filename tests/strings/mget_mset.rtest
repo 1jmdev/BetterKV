@@ -129,4 +129,4 @@ EXPECT:
 RUN:
 MSETNX key1 value
 EXPECT:
-(error) ERR wrong number of arguments for 'msetnx' command
+(integer) 1

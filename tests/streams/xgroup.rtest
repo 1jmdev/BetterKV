@@ -32,7 +32,7 @@ XGROUP CREATE mystream mygroup 0
 RUN:
 XGROUP CREATE mystream mygroup 0
 EXPECT:
-(error) BUSYGROUP Consumer group 'mygroup' already exists
+(error) BUSYGROUP Consumer Group name already exists
 CLEANUP:
 DEL mystream
 

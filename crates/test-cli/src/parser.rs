@@ -105,7 +105,7 @@ fn parse_case(lines: &[&str], start: usize, path: &Path) -> Result<(TestCase, us
             _ => match section {
                 Section::Setup => setup.push(line.to_string()),
                 Section::Run => run.push(line.to_string()),
-                Section::Expect => expect_lines.push(line.to_string()),
+                Section::Expect => expect_lines.push(raw_line.trim_end().to_string()),
                 Section::Cleanup => cleanup.push(line.to_string()),
                 Section::None => {
                     return Err(format!(
@@ -149,46 +149,124 @@ fn parse_case(lines: &[&str], start: usize, path: &Path) -> Result<(TestCase, us
 }
 
 fn parse_expected(lines: &[String], path: &Path, test_name: &str) -> Result<ExpectedValue, String> {
-    if lines.len() == 1 {
-        return parse_scalar_expected(&lines[0], false, path, test_name);
+    let mut groups = Vec::new();
+    let mut index = 0usize;
+
+    while index < lines.len() {
+        let line = lines[index].trim();
+
+        if line == "(unordered)" {
+            let next = lines.get(index + 1).ok_or_else(|| {
+                format!(
+                    "{} test `{test_name}` has `(unordered)` with no following array",
+                    path.display()
+                )
+            })?;
+            if !is_numbered_line(next) {
+                return Err(format!(
+                    "{} test `{test_name}` uses `(unordered)` without an array expectation",
+                    path.display()
+                ));
+            }
+
+            let (array, next_index) = parse_array_group(lines, index + 1, true, path, test_name)?;
+            groups.push(array);
+            index = next_index;
+            continue;
+        }
+
+        if is_numbered_line(&lines[index]) {
+            let (array, next_index) = parse_array_group(lines, index, false, path, test_name)?;
+            groups.push(array);
+            index = next_index;
+            continue;
+        }
+
+        groups.push(parse_scalar_expected(line, false, path, test_name)?);
+        index += 1;
     }
 
-    let mut unordered = false;
-    let mut slice = lines;
-    if let Some(first) = lines.first() {
-        if first == "(unordered)" {
-            unordered = true;
-            slice = &lines[1..];
+    if groups.len() == 1 {
+        return Ok(groups.remove(0));
+    }
+
+    Ok(ExpectedValue::Sequence(groups))
+}
+
+fn parse_array_group(
+    lines: &[String],
+    start: usize,
+    unordered: bool,
+    path: &Path,
+    test_name: &str,
+) -> Result<(ExpectedValue, usize), String> {
+    let base_indent = line_indent(&lines[start]);
+    let mut items = Vec::new();
+    let mut index = start;
+
+    while index < lines.len() {
+        if !is_numbered_line_with_indent(&lines[index], base_indent) {
+            break;
+        }
+
+        let (_, content) = split_numbered_line(lines[index].trim()).ok_or_else(|| {
+            format!(
+                "{} test `{test_name}` has invalid array line `{}`",
+                path.display(),
+                lines[index].trim()
+            )
+        })?;
+        index += 1;
+
+        if is_inline_numbered(content) {
+            let mut nested_lines = vec![content.to_string()];
+            while index < lines.len() && line_indent(&lines[index]) > base_indent {
+                nested_lines.push(lines[index].trim().to_string());
+                index += 1;
+            }
+            let (nested, consumed) = parse_array_group(&nested_lines, 0, false, path, test_name)?;
+            debug_assert_eq!(consumed, nested_lines.len());
+            items.push(nested);
+            continue;
+        }
+
+        items.push(parse_scalar_expected(content, true, path, test_name)?);
+
+        while index < lines.len() && line_indent(&lines[index]) > base_indent {
+            return Err(format!(
+                "{} test `{test_name}` has unexpected indented array line `{}`",
+                path.display(),
+                lines[index].trim()
+            ));
         }
     }
 
-    if slice.is_empty() {
-        return Err(format!(
-            "{} test `{test_name}` has `(unordered)` with no array items",
-            path.display()
-        ));
-    }
-
-    let mut items = Vec::with_capacity(slice.len());
-    for line in slice {
-        let value = normalize_array_line(line);
-        items.push(parse_scalar_expected(value, true, path, test_name)?);
-    }
-
-    Ok(ExpectedValue::Array { items, unordered })
+    Ok((ExpectedValue::Array { items, unordered }, index))
 }
 
-fn normalize_array_line(line: &str) -> &str {
-    let trimmed = line.trim();
-    let Some((prefix, value)) = trimmed.split_once(')') else {
-        return trimmed;
-    };
+fn is_numbered_line(line: &str) -> bool {
+    split_numbered_line(line.trim()).is_some()
+}
 
-    if !prefix.is_empty() && prefix.bytes().all(|byte| byte.is_ascii_digit()) {
-        value.trim()
-    } else {
-        trimmed
+fn is_numbered_line_with_indent(line: &str, indent: usize) -> bool {
+    line_indent(line) == indent && is_numbered_line(line)
+}
+
+fn is_inline_numbered(line: &str) -> bool {
+    split_numbered_line(line.trim()).is_some()
+}
+
+fn split_numbered_line(line: &str) -> Option<(&str, &str)> {
+    let trimmed = line.trim();
+    let (prefix, value) = trimmed.split_once(')')?;
+    if prefix.is_empty() || !prefix.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
     }
+    Some((prefix, value.trim()))
+}
+
+fn line_indent(line: &str) -> usize {
+    line.len() - line.trim_start_matches(' ').len()
 }
 
 fn parse_scalar_expected(
@@ -199,6 +277,12 @@ fn parse_scalar_expected(
 ) -> Result<ExpectedValue, String> {
     if raw == "(any)" {
         return Ok(ExpectedValue::Any);
+    }
+    if let Some(rest) = raw.strip_prefix("(capture) ") {
+        return Ok(ExpectedValue::Capture(rest.trim().to_string()));
+    }
+    if raw == "(noreply)" || raw == "(no reply)" || raw == "(no response)" {
+        return Ok(ExpectedValue::NoReply);
     }
     if raw == "(nil)" {
         return Ok(ExpectedValue::Bulk(None));
@@ -232,7 +316,7 @@ fn parse_scalar_expected(
                 rest.trim()
             )
         })?;
-        return Ok(ExpectedValue::Regex(regex));
+        return Ok(ExpectedValue::RawRegex(regex));
     }
     if raw.starts_with('"') {
         return Ok(ExpectedValue::Bulk(Some(parse_quoted_bytes(raw).map_err(

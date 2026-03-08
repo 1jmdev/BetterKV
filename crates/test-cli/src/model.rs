@@ -29,6 +29,8 @@ pub struct TestCase {
 #[derive(Debug, Clone)]
 pub enum ExpectedValue {
     Any,
+    NoReply,
+    Sequence(Vec<ExpectedValue>),
     Simple(String),
     Bulk(Option<Vec<u8>>),
     IntegerAny,
@@ -36,11 +38,12 @@ pub enum ExpectedValue {
     ErrorAny,
     ErrorPrefix(String),
     EmptyArray,
+    RawRegex(Regex),
     Array {
         items: Vec<ExpectedValue>,
         unordered: bool,
     },
-    Regex(Regex),
+    Capture(String),
 }
 
 #[derive(Debug, Clone)]

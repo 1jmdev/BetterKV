@@ -6,7 +6,7 @@ use crate::args::Args;
 use crate::client::Client;
 use crate::discovery::discover_rtest_files;
 use crate::model::{ExpectedValue, RunSummary, TestFailure};
-use crate::output::{print_failures, render_frame, Ui};
+use crate::output::{print_failures, render_frame, render_frame_raw, Ui};
 use crate::parser::parse_test_file;
 
 pub async fn run(args: Args) -> Result<RunSummary, String> {
@@ -25,7 +25,6 @@ pub async fn run(args: Args) -> Result<RunSummary, String> {
     let ui = Ui::new(total, args.quiet);
     ui.set_discovery(files.len(), total);
 
-    let mut client = Client::connect(&args).await?;
     let mut failures = Vec::new();
     let mut passed = 0usize;
 
@@ -38,7 +37,7 @@ pub async fn run(args: Args) -> Result<RunSummary, String> {
             ui.set_current_test(&location);
 
             let case_started = Instant::now();
-            let result = run_case(&mut client, &case).await;
+            let result = run_case(&args, &case).await;
             let elapsed = case_started.elapsed();
 
             match result {
@@ -74,31 +73,46 @@ pub async fn run(args: Args) -> Result<RunSummary, String> {
     Ok(summary)
 }
 
-async fn run_case(client: &mut Client, case: &crate::model::TestCase) -> Result<(), String> {
+async fn run_case(args: &Args, case: &crate::model::TestCase) -> Result<(), String> {
+    let mut client = Client::connect(args).await?;
     client.flush_all().await.map_err(|err| format!("FLUSHALL failed: {err}"))?;
+    let mut captures = std::collections::HashMap::<String, String>::new();
 
     for command in &case.setup {
+        let command = substitute_captures(command, &captures)?;
         client
-            .execute_raw(command)
+            .execute_raw(&command)
             .await
             .map_err(|err| format!("setup command `{command}` failed: {err}"))?;
     }
 
-    let mut last = None;
-    for command in &case.run {
-        let frame = client
-            .execute_raw(command)
-            .await
-            .map_err(|err| format!("run command `{command}` failed: {err}"))?;
-        last = Some(frame);
+    let no_reply = matches!(case.expect, ExpectedValue::NoReply);
+    let mut responses = Vec::with_capacity(case.run.len());
+    let last_index = case.run.len().saturating_sub(1);
+    for (index, command) in case.run.iter().enumerate() {
+        let command = substitute_captures(command, &captures)?;
+        if no_reply && index == last_index {
+            client
+                .execute_raw_no_reply(&command)
+                .await
+                .map_err(|err| format!("run command `{command}` failed: {err}"))?;
+        } else {
+            let frame = client
+                .execute_raw(&command)
+                .await
+                .map_err(|err| format!("run command `{command}` failed: {err}"))?;
+            responses.push(frame);
+        }
     }
 
-    let actual = last.ok_or_else(|| "RUN section did not execute any command".to_string())?;
-    validate_expected(&case.expect, &actual)?;
+    if !no_reply {
+        validate_run_results(&case.expect, &responses, &mut captures)?;
+    }
 
     for command in &case.cleanup {
+        let command = substitute_captures(command, &captures)?;
         client
-            .execute_raw(command)
+            .execute_raw(&command)
             .await
             .map_err(|err| format!("cleanup command `{command}` failed: {err}"))?;
     }
@@ -106,9 +120,55 @@ async fn run_case(client: &mut Client, case: &crate::model::TestCase) -> Result<
     Ok(())
 }
 
-fn validate_expected(expected: &ExpectedValue, actual: &RespFrame) -> Result<(), String> {
+fn validate_run_results(
+    expected: &ExpectedValue,
+    actual: &[RespFrame],
+    captures: &mut std::collections::HashMap<String, String>,
+) -> Result<(), String> {
+    match expected {
+        ExpectedValue::Sequence(items) => validate_sequence(items, actual, captures),
+        _ => {
+            let response = actual
+                .last()
+                .ok_or_else(|| "RUN section did not execute any command".to_string())?;
+            validate_expected(expected, response, captures)
+        }
+    }
+}
+
+fn validate_sequence(
+    expected: &[ExpectedValue],
+    actual: &[RespFrame],
+    captures: &mut std::collections::HashMap<String, String>,
+) -> Result<(), String> {
+    if expected.len() != actual.len() {
+        return Err(format!(
+            "expected {} response(s), got {}",
+            expected.len(),
+            actual.len()
+        ));
+    }
+
+    for (expected_item, actual_item) in expected.iter().zip(actual.iter()) {
+        validate_expected(expected_item, actual_item, captures)?;
+    }
+
+    Ok(())
+}
+
+fn validate_expected(
+    expected: &ExpectedValue,
+    actual: &RespFrame,
+    captures: &mut std::collections::HashMap<String, String>,
+) -> Result<(), String> {
     match expected {
         ExpectedValue::Any => Ok(()),
+        ExpectedValue::NoReply => Ok(()),
+        ExpectedValue::Sequence(_) => Err("internal error: sequence cannot validate a single response".to_string()),
+        ExpectedValue::Capture(name) => {
+            captures.insert(name.clone(), render_frame_raw(actual));
+            Ok(())
+        }
         ExpectedValue::Simple(value) => match actual {
             RespFrame::Simple(actual) if actual == value => Ok(()),
             RespFrame::SimpleStatic(actual) if actual == value => Ok(()),
@@ -146,25 +206,50 @@ fn validate_expected(expected: &ExpectedValue, actual: &RespFrame) -> Result<(),
             RespFrame::BulkValues(items) if items.is_empty() => Ok(()),
             _ => Err(mismatch(expected, actual)),
         },
-        ExpectedValue::Array { items, unordered } => validate_array(items, *unordered, actual),
-        ExpectedValue::Regex(regex) => {
-            let rendered = render_frame(actual);
+        ExpectedValue::RawRegex(regex) => {
+            let rendered = render_frame_raw(actual);
             if regex.is_match(&rendered) {
                 Ok(())
             } else {
                 Err(format!(
-                    "expected response to match `{}`, got:\n{}",
+                    "expected raw response to match `{}`, got:\n{}",
                     regex.as_str(),
-                    rendered
+                    render_frame(actual)
                 ))
             }
         }
+        ExpectedValue::Array { items, unordered } => validate_array(items, *unordered, actual, captures),
     }
 }
 
-fn validate_array(items: &[ExpectedValue], unordered: bool, actual: &RespFrame) -> Result<(), String> {
+fn validate_array(
+    items: &[ExpectedValue],
+    unordered: bool,
+    actual: &RespFrame,
+    captures: &mut std::collections::HashMap<String, String>,
+) -> Result<(), String> {
+    let normalized;
     let actual_items = match actual {
         RespFrame::Array(Some(items)) => items,
+        RespFrame::BulkOptions(items) => {
+            normalized = items
+                .iter()
+                .map(|item| match item {
+                    Some(value) => RespFrame::Bulk(Some(BulkData::Value(value.clone()))),
+                    None => RespFrame::Bulk(None),
+                })
+                .collect::<Vec<_>>();
+            &normalized
+        }
+        RespFrame::BulkValues(items) => {
+            normalized = items
+                .iter()
+                .cloned()
+                .map(BulkData::Value)
+                .map(|value| RespFrame::Bulk(Some(value)))
+                .collect::<Vec<_>>();
+            &normalized
+        }
         _ => return Err(mismatch(&ExpectedValue::Array { items: items.to_vec(), unordered }, actual)),
     };
 
@@ -179,7 +264,7 @@ fn validate_array(items: &[ExpectedValue], unordered: bool, actual: &RespFrame) 
 
     if !unordered {
         for (expected_item, actual_item) in items.iter().zip(actual_items.iter()) {
-            validate_expected(expected_item, actual_item)?;
+            validate_expected(expected_item, actual_item, captures)?;
         }
         return Ok(());
     }
@@ -191,8 +276,10 @@ fn validate_array(items: &[ExpectedValue], unordered: bool, actual: &RespFrame) 
             if used[index] {
                 continue;
             }
-            if validate_expected(expected_item, actual_item).is_ok() {
+            let mut scratch = captures.clone();
+            if validate_expected(expected_item, actual_item, &mut scratch).is_ok() {
                 used[index] = true;
+                *captures = scratch;
                 matched = true;
                 break;
             }
@@ -220,6 +307,9 @@ fn mismatch(expected: &ExpectedValue, actual: &RespFrame) -> String {
 fn expected_to_string(expected: &ExpectedValue) -> String {
     match expected {
         ExpectedValue::Any => "(any)".to_string(),
+        ExpectedValue::NoReply => "(noreply)".to_string(),
+        ExpectedValue::Sequence(items) => format!("sequence[{}]", items.len()),
+        ExpectedValue::Capture(name) => format!("(capture) {name}"),
         ExpectedValue::Simple(value) => value.clone(),
         ExpectedValue::Bulk(None) => "(nil)".to_string(),
         ExpectedValue::Bulk(Some(value)) => render_expected_bytes(value),
@@ -228,12 +318,50 @@ fn expected_to_string(expected: &ExpectedValue) -> String {
         ExpectedValue::ErrorAny => "(error)".to_string(),
         ExpectedValue::ErrorPrefix(prefix) => format!("(error) {prefix}"),
         ExpectedValue::EmptyArray => "(empty array)".to_string(),
+        ExpectedValue::RawRegex(regex) => format!("(match) {}", regex.as_str()),
         ExpectedValue::Array { items, unordered } => {
             let prefix = if *unordered { "(unordered) " } else { "" };
             format!("{prefix}array[{}]", items.len())
         }
-        ExpectedValue::Regex(regex) => format!("(match) {}", regex.as_str()),
     }
+}
+
+fn substitute_captures(
+    command: &str,
+    captures: &std::collections::HashMap<String, String>,
+) -> Result<String, String> {
+    let mut out = String::with_capacity(command.len());
+    let mut chars = command.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        if ch == '$' && chars.peek() == Some(&'{') {
+            chars.next();
+            let mut name = String::new();
+            let mut closed = false;
+
+            for next in chars.by_ref() {
+                if next == '}' {
+                    closed = true;
+                    break;
+                }
+                name.push(next);
+            }
+
+            if !closed {
+                return Err(format!("unterminated capture reference in command `{command}`"));
+            }
+
+            let value = captures
+                .get(&name)
+                .ok_or_else(|| format!("unknown capture `{name}` in command `{command}`"))?;
+            out.push_str(value);
+            continue;
+        }
+
+        out.push(ch);
+    }
+
+    Ok(out)
 }
 
 fn render_expected_bytes(bytes: &[u8]) -> String {
