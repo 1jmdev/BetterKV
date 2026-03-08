@@ -1,5 +1,8 @@
 use std::collections::BTreeMap;
 
+use super::command::AclCategory;
+use super::user::User;
+
 pub(super) const DEFAULT_USER: &str = "default";
 
 #[derive(Clone, Debug)]
@@ -7,32 +10,23 @@ pub(super) struct AuthState {
     pub(super) users: BTreeMap<String, User>,
 }
 
-#[derive(Clone, Debug)]
-pub(super) struct User {
-    pub(super) enabled: bool,
-    pub(super) nopass: bool,
-    pub(super) passwords: Vec<Vec<u8>>,
-}
-
-impl Default for User {
-    fn default() -> Self {
-        let _trace = profiler::scope("server::auth::default_user");
-        Self {
-            enabled: true,
-            nopass: true,
-            passwords: Vec::new(),
-        }
-    }
-}
-
 impl AuthState {
+    pub(super) fn new() -> Self {
+        let _trace = profiler::scope("server::auth::state_new");
+        let mut users = BTreeMap::new();
+        users.insert(DEFAULT_USER.to_string(), User::default());
+        Self { users }
+    }
+
     pub(super) fn default_user_has_password(&self) -> bool {
+        let _trace = profiler::scope("server::auth::default_user_has_password");
         self.users
             .get(DEFAULT_USER)
-            .is_some_and(|default_user| !default_user.nopass && !default_user.passwords.is_empty())
+            .is_some_and(|user| !user.nopass && !user.password_hashes.is_empty())
     }
 
     pub(super) fn default_user_auto_auth(&self) -> bool {
+        let _trace = profiler::scope("server::auth::default_user_auto_auth");
         self.users
             .get(DEFAULT_USER)
             .is_some_and(|user| user.enabled && user.nopass)
@@ -40,11 +34,11 @@ impl AuthState {
 
     pub(super) fn set_user(&mut self, username: &str, rules: &[String]) -> Result<(), String> {
         let _trace = profiler::scope("server::auth::set_user");
-        let user = self.users.entry(username.to_string()).or_insert(User {
-            enabled: false,
-            nopass: false,
-            passwords: Vec::new(),
-        });
+        let user = self
+            .users
+            .entry(username.to_string())
+            .or_insert_with(User::new_restricted);
+
         for rule in rules {
             if rule.eq_ignore_ascii_case("on") {
                 user.enabled = true;
@@ -56,75 +50,100 @@ impl AuthState {
             }
             if rule.eq_ignore_ascii_case("nopass") {
                 user.nopass = true;
-                user.passwords.clear();
+                user.password_hashes.clear();
                 continue;
             }
             if rule.eq_ignore_ascii_case("resetpass") {
                 user.nopass = false;
-                user.passwords.clear();
+                user.password_hashes.clear();
+                continue;
+            }
+            if rule.eq_ignore_ascii_case("resetkeys") {
+                user.key_patterns.clear();
+                continue;
+            }
+            if rule.eq_ignore_ascii_case("allkeys") {
+                user.key_patterns.clear();
+                user.key_patterns.push(b"*".to_vec());
+                continue;
+            }
+            if rule.eq_ignore_ascii_case("resetchannels") {
+                user.channel_patterns.clear();
+                continue;
+            }
+            if rule.eq_ignore_ascii_case("allchannels") {
+                user.channel_patterns.clear();
+                user.channel_patterns.push(b"*".to_vec());
+                continue;
+            }
+            if rule.eq_ignore_ascii_case("allcommands") {
+                user.command_rules.set_allow_all(true);
+                continue;
+            }
+            if rule.eq_ignore_ascii_case("nocommands") {
+                user.command_rules.set_allow_all(false);
+                user.command_rules.reset();
                 continue;
             }
             if rule.eq_ignore_ascii_case("reset") {
-                *user = User {
-                    enabled: false,
-                    nopass: false,
-                    passwords: Vec::new(),
-                };
+                user.reset();
                 continue;
             }
             if let Some(password) = rule.strip_prefix('>') {
-                user.nopass = false;
-                user.passwords.push(password.as_bytes().to_vec());
+                user.add_password(password.as_bytes());
                 continue;
             }
             if let Some(password) = rule.strip_prefix('<') {
-                user.passwords.retain(|item| item != password.as_bytes());
+                user.remove_password(password.as_bytes());
+                continue;
+            }
+            if let Some(hash) = rule.strip_prefix('#') {
+                user.add_password_hash(hash)?;
+                continue;
+            }
+            if let Some(hash) = rule.strip_prefix('!') {
+                user.remove_password_hash(hash)?;
+                continue;
+            }
+            if let Some(pattern) = rule.strip_prefix('~') {
+                user.key_patterns.push(pattern.as_bytes().to_vec());
+                continue;
+            }
+            if let Some(pattern) = rule.strip_prefix('&') {
+                user.channel_patterns.push(pattern.as_bytes().to_vec());
+                continue;
+            }
+            if let Some(category) = rule.strip_prefix("+@") {
+                let category = AclCategory::parse(category)?;
+                if category == AclCategory::All {
+                    user.command_rules.set_allow_all(true);
+                } else {
+                    user.command_rules.allow_category(category);
+                }
+                continue;
+            }
+            if let Some(category) = rule.strip_prefix("-@") {
+                let category = AclCategory::parse(category)?;
+                if category == AclCategory::All {
+                    user.command_rules.set_allow_all(false);
+                    user.command_rules.reset();
+                } else {
+                    user.command_rules.deny_category(category);
+                }
+                continue;
+            }
+            if let Some(command) = rule.strip_prefix('+') {
+                user.command_rules.allow_command(command);
+                continue;
+            }
+            if let Some(command) = rule.strip_prefix('-') {
+                user.command_rules.deny_command(command);
                 continue;
             }
 
-            if is_ignored_acl_rule(rule) {
-                continue;
-            }
             return Err(format!("ERR Unsupported ACL rule '{rule}'"));
         }
+
         Ok(())
     }
-}
-
-fn is_ignored_acl_rule(rule: &str) -> bool {
-    let _trace = profiler::scope("server::auth::is_ignored_acl_rule");
-    if rule.starts_with('~') || rule.starts_with('&') {
-        return true;
-    }
-    if rule.starts_with('+') || rule.starts_with('-') {
-        return true;
-    }
-    matches!(
-        rule.to_ascii_lowercase().as_str(),
-        "allkeys" | "resetkeys" | "allchannels" | "resetchannels" | "allcommands" | "nocommands"
-    )
-}
-
-pub(super) fn user_acl_line(name: &str, user: &User) -> String {
-    let _trace = profiler::scope("server::auth::user_acl_line");
-    let mut parts = vec![format!("user {name}")];
-    parts.push(if user.enabled {
-        "on".to_string()
-    } else {
-        "off".to_string()
-    });
-
-    if user.nopass {
-        parts.push("nopass".to_string());
-    } else if user.passwords.is_empty() {
-        parts.push("resetpass".to_string());
-    } else {
-        for password in &user.passwords {
-            parts.push(format!(">{}", String::from_utf8_lossy(password)));
-        }
-    }
-
-    parts.push("~*".to_string());
-    parts.push("+@all".to_string());
-    parts.join(" ")
 }

@@ -8,7 +8,7 @@ use types::value::CompactArg;
 use super::super::pubsub::{ConnectionPubSub, PubSubHub};
 use super::notifications::emit_command_notifications;
 use super::util::{collapse_pubsub_responses, wrong_args};
-use crate::auth::{self, AuthError, AuthService, SessionAuth};
+use crate::auth::{self, no_perm, AuthError, AuthService, SessionAuth};
 use crate::profile::ProfileHub;
 
 #[inline]
@@ -33,17 +33,14 @@ pub(super) fn execute_regular_command(
 
     let command = args[0].as_slice();
 
-    // Hot path: already authorized
-    if auth_state.authorized() {
-        return dispatch_authorized(store, hub, push_tx, pubsub_state, profiler, command, args);
-    }
-
-    // Cold path: not yet authorized.
     if command == b"AUTH" {
         return auth_command(auth, auth_state, args);
     }
 
     if command == b"ACL" {
+        if !auth_state.authorized() {
+            return auth::no_auth();
+        }
         return auth.acl_command(auth_state, args);
     }
 
@@ -53,7 +50,22 @@ pub(super) fn execute_regular_command(
         }
     }
 
-    if !auth_state.authorized() && !is_allowed_without_auth(command) {
+    // Hot path: already authorized
+    if auth_state.authorized() {
+        let acl_epoch = auth.acl_epoch();
+        if auth_state.acl_epoch() != acl_epoch && !auth.refresh_session(auth_state, acl_epoch) {
+            return auth::no_auth();
+        }
+        if auth_state.acl_check_required() {
+            if let Err(error) = auth.dry_run(auth_state.user().unwrap_or_default().as_bytes(), args)
+            {
+                return no_perm(error);
+            }
+        }
+        return dispatch_authorized(store, hub, push_tx, pubsub_state, profiler, command, args);
+    }
+
+    if !is_allowed_without_auth(command) {
         return auth::no_auth();
     }
 
@@ -120,7 +132,8 @@ fn authenticate_with(
     let _trace = profiler::scope("server::connection::dispatch::authenticate_with");
     match auth.authenticate(username, password) {
         Ok(user) => {
-            auth_state.set_user(user);
+            auth_state.set_user(user.username);
+            auth_state.set_acl_state(user.acl_check_required, user.acl_epoch);
             RespFrame::ok()
         }
         Err(AuthError::WrongPass) => {
