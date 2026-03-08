@@ -3,7 +3,9 @@ use std::time::Duration;
 use crate::store::Store;
 use types::value::{CompactValue, Entry};
 
-use super::super::helpers::{deadline_from_ttl, monotonic_now_ms, purge_if_expired};
+use super::super::helpers::{
+    deadline_from_ttl, get_live_entry, monotonic_now_ms, purge_if_expired,
+};
 use super::write_entry;
 
 impl Store {
@@ -12,12 +14,9 @@ impl Store {
         let idx = self.shard_index(key);
         let now_ms = monotonic_now_ms();
         let shard = self.shards[idx].read();
-        let Some(entry) = shard.entries.get::<[u8]>(key) else {
+        let Some(entry) = get_live_entry(&shard, key, now_ms) else {
             return Ok(None);
         };
-        if entry.is_expired(now_ms) {
-            return Ok(None);
-        }
         match entry.as_string() {
             Some(value) => Ok(Some(value.clone())),
             None => Err(()),
@@ -145,12 +144,9 @@ impl Store {
         let idx = self.shard_index(key);
         let now_ms = monotonic_now_ms();
         let shard = self.shards[idx].read();
-        let Some(entry) = shard.entries.get::<[u8]>(key) else {
+        let Some(entry) = get_live_entry(&shard, key, now_ms) else {
             return Ok(0);
         };
-        if entry.is_expired(now_ms) {
-            return Ok(0);
-        }
         match entry.as_string() {
             Some(value) => Ok(value.len()),
             None => Err(()),

@@ -22,49 +22,13 @@ pub const fn pack8(bytes: &[u8]) -> u64 {
     result
 }
 
-/// Precomputed keep-masks for each valid command length 1–8.
-/// Index `i` keeps the low `i*8` bits and zeros the rest.
-const LEN_MASK: [u64; 9] = [
-    0x0000_0000_0000_0000,
-    0x0000_0000_0000_00FF,
-    0x0000_0000_0000_FFFF,
-    0x0000_0000_00FF_FFFF,
-    0x0000_0000_FFFF_FFFF,
-    0x0000_00FF_FFFF_FFFF,
-    0x0000_FFFF_FFFF_FFFF,
-    0x00FF_FFFF_FFFF_FFFF,
-    0xFFFF_FFFF_FFFF_FFFF,
-];
-
-/// Pack incoming command bytes into a u64 for matching.
-/// Uses branchless SWAR uppercasing — all 8 bytes at once.
-/// Returns 0 for empty or >8-byte commands (handled separately).
 #[inline(always)]
 pub fn pack_runtime(cmd: &[u8]) -> u64 {
     let _trace = profiler::scope("commands::util::pack_runtime");
-    let len = cmd.len();
-    if len > 8 || len == 0 {
+    if cmd.is_empty() || cmd.len() > 8 {
         return 0;
     }
-
-    let mut buf = [0u8; 8];
-    unsafe {
-        std::ptr::copy_nonoverlapping(cmd.as_ptr(), buf.as_mut_ptr(), len);
-    }
-
-    let mut val = u64::from_le_bytes(buf);
-
-    const A: u64 = 0x6161_6161_6161_6161;
-    const ONES: u64 = 0x0101_0101_0101_0101;
-    const Z_BOUND: u64 = ONES.wrapping_mul(256 - 26);
-    const CASE_BIT: u64 = 0x2020_2020_2020_2020;
-
-    let lower_dist = val.wrapping_sub(A);
-    let is_lower = !lower_dist.wrapping_add(Z_BOUND) & !lower_dist & (ONES << 7);
-    let mask = (is_lower >> 2) & CASE_BIT;
-    val ^= mask;
-
-    (val & LEN_MASK[len]) | ((len as u64) << 56)
+    pack8(cmd)
 }
 
 /// All ≤8-byte command constants computed at compile time.

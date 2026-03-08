@@ -4,7 +4,7 @@ use crate::{Store, StoredEntry};
 use ahash::RandomState;
 use types::value::{CompactArg, CompactKey, CompactValue, Entry, HashValueMap};
 
-use super::super::helpers::{is_expired, monotonic_now_ms, purge_if_expired};
+use super::super::helpers::{get_live_entry, monotonic_now_ms, purge_if_expired};
 use super::{collect_pairs, get_hash_map, get_hash_map_mut};
 
 #[inline(always)]
@@ -139,11 +139,7 @@ impl Store {
         let idx = self.shard_index(key);
         let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
-        if is_expired(&shard, key, now_ms) {
-            return Ok(None);
-        }
-
-        let Some(entry) = shard.entries.get(key) else {
+        let Some(entry) = get_live_entry(&shard, key, now_ms) else {
             return Ok(None);
         };
         let map = get_hash_map(entry).ok_or(())?;
@@ -159,11 +155,7 @@ impl Store {
         let idx = self.shard_index(key);
         let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
-        if is_expired(&shard, key, now_ms) {
-            return Ok(vec![None; fields.len()]);
-        }
-
-        let Some(entry) = shard.entries.get(key) else {
+        let Some(entry) = get_live_entry(&shard, key, now_ms) else {
             return Ok(vec![None; fields.len()]);
         };
         let map = get_hash_map(entry).ok_or(())?;
@@ -179,11 +171,7 @@ impl Store {
         let idx = self.shard_index(key);
         let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
-        if is_expired(&shard, key, now_ms) {
-            return Ok(Vec::new());
-        }
-
-        let Some(entry) = shard.entries.get(key) else {
+        let Some(entry) = get_live_entry(&shard, key, now_ms) else {
             return Ok(Vec::new());
         };
         let map = get_hash_map(entry).ok_or(())?;
@@ -195,11 +183,8 @@ impl Store {
         let idx = self.shard_index(key);
         {
             let shard = self.shards[idx].read();
-            if shard.has_ttls() && is_expired(&shard, key, monotonic_now_ms()) {
-                return Ok(bytes::Bytes::from_static(b"*0\r\n"));
-            }
-
-            let Some(entry) = shard.entries.get(key) else {
+            let now_ms = monotonic_now_ms();
+            let Some(entry) = get_live_entry(&shard, key, now_ms) else {
                 return Ok(bytes::Bytes::from_static(b"*0\r\n"));
             };
             if let Some(encoded) = entry.hash_getall_cache() {
@@ -208,13 +193,14 @@ impl Store {
         }
 
         let mut shard = self.shards[idx].write();
-        if shard.has_ttls() && is_expired(&shard, key, monotonic_now_ms()) {
-            return Ok(bytes::Bytes::from_static(b"*0\r\n"));
-        }
-
+        let now_ms = monotonic_now_ms();
         let Some(entry) = shard.entries.get_mut(key) else {
             return Ok(bytes::Bytes::from_static(b"*0\r\n"));
         };
+        if entry.is_expired(now_ms) {
+            let _ = shard.remove_key(key);
+            return Ok(bytes::Bytes::from_static(b"*0\r\n"));
+        }
         if let Some(encoded) = entry.hash_getall_cache() {
             return Ok(encoded.clone());
         }
@@ -274,11 +260,7 @@ impl Store {
         let idx = self.shard_index(key);
         let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
-        if is_expired(&shard, key, now_ms) {
-            return Ok(0);
-        }
-
-        let Some(entry) = shard.entries.get(key) else {
+        let Some(entry) = get_live_entry(&shard, key, now_ms) else {
             return Ok(0);
         };
         let map = get_hash_map(entry).ok_or(())?;

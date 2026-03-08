@@ -2,7 +2,7 @@ use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use super::Shard;
+use super::{Shard, StoredEntry};
 
 static START: OnceLock<Instant> = OnceLock::new();
 static CACHED_TIME_MS: AtomicU64 = AtomicU64::new(0);
@@ -61,6 +61,16 @@ pub(super) fn purge_if_expired(shard: &mut Shard, key: &[u8], now_ms: u64) -> bo
         let _ = shard.remove_key(key);
     }
     expired
+}
+
+#[inline(always)]
+pub(super) fn get_live_entry<'a>(
+    shard: &'a Shard,
+    key: &[u8],
+    now_ms: u64,
+) -> Option<&'a StoredEntry> {
+    let entry = shard.entries.get(key)?;
+    (!entry.is_expired(now_ms)).then_some(entry)
 }
 
 pub(super) fn is_expired(shard: &Shard, key: &[u8], now_ms: u64) -> bool {

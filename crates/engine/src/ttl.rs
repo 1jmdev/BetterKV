@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use super::Store;
 use super::helpers::{
-    deadline_from_ttl, is_expired, monotonic_now_ms, purge_if_expired, remaining_ttl_ms,
+    deadline_from_ttl, get_live_entry, monotonic_now_ms, purge_if_expired, remaining_ttl_ms,
     unix_time_ms,
 };
 
@@ -76,12 +76,8 @@ impl Store {
         let idx = self.shard_index(key);
         let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
-        if is_expired(&shard, key, now_ms) {
-            return -2;
-        }
-
-        match shard.entries.get(key) {
-            Some(_) => remaining_ttl_ms(shard.ttl_deadline(key).unwrap_or(0)),
+        match get_live_entry(&shard, key, now_ms) {
+            Some(entry) => remaining_ttl_ms(entry.deadline().unwrap_or(0)),
             None => -2,
         }
     }
