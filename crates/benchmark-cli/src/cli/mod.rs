@@ -90,6 +90,8 @@ pub struct Args {
     pub tls_ciphersuites: Option<String>,
     #[arg(long = "strict", action = ArgAction::SetTrue, hide = true)]
     pub strict: bool,
+    #[arg(long = "no-response-check", action = ArgAction::SetTrue)]
+    pub no_response_check: bool,
     #[arg(allow_hyphen_values = true)]
     pub command_args: Vec<String>,
 }

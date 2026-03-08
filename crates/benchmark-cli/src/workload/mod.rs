@@ -146,6 +146,7 @@ mod tests {
             tls_ciphers: None,
             tls_ciphersuites: None,
             strict: false,
+            no_response_check: false,
             command_args: Vec::new(),
         }
     }

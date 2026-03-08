@@ -1,4 +1,4 @@
-use crate::resp::{ExpectedResponse, encode_expected_response, encode_resp_parts};
+use crate::resp::{encode_expected_response, encode_resp_parts, ExpectedResponse};
 use crate::workload::{ArgTemplate, BenchKind, BenchRun, CommandTemplate};
 
 use super::model::{RandomSource, RequestGroup};
@@ -33,6 +33,7 @@ pub fn build_request_group(
 
     Ok(RequestGroup {
         payload,
+        uniform_encoded: shared_uniform_encoded(&encoded),
         expected,
         encoded,
     })
@@ -249,4 +250,12 @@ fn pick_key_slot(random: &mut RandomSource, keyspace: Option<u64>) -> u64 {
         Some(1) => 0,
         Some(keyspace) => random.next() % keyspace,
     }
+}
+
+fn shared_uniform_encoded(encoded: &[Option<Vec<u8>>]) -> Option<Vec<u8>> {
+    let first = encoded.first()?.as_ref()?;
+    encoded
+        .iter()
+        .all(|item| item.as_ref().is_some_and(|bytes| bytes == first))
+        .then(|| first.clone())
 }

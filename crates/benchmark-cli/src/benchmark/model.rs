@@ -41,6 +41,7 @@ pub(crate) struct Shared {
     pub password: Option<String>,
     pub run: BenchRun,
     pub strict: bool,
+    pub no_response_check: bool,
 }
 
 pub(crate) struct Progress {
@@ -73,8 +74,10 @@ impl RandomSource {
     }
 }
 
+#[derive(Clone)]
 pub struct RequestGroup {
     pub payload: Vec<u8>,
     pub expected: Vec<Option<ExpectedResponse>>,
     pub encoded: Vec<Option<Vec<u8>>>,
+    pub uniform_encoded: Option<Vec<u8>>,
 }

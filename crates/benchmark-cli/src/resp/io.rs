@@ -1,14 +1,14 @@
 use bytes::{Buf, BytesMut};
 use protocol::parser::{self, ParseError};
 use protocol::types::{BulkData, RespFrame};
-use tokio::io::AsyncReadExt;
-use tokio::net::TcpStream;
+use tokio::io::{AsyncRead, AsyncReadExt};
 
 use super::ExpectedResponse;
 use super::skip::try_skip_frame;
+use crate::benchmark::RequestGroup;
 
 pub async fn consume_response(
-    stream: &mut TcpStream,
+    stream: &mut (impl AsyncRead + Unpin),
     parse_buf: &mut BytesMut,
     expected: Option<&ExpectedResponse>,
     encoded: Option<&[u8]>,
@@ -32,7 +32,7 @@ pub async fn consume_response(
 }
 
 pub async fn read_one_response(
-    stream: &mut TcpStream,
+    stream: &mut (impl AsyncRead + Unpin),
     parse_buf: &mut BytesMut,
 ) -> Result<RespFrame, String> {
     loop {
@@ -52,8 +52,95 @@ pub async fn read_one_response(
     }
 }
 
+pub async fn consume_uniform_responses(
+    stream: &mut (impl AsyncRead + Unpin),
+    parse_buf: &mut BytesMut,
+    expected: &[u8],
+    count: usize,
+    strict: bool,
+) -> Result<(), String> {
+    if count == 0 {
+        return Ok(());
+    }
+
+    let frame_len = expected.len();
+    let total_len = frame_len
+        .checked_mul(count)
+        .ok_or_else(|| "response batch is too large".to_string())?;
+
+    while parse_buf.len() < total_len {
+        let read = stream
+            .read_buf(parse_buf)
+            .await
+            .map_err(|err| format!("read failed: {err}"))?;
+        if read == 0 {
+            return Err("connection closed by server".to_string());
+        }
+    }
+
+    for index in 0..count {
+        let offset = index * frame_len;
+        let frame = &parse_buf[offset..offset + frame_len];
+        if frame.first().copied() == Some(b'-') {
+            let actual = read_one_response(stream, parse_buf).await?;
+            return Err(format!("server returned error while validating: {actual:?}"));
+        }
+        if strict && frame != expected {
+            let actual = read_one_response(stream, parse_buf).await?;
+            return Err(format!("unexpected response bytes, got {actual:?}"));
+        }
+        if !strict && frame != expected {
+            return Err("unexpected response bytes in uniform fast path".to_string());
+        }
+    }
+
+    parse_buf.advance(total_len);
+    Ok(())
+}
+
+pub async fn consume_responses_unchecked(
+    stream: &mut (impl AsyncRead + Unpin),
+    parse_buf: &mut BytesMut,
+    request_group: &RequestGroup,
+) -> Result<(), String> {
+    if let Some(encoded) = request_group.uniform_encoded.as_deref() {
+        return skip_uniform_responses(stream, parse_buf, encoded.len(), request_group.encoded.len()).await;
+    }
+
+    for encoded in &request_group.encoded {
+        if let Some(encoded) = encoded.as_deref() {
+            skip_exact_response(stream, parse_buf, encoded).await?;
+        } else {
+            skip_one_response(stream, parse_buf).await?;
+        }
+    }
+    Ok(())
+}
+
+async fn skip_uniform_responses(
+    stream: &mut (impl AsyncRead + Unpin),
+    parse_buf: &mut BytesMut,
+    frame_len: usize,
+    count: usize,
+) -> Result<(), String> {
+    let total_len = frame_len
+        .checked_mul(count)
+        .ok_or_else(|| "response batch is too large".to_string())?;
+    while parse_buf.len() < total_len {
+        let read = stream
+            .read_buf(parse_buf)
+            .await
+            .map_err(|err| format!("read failed: {err}"))?;
+        if read == 0 {
+            return Err("connection closed by server".to_string());
+        }
+    }
+    parse_buf.advance(total_len);
+    Ok(())
+}
+
 async fn skip_exact_response(
-    stream: &mut TcpStream,
+    stream: &mut (impl AsyncRead + Unpin),
     parse_buf: &mut BytesMut,
     expected: &[u8],
 ) -> Result<(), String> {
@@ -77,7 +164,7 @@ async fn skip_exact_response(
 }
 
 async fn validate_exact_response(
-    stream: &mut TcpStream,
+    stream: &mut (impl AsyncRead + Unpin),
     parse_buf: &mut BytesMut,
     expected: &[u8],
 ) -> Result<(), String> {
@@ -105,7 +192,10 @@ async fn validate_exact_response(
     Ok(())
 }
 
-async fn skip_one_response(stream: &mut TcpStream, parse_buf: &mut BytesMut) -> Result<(), String> {
+async fn skip_one_response(
+    stream: &mut (impl AsyncRead + Unpin),
+    parse_buf: &mut BytesMut,
+) -> Result<(), String> {
     loop {
         match try_skip_frame(parse_buf)? {
             Some(()) => return Ok(()),
@@ -120,6 +210,34 @@ async fn skip_one_response(stream: &mut TcpStream, parse_buf: &mut BytesMut) -> 
             }
         }
     }
+}
+
+pub async fn consume_response_read<R: AsyncRead + Unpin>(
+    stream: &mut R,
+    parse_buf: &mut BytesMut,
+    expected: Option<&ExpectedResponse>,
+    encoded: Option<&[u8]>,
+    strict: bool,
+) -> Result<(), String> {
+    consume_response(stream, parse_buf, expected, encoded, strict).await
+}
+
+pub async fn consume_uniform_responses_read<R: AsyncRead + Unpin>(
+    stream: &mut R,
+    parse_buf: &mut BytesMut,
+    expected: &[u8],
+    count: usize,
+    strict: bool,
+) -> Result<(), String> {
+    consume_uniform_responses(stream, parse_buf, expected, count, strict).await
+}
+
+pub async fn consume_responses_unchecked_read<R: AsyncRead + Unpin>(
+    stream: &mut R,
+    parse_buf: &mut BytesMut,
+    request_group: &RequestGroup,
+) -> Result<(), String> {
+    consume_responses_unchecked(stream, parse_buf, request_group).await
 }
 
 fn validate_response(expected: &ExpectedResponse, actual: &RespFrame) -> Result<(), String> {
