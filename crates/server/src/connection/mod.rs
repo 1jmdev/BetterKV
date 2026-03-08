@@ -1,4 +1,5 @@
 use bytes::BytesMut;
+use commands::command::identify;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc::error::TryRecvError;
@@ -90,7 +91,8 @@ pub async fn handle_connection(
                         .first()
                         .and_then(|command| profiler::begin_request(command.as_slice()));
 
-                    let response = tx_state.handle_args_with(&store, &mut command_args_buf, |store, args| {
+                    let command = identify(command_args_buf[0].as_slice());
+                    let response = tx_state.handle_args_with(&store, &mut command_args_buf, command, |store, command, args| {
                         dispatch::execute_regular_command(
                             store,
                             &pubsub_hub,
@@ -99,6 +101,7 @@ pub async fn handle_connection(
                             &auth,
                             &mut auth_state,
                             &profiler,
+                            command,
                             args,
                         )
                     });

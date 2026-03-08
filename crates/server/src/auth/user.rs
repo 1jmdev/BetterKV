@@ -1,10 +1,11 @@
+use commands::command::CommandId;
 use std::collections::BTreeSet;
 
 use types::value::CompactArg;
 
-use super::command::{command_spec, AclCategory, CommandSpec};
+use super::command::{AclCategory, CommandSpec, command_spec};
 use super::error::PermissionError;
-use super::password::{format_password_hash, parse_password_hash, password_hash, PasswordHash};
+use super::password::{PasswordHash, format_password_hash, parse_password_hash, password_hash};
 use super::pattern::any_pattern_matches;
 
 #[derive(Clone, Debug)]
@@ -150,7 +151,7 @@ impl User {
 
     pub(super) fn check_permissions(
         &self,
-        command: &[u8],
+        command: CommandId,
         args: &[CompactArg],
     ) -> Result<(), PermissionError> {
         let _trace = profiler::scope("server::auth::check_permissions");
@@ -158,7 +159,12 @@ impl User {
 
         if !self.command_rules.allows(&spec) {
             return Err(PermissionError::Command(
-                String::from_utf8_lossy(command).to_string(),
+                command.name().map(str::to_string).unwrap_or_else(|| {
+                    String::from_utf8_lossy(
+                        args.first().map(CompactArg::as_slice).unwrap_or_default(),
+                    )
+                    .to_string()
+                }),
             ));
         }
 

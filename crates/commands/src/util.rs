@@ -44,6 +44,15 @@ pub mod cmd {
     pub const QUIT: u64 = pack8(b"QUIT");
     pub const PING: u64 = pack8(b"PING");
     pub const ECHO: u64 = pack8(b"ECHO");
+    pub const ACL: u64 = pack8(b"ACL");
+    pub const CONFIG: u64 = pack8(b"CONFIG");
+    pub const PUBLISH: u64 = pack8(b"PUBLISH");
+    pub const PUBSUB: u64 = pack8(b"PUBSUB");
+    pub const MULTI: u64 = pack8(b"MULTI");
+    pub const EXEC: u64 = pack8(b"EXEC");
+    pub const DISCARD: u64 = pack8(b"DISCARD");
+    pub const WATCH: u64 = pack8(b"WATCH");
+    pub const UNWATCH: u64 = pack8(b"UNWATCH");
     pub const EVAL: u64 = pack8(b"EVAL");
     pub const EVAL_RO: u64 = pack8(b"EVAL_RO");
     pub const EVALSHA: u64 = pack8(b"EVALSHA");

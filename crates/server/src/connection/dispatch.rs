@@ -1,6 +1,7 @@
 use tokio::sync::mpsc::UnboundedSender;
 
-use commands::dispatcher::dispatch_args;
+use commands::command::CommandId;
+use commands::dispatcher::dispatch_with_id;
 use engine::store::Store;
 use protocol::types::{BulkData, RespFrame};
 use types::value::CompactArg;
@@ -24,6 +25,7 @@ pub(super) fn execute_regular_command(
     auth: &AuthService,
     auth_state: &mut SessionAuth,
     profiler: &ProfileHub,
+    command: CommandId,
     args: &[CompactArg],
 ) -> RespFrame {
     let _trace = profiler::scope("server::connection::dispatch::execute_regular_command");
@@ -31,20 +33,18 @@ pub(super) fn execute_regular_command(
         return RespFrame::error_static("ERR empty command");
     }
 
-    let command = args[0].as_slice();
-
-    if command == b"AUTH" {
+    if command == CommandId::Auth {
         return auth_command(auth, auth_state, args);
     }
 
-    if command == b"ACL" {
+    if command == CommandId::Acl {
         if !auth_state.authorized() {
             return auth::no_auth();
         }
         return auth.acl_command(auth_state, args);
     }
 
-    if command == b"HELLO" {
+    if command == CommandId::Hello {
         if let Some(response) = hello_with_auth(auth, auth_state, args) {
             return response;
         }
@@ -57,8 +57,11 @@ pub(super) fn execute_regular_command(
             return auth::no_auth();
         }
         if auth_state.acl_check_required() {
-            if let Err(error) = auth.dry_run(auth_state.user().unwrap_or_default().as_bytes(), args)
-            {
+            if let Err(error) = auth.dry_run(
+                auth_state.user().unwrap_or_default().as_bytes(),
+                command,
+                args,
+            ) {
                 return no_perm(error);
             }
         }
@@ -79,25 +82,20 @@ fn dispatch_authorized(
     push_tx: &UnboundedSender<RespFrame>,
     pubsub_state: &mut ConnectionPubSub,
     profiler: &ProfileHub,
-    command: &[u8],
+    command: CommandId,
     args: &[CompactArg],
 ) -> RespFrame {
-    match command.first().copied() {
-        Some(b'P' | b'S' | b'U' | b'C') => {
-            if let Some(response) =
-                handle_pubsub_or_config_command(hub, push_tx, pubsub_state, command, args)
-            {
-                return response;
-            }
-        }
-        _ => {}
+    if let Some(response) =
+        handle_pubsub_or_config_command(hub, push_tx, pubsub_state, command, args)
+    {
+        return response;
     }
 
     let key = args.get(1).map(CompactArg::as_slice);
     profiler.run_command(key, || {
-        let response = dispatch_args(store, args);
+        let response = dispatch_with_id(store, command, args);
         if hub.keyspace_notifications_enabled() {
-            emit_command_notifications(hub, command, args, &response);
+            emit_command_notifications(hub, args[0].as_slice(), args, &response);
         }
         response
     })
@@ -180,9 +178,12 @@ fn hello_with_auth(
     None
 }
 
-fn is_allowed_without_auth(command: &[u8]) -> bool {
+fn is_allowed_without_auth(command: CommandId) -> bool {
     let _trace = profiler::scope("server::connection::dispatch::is_allowed_without_auth");
-    matches!(command, b"AUTH" | b"HELLO" | b"QUIT")
+    matches!(
+        command,
+        CommandId::Auth | CommandId::Hello | CommandId::Quit
+    )
 }
 
 fn response_is_ok(response: &RespFrame) -> bool {
@@ -198,35 +199,19 @@ fn handle_pubsub_or_config_command(
     hub: &PubSubHub,
     push_tx: &UnboundedSender<RespFrame>,
     pubsub_state: &mut ConnectionPubSub,
-    command: &[u8],
+    command: CommandId,
     args: &[CompactArg],
 ) -> Option<RespFrame> {
     let _trace = profiler::scope("server::connection::dispatch::handle_pubsub_or_config_command");
 
-    // parse_command_into uppercases args[0], so exact-byte matches are enough here.
-    match command.first().copied() {
-        Some(b'P') => {
-            if command == b"PUBLISH" {
-                return Some(publish_command(hub, args));
-            }
-            if command == b"PSUBSCRIBE" {
-                return Some(psubscribe_command(hub, push_tx, pubsub_state, args));
-            }
-            if command == b"PUNSUBSCRIBE" {
-                return Some(punsubscribe_command(hub, pubsub_state, args));
-            }
-            if command == b"PUBSUB" {
-                return Some(pubsub_command(hub, args));
-            }
-            None
-        }
-        Some(b'S') if command == b"SUBSCRIBE" => {
-            Some(subscribe_command(hub, push_tx, pubsub_state, args))
-        }
-        Some(b'U') if command == b"UNSUBSCRIBE" => {
-            Some(unsubscribe_command(hub, pubsub_state, args))
-        }
-        Some(b'C') if command == b"CONFIG" => Some(config_command(hub, args)),
+    match command {
+        CommandId::Publish => Some(publish_command(hub, args)),
+        CommandId::PSubscribe => Some(psubscribe_command(hub, push_tx, pubsub_state, args)),
+        CommandId::PUnsubscribe => Some(punsubscribe_command(hub, pubsub_state, args)),
+        CommandId::PubSub => Some(pubsub_command(hub, args)),
+        CommandId::Subscribe => Some(subscribe_command(hub, push_tx, pubsub_state, args)),
+        CommandId::Unsubscribe => Some(unsubscribe_command(hub, pubsub_state, args)),
+        CommandId::Config => Some(config_command(hub, args)),
         _ => None,
     }
 }

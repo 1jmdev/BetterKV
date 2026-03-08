@@ -1,4 +1,4 @@
-use crate::util::{cmd, pack_runtime};
+use crate::command::{CommandId, identify};
 use crate::{connection, geo, hash, keyspace, list, scripting, set, stream, string, ttl, zset};
 use engine::store::Store;
 use protocol::types::{BulkData, RespFrame};
@@ -21,283 +21,177 @@ pub fn dispatch_args(store: &Store, args: &[CompactArg]) -> RespFrame {
         return RespFrame::error_static("ERR empty command");
     }
 
-    let raw = args[0].as_slice();
-
-    // Hot path: commands ≤8 bytes packed to a u64 integer.
-    // LLVM compiles this match into a jump table or optimised binary search —
-    // one integer compare per arm, no multi-level branching.
-    if raw.len() <= 8 {
-        let key = pack_runtime(raw);
-        match key {
-            // ── Highest-frequency commands first ──────────────────────────────
-            cmd::GET => return string::get(store, args),
-            cmd::SET => return string::set(store, args),
-            cmd::INCR => return string::incr(store, args),
-            cmd::DEL => return keyspace::del(store, args),
-            cmd::EXPIRE => return ttl::expire(store, args),
-            cmd::PING => return connection::ping(args),
-            cmd::EVAL => return scripting::eval(store, args),
-            cmd::EVAL_RO => return scripting::eval_ro(store, args),
-            cmd::EVALSHA => return scripting::evalsha(store, args),
-            cmd::SCRIPT => return scripting::script(store, args),
-
-            // ── Connection ────────────────────────────────────────────────────
-            cmd::AUTH => return connection::auth(args),
-            cmd::HELLO => return connection::hello(args),
-            cmd::CLIENT => return connection::client(args),
-            cmd::COMMAND => return RespFrame::Array(Some(vec![])),
-            cmd::SELECT => return connection::select_db(args),
-            cmd::QUIT => return connection::quit(args),
-            cmd::ECHO => return connection::echo(args),
-
-            // ── String ────────────────────────────────────────────────────────
-            cmd::SETNX => return string::setnx(store, args),
-            cmd::GETSET => return string::getset(store, args),
-            cmd::GETDEL => return string::getdel(store, args),
-            cmd::SETEX => return string::setex(store, args),
-            cmd::PSETEX => return string::psetex(store, args),
-            cmd::GETEX => return string::getex(store, args),
-            cmd::APPEND => return string::append(store, args),
-            cmd::STRLEN => return string::strlen(store, args),
-            cmd::SETRANGE => return string::setrange(store, args),
-            cmd::GETRANGE => return string::getrange(store, args),
-            cmd::MGET => return string::mget(store, args),
-            cmd::MSET => return string::mset(store, args),
-            cmd::MSETNX => return string::msetnx(store, args),
-            cmd::INCRBY => return string::incrby(store, args),
-            cmd::DECR => return string::decr(store, args),
-            cmd::DECRBY => return string::decrby(store, args),
-            cmd::SETBIT => return string::setbit(store, args),
-            cmd::GETBIT => return string::getbit(store, args),
-            cmd::BITCOUNT => return string::bitcount(store, args),
-            cmd::BITPOS => return string::bitpos(store, args),
-            cmd::BITOP => return string::bitop(store, args),
-            cmd::BITFIELD => return string::bitfield(store, args),
-            cmd::PFADD => return string::pfadd(store, args),
-            cmd::PFCOUNT => return string::pfcount(store, args),
-            cmd::PFMERGE => return string::pfmerge(store, args),
-
-            // ── Hash ──────────────────────────────────────────────────────────
-            cmd::HSET => return hash::hset(store, args),
-            cmd::HMSET => return hash::hmset(store, args),
-            cmd::HSETNX => return hash::hsetnx(store, args),
-            cmd::HGET => return hash::hget(store, args),
-            cmd::HMGET => return hash::hmget(store, args),
-            cmd::HGETALL => return hash::hgetall(store, args),
-            cmd::HDEL => return hash::hdel(store, args),
-            cmd::HEXISTS => return hash::hexists(store, args),
-            cmd::HKEYS => return hash::hkeys(store, args),
-            cmd::HVALS => return hash::hvals(store, args),
-            cmd::HLEN => return hash::hlen(store, args),
-            cmd::HSTRLEN => return hash::hstrlen(store, args),
-            cmd::HINCRBY => return hash::hincrby(store, args),
-            cmd::HSCAN => return hash::hscan(store, args),
-
-            // ── List ──────────────────────────────────────────────────────────
-            cmd::LPUSH => return list::lpush(store, args),
-            cmd::RPUSH => return list::rpush(store, args),
-            cmd::LPOP => return list::lpop(store, args),
-            cmd::RPOP => return list::rpop(store, args),
-            cmd::LLEN => return list::llen(store, args),
-            cmd::LINDEX => return list::lindex(store, args),
-            cmd::LRANGE => return list::lrange(store, args),
-            cmd::LSET => return list::lset(store, args),
-            cmd::LTRIM => return list::ltrim(store, args),
-            cmd::LINSERT => return list::linsert(store, args),
-            cmd::LPOS => return list::lpos(store, args),
-            cmd::LMOVE => return list::lmove(store, args),
-            cmd::LMPOP => return list::lmpop(store, args),
-            cmd::BLPOP => return list::blpop(store, args),
-            cmd::BRPOP => return list::brpop(store, args),
-            cmd::BLMPOP => return list::blmpop(store, args),
-
-            // ── Set ───────────────────────────────────────────────────────────
-            cmd::SADD => return set::sadd(store, args),
-            cmd::SREM => return set::srem(store, args),
-            cmd::SMEMBERS => return set::smembers(store, args),
-            cmd::SCARD => return set::scard(store, args),
-            cmd::SMOVE => return set::smove(store, args),
-            cmd::SPOP => return set::spop(store, args),
-            cmd::SINTER => return set::sinter(store, args),
-            cmd::SUNION => return set::sunion(store, args),
-            cmd::SDIFF => return set::sdiff(store, args),
-            cmd::SSCAN => return set::sscan(store, args),
-
-            // ── Sorted set ────────────────────────────────────────────────────
-            cmd::ZADD => return zset::zadd(store, args),
-            cmd::ZREM => return zset::zrem(store, args),
-            cmd::ZCARD => return zset::zcard(store, args),
-            cmd::ZCOUNT => return zset::zcount(store, args),
-            cmd::ZSCORE => return zset::zscore(store, args),
-            cmd::ZRANK => return zset::zrank(store, args, false),
-            cmd::ZREVRANK => return zset::zrank(store, args, true),
-            cmd::ZINCRBY => return zset::zincrby(store, args),
-            cmd::ZMSCORE => return zset::zmscore(store, args),
-            cmd::ZRANGE => return zset::zrange(store, args, false),
-            cmd::ZPOPMIN => return zset::zpop(store, args, false),
-            cmd::ZPOPMAX => return zset::zpop(store, args, true),
-            cmd::BZPOPMIN => return zset::bzpop(store, args, false),
-            cmd::BZPOPMAX => return zset::bzpop(store, args, true),
-            cmd::ZMPOP => return zset::zmpop(store, args),
-            cmd::BZMPOP => return zset::bzmpop(store, args),
-            cmd::ZINTER => return zset::zop(store, args, "ZINTER"),
-            cmd::ZUNION => return zset::zop(store, args, "ZUNION"),
-            cmd::ZDIFF => return zset::zop(store, args, "ZDIFF"),
-            cmd::ZSCAN => return zset::zscan(store, args),
-
-            // ── GEO ───────────────────────────────────────────────────────────
-            cmd::GEOADD => return geo::geoadd(store, args),
-            cmd::GEOPOS => return geo::geopos(store, args),
-            cmd::GEODIST => return geo::geodist(store, args),
-            cmd::GEOHASH => return geo::geohash(store, args),
-
-            // ── Stream ────────────────────────────────────────────────────────
-            cmd::XADD => return stream::xadd(store, args),
-            cmd::XLEN => return stream::xlen(store, args),
-            cmd::XDEL => return stream::xdel(store, args),
-            cmd::XRANGE => return stream::xrange(store, args),
-            cmd::XTRIM => return stream::xtrim(store, args),
-            cmd::XREAD => return stream::xread(store, args),
-            cmd::XGROUP => return stream::xgroup(store, args),
-            cmd::XACK => return stream::xack(store, args),
-            cmd::XCLAIM => return stream::xclaim(store, args),
-            cmd::XPENDING => return stream::xpending(store, args),
-
-            // ── Keyspace ──────────────────────────────────────────────────────
-            cmd::EXISTS => return keyspace::exists(store, args),
-            cmd::TOUCH => return keyspace::touch(store, args),
-            cmd::UNLINK => return keyspace::unlink(store, args),
-            cmd::TYPE => return keyspace::key_type(store, args),
-            cmd::RENAME => return keyspace::rename(store, args),
-            cmd::RENAMENX => return keyspace::renamenx(store, args),
-            cmd::DBSIZE => return keyspace::dbsize(store, args),
-            cmd::KEYS => return keyspace::keys(store, args),
-            cmd::SCAN => return keyspace::scan(store, args),
-            cmd::MOVE => return keyspace::move_key(store, args),
-            cmd::DUMP => return keyspace::dump(store, args),
-            cmd::RESTORE => return keyspace::restore(store, args),
-            cmd::SORT => return keyspace::sort(store, args),
-            cmd::COPY => return keyspace::copy(store, args),
-            cmd::FLUSHDB => return keyspace::flushdb(store, args),
-            cmd::FLUSHALL => return keyspace::flushall(store, args),
-
-            // ── TTL ───────────────────────────────────────────────────────────
-            cmd::PEXPIRE => return ttl::pexpire(store, args),
-            cmd::EXPIREAT => return ttl::expireat(store, args),
-            cmd::PERSIST => return ttl::persist(store, args),
-            cmd::TTL => return ttl::ttl(store, args),
-            cmd::PTTL => return ttl::pttl(store, args),
-
-            _ => {}
-        }
-    }
-
-    dispatch_long(store, raw, args)
+    dispatch_with_id(store, identify(args[0].as_slice()), args)
 }
 
-#[cold]
-fn dispatch_long(store: &Store, raw: &[u8], args: &[CompactArg]) -> RespFrame {
-    match raw.len() {
-        9 => {
-            if raw.eq_ignore_ascii_case(b"PEXPIREAT") {
-                return ttl::pexpireat(store, args);
-            }
-            if raw.eq_ignore_ascii_case(b"SISMEMBER") {
-                return set::sismember(store, args);
-            }
-            if raw.eq_ignore_ascii_case(b"ZREVRANGE") {
-                return zset::zrange(store, args, true);
-            }
-            if raw.eq_ignore_ascii_case(b"GEORADIUS") {
-                return geo::georadius(store, args);
-            }
-            if raw.eq_ignore_ascii_case(b"GEOSEARCH") {
-                return geo::geosearch(store, args);
-            }
-            if raw.eq_ignore_ascii_case(b"XREVRANGE") {
-                return stream::xrevrange(store, args);
-            }
-            if raw.eq_ignore_ascii_case(b"XREADGROUP") {
-                return stream::xreadgroup(store, args);
-            }
-            if raw.eq_ignore_ascii_case(b"XAUTOCLAIM") {
-                return stream::xautoclaim(store, args);
-            }
-        }
-        10 => {
-            if raw.eq_ignore_ascii_case(b"HRANDFIELD") {
-                return hash::hrandfield(store, args);
-            }
-            if raw.eq_ignore_ascii_case(b"BRPOPLPUSH") {
-                return list::brpoplpush(store, args);
-            }
-            if raw.eq_ignore_ascii_case(b"SDIFFSTORE") {
-                return set::sdiffstore(store, args);
-            }
-            if raw.eq_ignore_ascii_case(b"SINTERCARD") {
-                return set::sintercard(store, args);
-            }
-            if raw.eq_ignore_ascii_case(b"EVALSHA_RO") {
-                return scripting::evalsha_ro(store, args);
-            }
-        }
-        11 => {
-            if raw.eq_ignore_ascii_case(b"BITFIELD_RO") {
-                return string::bitfield_ro(store, args);
-            }
-            if raw.eq_ignore_ascii_case(b"SINTERSTORE") {
-                return set::sinterstore(store, args);
-            }
-            if raw.eq_ignore_ascii_case(b"SUNIONSTORE") {
-                return set::sunionstore(store, args);
-            }
-            if raw.eq_ignore_ascii_case(b"SRANDMEMBER") {
-                return set::srandmember(store, args);
-            }
-            if raw.eq_ignore_ascii_case(b"ZRANDMEMBER") {
-                return zset::zrandmember(store, args);
-            }
-        }
-        12 => {
-            if raw.eq_ignore_ascii_case(b"HINCRBYFLOAT") {
-                return hash::hincrbyfloat(store, args);
-            }
-            if raw.eq_ignore_ascii_case(b"GEORADIUS_RO") {
-                return geo::georadius_ro(store, args);
-            }
-        }
-        13 => {
-            if raw.eq_ignore_ascii_case(b"ZRANGEBYSCORE") {
-                return zset::zrange_by_score(store, args, false);
-            }
-            if raw.eq_ignore_ascii_case(b"GEOSEARCHSTORE") {
-                return geo::geosearchstore(store, args);
-            }
-        }
-        14 => {
-            if raw.eq_ignore_ascii_case(b"ZREMRANGEBYRANK") {
-                return zset::zremrangebyrank(store, args);
-            }
-        }
-        16 => {
-            if raw.eq_ignore_ascii_case(b"ZREVRANGEBYSCORE") {
-                return zset::zrange_by_score(store, args, true);
-            }
-        }
-        17 => {
-            if raw.eq_ignore_ascii_case(b"GEORADIUSBYMEMBER") {
-                return geo::georadiusbymember(store, args);
-            }
-        }
-        20 => {
-            if raw.eq_ignore_ascii_case(b"GEORADIUSBYMEMBER_RO") {
-                return geo::georadiusbymember_ro(store, args);
-            }
-        }
-        _ => {}
+#[inline]
+pub fn dispatch_with_id(store: &Store, command: CommandId, args: &[CompactArg]) -> RespFrame {
+    match command {
+        CommandId::Get => string::get(store, args),
+        CommandId::Set => string::set(store, args),
+        CommandId::Incr => string::incr(store, args),
+        CommandId::Del => keyspace::del(store, args),
+        CommandId::Expire => ttl::expire(store, args),
+        CommandId::Ping => connection::ping(args),
+        CommandId::Eval => scripting::eval(store, args),
+        CommandId::EvalRo => scripting::eval_ro(store, args),
+        CommandId::EvalSha => scripting::evalsha(store, args),
+        CommandId::EvalShaRo => scripting::evalsha_ro(store, args),
+        CommandId::Script => scripting::script(store, args),
+        CommandId::Auth => connection::auth(args),
+        CommandId::Hello => connection::hello(args),
+        CommandId::Client => connection::client(args),
+        CommandId::Command => RespFrame::Array(Some(vec![])),
+        CommandId::Select => connection::select_db(args),
+        CommandId::Quit => connection::quit(args),
+        CommandId::Echo => connection::echo(args),
+        CommandId::SetNx => string::setnx(store, args),
+        CommandId::GetSet => string::getset(store, args),
+        CommandId::GetDel => string::getdel(store, args),
+        CommandId::SetEx => string::setex(store, args),
+        CommandId::PSetEx => string::psetex(store, args),
+        CommandId::GetEx => string::getex(store, args),
+        CommandId::Append => string::append(store, args),
+        CommandId::StrLen => string::strlen(store, args),
+        CommandId::SetRange => string::setrange(store, args),
+        CommandId::GetRange => string::getrange(store, args),
+        CommandId::MGet => string::mget(store, args),
+        CommandId::MSet => string::mset(store, args),
+        CommandId::MSetNx => string::msetnx(store, args),
+        CommandId::IncrBy => string::incrby(store, args),
+        CommandId::Decr => string::decr(store, args),
+        CommandId::DecrBy => string::decrby(store, args),
+        CommandId::SetBit => string::setbit(store, args),
+        CommandId::GetBit => string::getbit(store, args),
+        CommandId::BitCount => string::bitcount(store, args),
+        CommandId::BitPos => string::bitpos(store, args),
+        CommandId::BitOp => string::bitop(store, args),
+        CommandId::BitField => string::bitfield(store, args),
+        CommandId::BitFieldRo => string::bitfield_ro(store, args),
+        CommandId::PfAdd => string::pfadd(store, args),
+        CommandId::PfCount => string::pfcount(store, args),
+        CommandId::PfMerge => string::pfmerge(store, args),
+        CommandId::HSet => hash::hset(store, args),
+        CommandId::HMSet => hash::hmset(store, args),
+        CommandId::HSetNx => hash::hsetnx(store, args),
+        CommandId::HGet => hash::hget(store, args),
+        CommandId::HMGet => hash::hmget(store, args),
+        CommandId::HGetAll => hash::hgetall(store, args),
+        CommandId::HDel => hash::hdel(store, args),
+        CommandId::HExists => hash::hexists(store, args),
+        CommandId::HKeys => hash::hkeys(store, args),
+        CommandId::HVals => hash::hvals(store, args),
+        CommandId::HLen => hash::hlen(store, args),
+        CommandId::HStrLen => hash::hstrlen(store, args),
+        CommandId::HIncrBy => hash::hincrby(store, args),
+        CommandId::HIncrByFloat => hash::hincrbyfloat(store, args),
+        CommandId::HScan => hash::hscan(store, args),
+        CommandId::HRandField => hash::hrandfield(store, args),
+        CommandId::LPush => list::lpush(store, args),
+        CommandId::RPush => list::rpush(store, args),
+        CommandId::LPop => list::lpop(store, args),
+        CommandId::RPop => list::rpop(store, args),
+        CommandId::LLen => list::llen(store, args),
+        CommandId::LIndex => list::lindex(store, args),
+        CommandId::LRange => list::lrange(store, args),
+        CommandId::LSet => list::lset(store, args),
+        CommandId::LTrim => list::ltrim(store, args),
+        CommandId::LInsert => list::linsert(store, args),
+        CommandId::LPos => list::lpos(store, args),
+        CommandId::LMove => list::lmove(store, args),
+        CommandId::LMPop => list::lmpop(store, args),
+        CommandId::BLPop => list::blpop(store, args),
+        CommandId::BRPop => list::brpop(store, args),
+        CommandId::BLMPop => list::blmpop(store, args),
+        CommandId::BRPopLPush => list::brpoplpush(store, args),
+        CommandId::SAdd => set::sadd(store, args),
+        CommandId::SRem => set::srem(store, args),
+        CommandId::SMembers => set::smembers(store, args),
+        CommandId::SCard => set::scard(store, args),
+        CommandId::SMove => set::smove(store, args),
+        CommandId::SPop => set::spop(store, args),
+        CommandId::SInter => set::sinter(store, args),
+        CommandId::SUnion => set::sunion(store, args),
+        CommandId::SDiff => set::sdiff(store, args),
+        CommandId::SScan => set::sscan(store, args),
+        CommandId::SIsMember => set::sismember(store, args),
+        CommandId::SDiffStore => set::sdiffstore(store, args),
+        CommandId::SInterCard => set::sintercard(store, args),
+        CommandId::SInterStore => set::sinterstore(store, args),
+        CommandId::SUnionStore => set::sunionstore(store, args),
+        CommandId::SRandMember => set::srandmember(store, args),
+        CommandId::ZAdd => zset::zadd(store, args),
+        CommandId::ZRem => zset::zrem(store, args),
+        CommandId::ZCard => zset::zcard(store, args),
+        CommandId::ZCount => zset::zcount(store, args),
+        CommandId::ZScore => zset::zscore(store, args),
+        CommandId::ZRank => zset::zrank(store, args, false),
+        CommandId::ZRevRank => zset::zrank(store, args, true),
+        CommandId::ZIncrBy => zset::zincrby(store, args),
+        CommandId::ZMScore => zset::zmscore(store, args),
+        CommandId::ZRange => zset::zrange(store, args, false),
+        CommandId::ZRevRange => zset::zrange(store, args, true),
+        CommandId::ZPopMin => zset::zpop(store, args, false),
+        CommandId::ZPopMax => zset::zpop(store, args, true),
+        CommandId::BZPopMin => zset::bzpop(store, args, false),
+        CommandId::BZPopMax => zset::bzpop(store, args, true),
+        CommandId::ZMPop => zset::zmpop(store, args),
+        CommandId::BZMPop => zset::bzmpop(store, args),
+        CommandId::ZInter => zset::zop(store, args, "ZINTER"),
+        CommandId::ZUnion => zset::zop(store, args, "ZUNION"),
+        CommandId::ZDiff => zset::zop(store, args, "ZDIFF"),
+        CommandId::ZScan => zset::zscan(store, args),
+        CommandId::ZRandMember => zset::zrandmember(store, args),
+        CommandId::ZRangeByScore => zset::zrange_by_score(store, args, false),
+        CommandId::ZRevRangeByScore => zset::zrange_by_score(store, args, true),
+        CommandId::ZRemRangeByRank => zset::zremrangebyrank(store, args),
+        CommandId::GeoAdd => geo::geoadd(store, args),
+        CommandId::GeoPos => geo::geopos(store, args),
+        CommandId::GeoDist => geo::geodist(store, args),
+        CommandId::GeoHash => geo::geohash(store, args),
+        CommandId::GeoRadius => geo::georadius(store, args),
+        CommandId::GeoRadiusRo => geo::georadius_ro(store, args),
+        CommandId::GeoSearch => geo::geosearch(store, args),
+        CommandId::GeoSearchStore => geo::geosearchstore(store, args),
+        CommandId::GeoRadiusByMember => geo::georadiusbymember(store, args),
+        CommandId::GeoRadiusByMemberRo => geo::georadiusbymember_ro(store, args),
+        CommandId::XAdd => stream::xadd(store, args),
+        CommandId::XLen => stream::xlen(store, args),
+        CommandId::XDel => stream::xdel(store, args),
+        CommandId::XRange => stream::xrange(store, args),
+        CommandId::XRevRange => stream::xrevrange(store, args),
+        CommandId::XTrim => stream::xtrim(store, args),
+        CommandId::XRead => stream::xread(store, args),
+        CommandId::XGroup => stream::xgroup(store, args),
+        CommandId::XAck => stream::xack(store, args),
+        CommandId::XClaim => stream::xclaim(store, args),
+        CommandId::XPending => stream::xpending(store, args),
+        CommandId::XReadGroup => stream::xreadgroup(store, args),
+        CommandId::XAutoClaim => stream::xautoclaim(store, args),
+        CommandId::Exists => keyspace::exists(store, args),
+        CommandId::Touch => keyspace::touch(store, args),
+        CommandId::Unlink => keyspace::unlink(store, args),
+        CommandId::Type => keyspace::key_type(store, args),
+        CommandId::Rename => keyspace::rename(store, args),
+        CommandId::RenameNx => keyspace::renamenx(store, args),
+        CommandId::DbSize => keyspace::dbsize(store, args),
+        CommandId::Keys => keyspace::keys(store, args),
+        CommandId::Scan => keyspace::scan(store, args),
+        CommandId::Move => keyspace::move_key(store, args),
+        CommandId::Dump => keyspace::dump(store, args),
+        CommandId::Restore => keyspace::restore(store, args),
+        CommandId::Sort => keyspace::sort(store, args),
+        CommandId::Copy => keyspace::copy(store, args),
+        CommandId::FlushDb => keyspace::flushdb(store, args),
+        CommandId::FlushAll => keyspace::flushall(store, args),
+        CommandId::PExpire => ttl::pexpire(store, args),
+        CommandId::ExpireAt => ttl::expireat(store, args),
+        CommandId::PExpireAt => ttl::pexpireat(store, args),
+        CommandId::Persist => ttl::persist(store, args),
+        CommandId::Ttl => ttl::ttl(store, args),
+        CommandId::PTtl => ttl::pttl(store, args),
+        _ => RespFrame::error_static("ERR unknown command"),
     }
-
-    RespFrame::error_static("ERR unknown command")
 }
 
 pub fn parse_command(frame: RespFrame) -> Result<Vec<CompactArg>, &'static str> {

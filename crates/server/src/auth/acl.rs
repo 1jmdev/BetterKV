@@ -1,10 +1,11 @@
+use commands::command::identify;
 use parking_lot::RwLock;
 use protocol::types::{BulkData, RespFrame};
 use std::sync::atomic::{AtomicU64, Ordering};
 use types::value::CompactArg;
 
-use super::command::{acl_categories, commands_in_category, AclCategory};
-use super::error::{no_auth, no_perm, PermissionError};
+use super::command::{AclCategory, acl_categories, commands_in_category};
+use super::error::{PermissionError, no_auth, no_perm};
 use super::session::SessionAuth;
 use super::state::{AuthState, DEFAULT_USER};
 
@@ -204,7 +205,7 @@ fn acl_genpass(args: &[CompactArg]) -> RespFrame {
             _ => {
                 return RespFrame::error_static(
                     "ERR ACL GENPASS argument must be a positive number",
-                )
+                );
             }
         }
     } else {
@@ -280,7 +281,7 @@ fn acl_dryrun(inner: &RwLock<AuthState>, args: &[CompactArg]) -> RespFrame {
             "WRONGPASS invalid username-password pair or user is disabled. user={username}"
         ));
     };
-    match user.check_permissions(args[3].as_slice(), &args[3..]) {
+    match user.check_permissions(identify(args[3].as_slice()), &args[3..]) {
         Ok(()) => RespFrame::ok(),
         Err(error) => no_perm(match error {
             PermissionError::Command(command) => PermissionError::Command(command),

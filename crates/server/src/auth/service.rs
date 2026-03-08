@@ -1,6 +1,7 @@
+use commands::command::CommandId;
 use std::sync::{
-    atomic::{AtomicU64, Ordering},
     Arc,
+    atomic::{AtomicU64, Ordering},
 };
 
 use parking_lot::RwLock;
@@ -141,7 +142,12 @@ impl AuthService {
         true
     }
 
-    pub fn dry_run(&self, username: &[u8], args: &[CompactArg]) -> Result<(), PermissionError> {
+    pub fn dry_run(
+        &self,
+        username: &[u8],
+        command: CommandId,
+        args: &[CompactArg],
+    ) -> Result<(), PermissionError> {
         let _trace = profiler::scope("server::auth::dry_run");
         let username = std::str::from_utf8(username)
             .ok()
@@ -152,10 +158,10 @@ impl AuthService {
         let Some(user) = state.users.get(&username) else {
             return Err(PermissionError::Command("ACL DRYRUN".to_string()));
         };
-        let Some(command) = args.first() else {
+        if args.is_empty() {
             return Ok(());
-        };
-        user.check_permissions(command.as_slice(), args)
+        }
+        user.check_permissions(command, args)
     }
 }
 
@@ -207,15 +213,20 @@ mod tests {
         };
         let auth = AuthService::from_config(&config).expect("auth service");
 
-        assert!(auth
-            .dry_run(b"alice", &[arg("GET"), arg("cache:1")])
-            .is_ok());
+        assert!(
+            auth.dry_run(b"alice", CommandId::Get, &[arg("GET"), arg("cache:1")])
+                .is_ok()
+        );
         assert!(matches!(
-            auth.dry_run(b"alice", &[arg("SET"), arg("cache:1"), arg("v")]),
+            auth.dry_run(
+                b"alice",
+                CommandId::Set,
+                &[arg("SET"), arg("cache:1"), arg("v")]
+            ),
             Err(PermissionError::Command(_))
         ));
         assert_eq!(
-            auth.dry_run(b"alice", &[arg("GET"), arg("other:1")]),
+            auth.dry_run(b"alice", CommandId::Get, &[arg("GET"), arg("other:1")]),
             Err(PermissionError::Key)
         );
     }

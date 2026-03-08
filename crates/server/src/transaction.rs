@@ -1,4 +1,5 @@
 use ahash::AHashMap;
+use commands::command::CommandId;
 
 use engine::store::Store;
 use protocol::types::RespFrame;
@@ -7,7 +8,7 @@ use types::value::CompactArg;
 #[derive(Default)]
 pub struct TransactionState {
     in_multi: bool,
-    queued: Vec<Vec<CompactArg>>,
+    queued: Vec<(CommandId, Vec<CompactArg>)>,
     watched: AHashMap<Vec<u8>, Option<Vec<u8>>>,
 }
 
@@ -16,10 +17,11 @@ impl TransactionState {
         &mut self,
         store: &Store,
         args: &mut Vec<CompactArg>,
+        command: CommandId,
         mut execute: F,
     ) -> RespFrame
     where
-        F: FnMut(&Store, &[CompactArg]) -> RespFrame,
+        F: FnMut(&Store, CommandId, &[CompactArg]) -> RespFrame,
     {
         let _trace = profiler::scope("server::transaction::handle_args_with");
         if args.is_empty() {
@@ -28,31 +30,28 @@ impl TransactionState {
 
         // hot path
         if !self.in_multi {
-            let cmd = args[0].as_slice();
-            match cmd.first().copied() {
-                Some(b'M') if cmd == b"MULTI" => return self.multi(args.as_slice()),
-                Some(b'E') if cmd == b"EXEC" => {
-                    return RespFrame::error_static("ERR EXEC without MULTI");
-                }
-                Some(b'D') if cmd == b"DISCARD" => {
+            match command {
+                CommandId::Multi => return self.multi(args.as_slice()),
+                CommandId::Exec => return RespFrame::error_static("ERR EXEC without MULTI"),
+                CommandId::Discard => {
                     return RespFrame::error_static("ERR DISCARD without MULTI");
                 }
-                Some(b'W') if cmd == b"WATCH" => return self.watch(store, args.as_slice()),
-                Some(b'U') if cmd == b"UNWATCH" => return self.unwatch(args.as_slice()),
+                CommandId::Watch => return self.watch(store, args.as_slice()),
+                CommandId::Unwatch => return self.unwatch(args.as_slice()),
                 _ => {}
             }
-            return execute(store, args.as_slice());
+            return execute(store, command, args.as_slice());
         }
 
         // cold path
-        match classify_transaction_command(args[0].as_slice()) {
+        match TransactionCommand::from(command) {
             TransactionCommand::Multi => self.multi(args.as_slice()),
             TransactionCommand::Exec => self.exec_with(store, args.as_slice(), execute),
             TransactionCommand::Discard => self.discard(args.as_slice()),
             TransactionCommand::Watch => self.watch(store, args.as_slice()),
             TransactionCommand::Unwatch => self.unwatch(args.as_slice()),
             TransactionCommand::Other => {
-                self.queued.push(std::mem::take(args));
+                self.queued.push((command, std::mem::take(args)));
                 RespFrame::simple_static("QUEUED")
             }
         }
@@ -74,7 +73,7 @@ impl TransactionState {
 
     fn exec_with<F>(&mut self, store: &Store, args: &[CompactArg], mut execute: F) -> RespFrame
     where
-        F: FnMut(&Store, &[CompactArg]) -> RespFrame,
+        F: FnMut(&Store, CommandId, &[CompactArg]) -> RespFrame,
     {
         let _trace = profiler::scope("server::transaction::exec_with");
         if args.len() != 1 {
@@ -93,8 +92,8 @@ impl TransactionState {
 
         let queued = std::mem::take(&mut self.queued);
         let mut out = Vec::with_capacity(queued.len());
-        for item in queued {
-            out.push(execute(store, item.as_slice()));
+        for (command, item) in queued {
+            out.push(execute(store, command, item.as_slice()));
         }
         self.watched.clear();
         RespFrame::Array(Some(out))
@@ -157,14 +156,15 @@ enum TransactionCommand {
     Other,
 }
 
-#[inline]
-fn classify_transaction_command(command: &[u8]) -> TransactionCommand {
-    match command.first().copied() {
-        Some(b'M') if command == b"MULTI" => TransactionCommand::Multi,
-        Some(b'E') if command == b"EXEC" => TransactionCommand::Exec,
-        Some(b'D') if command == b"DISCARD" => TransactionCommand::Discard,
-        Some(b'W') if command == b"WATCH" => TransactionCommand::Watch,
-        Some(b'U') if command == b"UNWATCH" => TransactionCommand::Unwatch,
-        _ => TransactionCommand::Other,
+impl From<CommandId> for TransactionCommand {
+    fn from(command: CommandId) -> Self {
+        match command {
+            CommandId::Multi => Self::Multi,
+            CommandId::Exec => Self::Exec,
+            CommandId::Discard => Self::Discard,
+            CommandId::Watch => Self::Watch,
+            CommandId::Unwatch => Self::Unwatch,
+            _ => Self::Other,
+        }
     }
 }
