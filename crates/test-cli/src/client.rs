@@ -7,6 +7,7 @@ use protocol::parser::{self, ParseError};
 use protocol::types::{BulkData, RespFrame};
 
 use crate::args::Args;
+use crate::syntax::parse_command_line;
 
 pub struct Client {
     stream: TcpStream,
@@ -56,12 +57,8 @@ impl Client {
     }
 
     pub async fn execute_raw(&mut self, command: &str) -> Result<RespFrame, String> {
-        let Some(parts) = shlex::split(command) else {
-            return Err(format!("invalid quoting in command: {command}"));
-        };
-
-        self.execute(parts.into_iter().map(String::into_bytes).collect())
-            .await
+        let parts = parse_command_line(command)?;
+        self.execute(parts).await
     }
 
     pub async fn execute(&mut self, command: Vec<Vec<u8>>) -> Result<RespFrame, String> {

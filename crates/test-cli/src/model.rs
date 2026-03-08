@@ -30,7 +30,8 @@ pub struct TestCase {
 pub enum ExpectedValue {
     Any,
     Simple(String),
-    Bulk(Option<String>),
+    Bulk(Option<Vec<u8>>),
+    IntegerAny,
     Integer(i64),
     ErrorAny,
     ErrorPrefix(String),

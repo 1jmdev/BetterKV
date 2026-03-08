@@ -4,6 +4,7 @@ use std::path::Path;
 use regex::Regex;
 
 use crate::model::{ExpectedValue, FileMetadata, TestCase, TestFile};
+use crate::syntax::parse_quoted_bytes;
 
 pub fn parse_test_file(path: &Path) -> Result<TestFile, String> {
     let raw = fs::read_to_string(path)
@@ -170,16 +171,24 @@ fn parse_expected(lines: &[String], path: &Path, test_name: &str) -> Result<Expe
 
     let mut items = Vec::with_capacity(slice.len());
     for line in slice {
-        let Some((_, value)) = line.split_once(')') else {
-            return Err(format!(
-                "{} test `{test_name}` has invalid array line `{line}`",
-                path.display()
-            ));
-        };
-        items.push(parse_scalar_expected(value.trim(), true, path, test_name)?);
+        let value = normalize_array_line(line);
+        items.push(parse_scalar_expected(value, true, path, test_name)?);
     }
 
     Ok(ExpectedValue::Array { items, unordered })
+}
+
+fn normalize_array_line(line: &str) -> &str {
+    let trimmed = line.trim();
+    let Some((prefix, value)) = trimmed.split_once(')') else {
+        return trimmed;
+    };
+
+    if !prefix.is_empty() && prefix.bytes().all(|byte| byte.is_ascii_digit()) {
+        value.trim()
+    } else {
+        trimmed
+    }
 }
 
 fn parse_scalar_expected(
@@ -204,6 +213,9 @@ fn parse_scalar_expected(
         return Ok(ExpectedValue::ErrorPrefix(rest.trim().to_string()));
     }
     if let Some(rest) = raw.strip_prefix("(integer) ") {
+        if rest.trim() == "(any)" {
+            return Ok(ExpectedValue::IntegerAny);
+        }
         let value = rest.trim().parse::<i64>().map_err(|err| {
             format!(
                 "{} test `{test_name}` has invalid integer expectation `{raw}`: {err}",
@@ -223,10 +235,9 @@ fn parse_scalar_expected(
         return Ok(ExpectedValue::Regex(regex));
     }
     if raw.starts_with('"') {
-        return Ok(ExpectedValue::Bulk(Some(
-            parse_quoted_string(raw)
-                .map_err(|err| format!("{} test `{test_name}`: {err}", path.display()))?,
-        )));
+        return Ok(ExpectedValue::Bulk(Some(parse_quoted_bytes(raw).map_err(
+            |err| format!("{} test `{test_name}`: {err}", path.display()),
+        )?)));
     }
     if !in_array {
         return Ok(ExpectedValue::Simple(raw.to_string()));
@@ -234,37 +245,6 @@ fn parse_scalar_expected(
 
     Ok(ExpectedValue::Simple(raw.to_string()))
 }
-
-fn parse_quoted_string(raw: &str) -> Result<String, String> {
-    if !raw.ends_with('"') || raw.len() < 2 {
-        return Err(format!("invalid quoted string `{raw}`"));
-    }
-
-    let mut out = String::new();
-    let mut chars = raw[1..raw.len() - 1].chars();
-    while let Some(ch) = chars.next() {
-        if ch != '\\' {
-            out.push(ch);
-            continue;
-        }
-
-        let Some(escaped) = chars.next() else {
-            return Err(format!("invalid escape in `{raw}`"));
-        };
-
-        match escaped {
-            '\\' => out.push('\\'),
-            '"' => out.push('"'),
-            'n' => out.push('\n'),
-            'r' => out.push('\r'),
-            't' => out.push('\t'),
-            other => return Err(format!("unsupported escape `\\{other}` in `{raw}`")),
-        }
-    }
-
-    Ok(out)
-}
-
 fn ignored_line(line: &str) -> bool {
     let trimmed = line.trim();
     trimmed.is_empty() || trimmed.starts_with('#')

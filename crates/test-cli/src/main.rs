@@ -5,6 +5,7 @@ mod model;
 mod output;
 mod parser;
 mod runner;
+mod syntax;
 
 use std::process::ExitCode;
 

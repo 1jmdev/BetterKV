@@ -119,8 +119,12 @@ fn validate_expected(expected: &ExpectedValue, actual: &RespFrame) -> Result<(),
             _ => Err(mismatch(expected, actual)),
         },
         ExpectedValue::Bulk(Some(value)) => match actual {
-            RespFrame::Bulk(Some(BulkData::Arg(actual))) if actual.as_slice() == value.as_bytes() => Ok(()),
-            RespFrame::Bulk(Some(BulkData::Value(actual))) if actual.as_slice() == value.as_bytes() => Ok(()),
+            RespFrame::Bulk(Some(BulkData::Arg(actual))) if actual.as_slice() == value.as_slice() => Ok(()),
+            RespFrame::Bulk(Some(BulkData::Value(actual))) if actual.as_slice() == value.as_slice() => Ok(()),
+            _ => Err(mismatch(expected, actual)),
+        },
+        ExpectedValue::IntegerAny => match actual {
+            RespFrame::Integer(_) => Ok(()),
             _ => Err(mismatch(expected, actual)),
         },
         ExpectedValue::Integer(value) => match actual {
@@ -218,7 +222,8 @@ fn expected_to_string(expected: &ExpectedValue) -> String {
         ExpectedValue::Any => "(any)".to_string(),
         ExpectedValue::Simple(value) => value.clone(),
         ExpectedValue::Bulk(None) => "(nil)".to_string(),
-        ExpectedValue::Bulk(Some(value)) => format!("\"{}\"", value),
+        ExpectedValue::Bulk(Some(value)) => render_expected_bytes(value),
+        ExpectedValue::IntegerAny => "(integer) (any)".to_string(),
         ExpectedValue::Integer(value) => format!("(integer) {value}"),
         ExpectedValue::ErrorAny => "(error)".to_string(),
         ExpectedValue::ErrorPrefix(prefix) => format!("(error) {prefix}"),
@@ -229,4 +234,21 @@ fn expected_to_string(expected: &ExpectedValue) -> String {
         }
         ExpectedValue::Regex(regex) => format!("(match) {}", regex.as_str()),
     }
+}
+
+fn render_expected_bytes(bytes: &[u8]) -> String {
+    let mut out = String::from("\"");
+    for byte in bytes {
+        match byte {
+            b'\\' => out.push_str("\\\\"),
+            b'"' => out.push_str("\\\""),
+            b'\n' => out.push_str("\\n"),
+            b'\r' => out.push_str("\\r"),
+            b'\t' => out.push_str("\\t"),
+            value if value.is_ascii_graphic() || *value == b' ' => out.push(*value as char),
+            value => out.push_str(&format!("\\x{value:02x}")),
+        }
+    }
+    out.push('"');
+    out
 }
