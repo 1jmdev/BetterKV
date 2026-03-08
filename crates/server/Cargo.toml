@@ -11,6 +11,7 @@ path = "src/main.rs"
 profiling = ["profiler/enabled"]
 
 [dependencies]
+clap.workspace = true
 commands.workspace = true
 engine.workspace = true
 types.workspace = true

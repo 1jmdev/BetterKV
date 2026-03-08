@@ -1,177 +1,132 @@
-use std::path::PathBuf;
+use clap::{ArgAction, Parser};
 
-#[derive(Debug)]
-pub(crate) enum Action {
-    Help,
-    Version,
-    CheckSystem,
-    TestMemory(u64),
-    Run(RuntimeArgs),
-}
+#[derive(Debug, Parser)]
+#[command(
+    name = "betterkv-server",
+    version,
+    about = "BetterKV server",
+    long_about = None,
+    after_help = "\
+Examples:
+  betterkv-server                                     (run with default config)
+  echo 'port 6380' | betterkv-server -               (read config from stdin)
+  betterkv-server /etc/betterkv/6379.conf            (run with config file)
+  betterkv-server --port 7777                        (override port)
+  betterkv-server /etc/betterkv.conf --loglevel debug
+  betterkv-server --port 7777 --bind 127.0.0.1",
+    disable_help_flag = true,
+    disable_version_flag = true,
+)]
+pub(crate) struct Cli {
+    #[arg(short = 'h', long = "help", action = ArgAction::Help, help = "Print help")]
+    pub help: Option<bool>,
 
-#[derive(Debug, Default)]
-pub(crate) struct RuntimeArgs {
-    pub config_file: Option<ConfigInput>,
-    pub directives: Vec<Directive>,
-}
+    #[arg(short = 'v', long = "version", action = ArgAction::Version, help = "Print version")]
+    pub version: Option<bool>,
 
-#[derive(Debug)]
-pub(crate) enum ConfigInput {
-    Path(PathBuf),
-    Stdin,
-}
+    #[arg(
+        value_name = "CONFIG",
+        help = "Path to config file, or - to read from stdin"
+    )]
+    pub config: Option<String>,
 
-#[derive(Debug)]
-pub(crate) struct Directive {
-    pub name: String,
-    pub values: Vec<String>,
-}
+    #[arg(
+        long = "bind",
+        value_name = "ADDRESS",
+        help = "IP address to bind to (default: 127.0.0.1)"
+    )]
+    pub bind: Option<String>,
 
-pub(crate) fn parse_cli_args(args: &[String]) -> Result<Action, String> {
-    let _trace = profiler::scope("server::main::parse_cli_args");
-    let tail = &args[1..];
-    if tail.is_empty() {
-        return Ok(Action::Run(RuntimeArgs::default()));
-    }
+    #[arg(
+        long = "port",
+        value_name = "PORT",
+        help = "TCP port to listen on (default: 6379)"
+    )]
+    pub port: Option<u16>,
 
-    if tail.len() == 1 {
-        let arg = tail[0].as_str();
-        if arg == "-h" || arg == "--help" {
-            return Ok(Action::Help);
-        }
-        if arg == "-v" || arg == "--version" {
-            return Ok(Action::Version);
-        }
-        if arg == "--check-system" {
-            return Ok(Action::CheckSystem);
-        }
-    }
+    #[arg(
+        long = "io-threads",
+        value_name = "N",
+        help = "Number of I/O worker threads (default: number of CPUs)"
+    )]
+    pub io_threads: Option<usize>,
 
-    if tail.first().map(String::as_str) == Some("--test-memory") {
-        if tail.len() != 2 {
-            return Err("--test-memory requires exactly one value".to_string());
-        }
-        let value = tail[1]
-            .parse::<u64>()
-            .map_err(|_| format!("invalid --test-memory value '{}'", tail[1]))?;
-        return Ok(Action::TestMemory(value));
-    }
+    #[arg(
+        long = "shards",
+        value_name = "N",
+        help = "Number of data shards, rounded up to next power of two (default: CPUs * 64)"
+    )]
+    pub shards: Option<usize>,
 
-    let mut runtime = RuntimeArgs::default();
-    let mut index = 0;
+    #[arg(
+        long = "hz",
+        value_name = "HZ",
+        help = "Server tick rate; sets sweep interval to 1000/hz ms (default: 4)"
+    )]
+    pub hz: Option<u64>,
 
-    if let Some(first) = tail.first() {
-        if first == "-" {
-            runtime.config_file = Some(ConfigInput::Stdin);
-            index = 1;
-        } else if !first.starts_with("--") {
-            runtime.config_file = Some(ConfigInput::Path(PathBuf::from(first)));
-            index = 1;
-        }
-    }
+    #[arg(
+        long = "sweep-interval-ms",
+        value_name = "MS",
+        help = "Interval in milliseconds between expiry sweeps (default: 250)"
+    )]
+    pub sweep_interval_ms: Option<u64>,
 
-    while index < tail.len() {
-        let token = &tail[index];
-        if token == "-" {
-            index += 1;
-            continue;
-        }
+    #[arg(
+        long = "loglevel",
+        value_name = "LEVEL",
+        help = "Log verbosity: trace, debug, info, warn, error (default: info)"
+    )]
+    pub loglevel: Option<String>,
 
-        if !token.starts_with("--") {
-            return Err(format!("unexpected argument '{token}'"));
-        }
+    #[arg(
+        long = "logfile",
+        value_name = "PATH",
+        help = "Log output file path, or stdout to log to stdout (default: stdout)"
+    )]
+    pub logfile: Option<String>,
 
-        let name = token.trim_start_matches("--");
-        if name.is_empty() {
-            return Err("invalid empty option".to_string());
-        }
-        if name == "help" {
-            return Ok(Action::Help);
-        }
-        if name == "version" {
-            return Ok(Action::Version);
-        }
-        if name == "check-system" {
-            return Ok(Action::CheckSystem);
-        }
-        if name == "test-memory" {
-            if index + 1 >= tail.len() || tail[index + 1].starts_with("--") {
-                return Err("--test-memory requires a value".to_string());
-            }
-            let value = tail[index + 1]
-                .parse::<u64>()
-                .map_err(|_| format!("invalid --test-memory value '{}'", tail[index + 1]))?;
-            return Ok(Action::TestMemory(value));
-        }
-        if name == "sentinel" {
-            return Err("sentinel mode is not supported".to_string());
-        }
+    #[arg(
+        long = "dir",
+        value_name = "PATH",
+        help = "Working directory for snapshot files (default: .)"
+    )]
+    pub dir: Option<String>,
 
-        index += 1;
-        let mut values = Vec::new();
-        while index < tail.len() && !tail[index].starts_with("--") && tail[index] != "-" {
-            values.push(tail[index].clone());
-            index += 1;
-        }
+    #[arg(
+        long = "dbfilename",
+        value_name = "FILENAME",
+        help = "Name of the snapshot file (default: dump.bkv)"
+    )]
+    pub dbfilename: Option<String>,
 
-        runtime.directives.push(Directive {
-            name: name.to_ascii_lowercase(),
-            values,
-        });
-    }
+    #[arg(
+        long = "save",
+        value_name = "SECONDS [CHANGES]",
+        num_args = 1..,
+        help = "Snapshot interval in seconds, optionally with a minimum change count"
+    )]
+    pub save: Option<Vec<String>>,
 
-    Ok(Action::Run(runtime))
-}
+    #[arg(
+        long = "snapshot-on-shutdown",
+        action = ArgAction::SetTrue,
+        help = "Save a snapshot when the server shuts down"
+    )]
+    pub snapshot_on_shutdown: bool,
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+    #[arg(
+        long = "requirepass",
+        value_name = "PASSWORD",
+        help = "Require clients to authenticate with this password"
+    )]
+    pub requirepass: Option<String>,
 
-    #[test]
-    fn parses_config_file_and_cli_overrides() {
-        let _trace = profiler::scope("server::main::parses_config_file_and_cli_overrides");
-        let args = vec![
-            "betterkv-server".to_string(),
-            "./conf/redis.conf".to_string(),
-            "--port".to_string(),
-            "6380".to_string(),
-            "--bind".to_string(),
-            "0.0.0.0".to_string(),
-        ];
-
-        let action = parse_cli_args(&args).expect("parse args");
-        match action {
-            Action::Run(runtime) => {
-                assert!(matches!(runtime.config_file, Some(ConfigInput::Path(_))));
-                assert_eq!(runtime.directives.len(), 2);
-                assert_eq!(runtime.directives[0].name, "port");
-                assert_eq!(runtime.directives[0].values, vec!["6380"]);
-            }
-            other => panic!("unexpected action: {other:?}"),
-        }
-    }
-
-    #[test]
-    fn parses_test_memory() {
-        let _trace = profiler::scope("server::main::parses_test_memory");
-        let args = vec![
-            "betterkv-server".to_string(),
-            "--test-memory".to_string(),
-            "256".to_string(),
-        ];
-
-        let action = parse_cli_args(&args).expect("parse args");
-        match action {
-            Action::TestMemory(value) => assert_eq!(value, 256),
-            other => panic!("unexpected action: {other:?}"),
-        }
-    }
-
-    #[test]
-    fn parses_help_short_flag() {
-        let _trace = profiler::scope("server::main::parses_help_short_flag");
-        let args = vec!["betterkv-server".to_string(), "-h".to_string()];
-        let action = parse_cli_args(&args).expect("parse args");
-        assert!(matches!(action, Action::Help));
-    }
+    #[arg(
+        long = "user",
+        value_name = "NAME RULES...",
+        num_args = 1..,
+        help = "Define an ACL user: --user <name> [on|off] [>password] [~pattern] [+cmd|-cmd]"
+    )]
+    pub user: Vec<String>,
 }
