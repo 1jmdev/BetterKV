@@ -1,3 +1,7 @@
+use bytes::BytesMut;
+use protocol::encoder::Encoder;
+use protocol::types::{BulkData, RespFrame};
+
 #[derive(Clone, Debug)]
 pub enum ExpectedResponse {
     Simple(&'static str),
@@ -6,55 +10,39 @@ pub enum ExpectedResponse {
 }
 
 pub fn encode_resp_parts(parts: &[&[u8]]) -> Vec<u8> {
-    let mut out = Vec::with_capacity(parts.iter().map(|part| part.len() + 16).sum::<usize>() + 16);
-    out.push(b'*');
-    append_u64(&mut out, parts.len() as u64);
-    out.extend_from_slice(b"\r\n");
-
-    for part in parts {
-        out.push(b'$');
-        append_u64(&mut out, part.len() as u64);
-        out.extend_from_slice(b"\r\n");
-        out.extend_from_slice(part);
-        out.extend_from_slice(b"\r\n");
-    }
-    out
+    let mut encoder = Encoder::default();
+    let mut buf =
+        BytesMut::with_capacity(parts.iter().map(|part| part.len() + 16).sum::<usize>() + 16);
+    let frame = RespFrame::Array(Some(
+        parts
+            .iter()
+            .map(|part| RespFrame::Bulk(Some(BulkData::from_vec(part.to_vec()))))
+            .collect(),
+    ));
+    encoder.encode(&frame, &mut buf);
+    buf.to_vec()
 }
 
 pub fn encode_expected_response(expected: &ExpectedResponse) -> Option<Vec<u8>> {
-    let mut out = Vec::new();
-    append_expected_response(&mut out, expected)?;
-    Some(out)
+    let mut encoder = Encoder::default();
+    let mut buf = BytesMut::new();
+    let frame = expected_to_frame(expected)?;
+    encoder.encode(&frame, &mut buf);
+    Some(buf.to_vec())
 }
 
-fn append_expected_response(out: &mut Vec<u8>, expected: &ExpectedResponse) -> Option<()> {
-    match expected {
-        ExpectedResponse::Simple(value) => {
-            out.push(b'+');
-            out.extend_from_slice(value.as_bytes());
-            out.extend_from_slice(b"\r\n");
-        }
-        ExpectedResponse::Bulk(None) => out.extend_from_slice(b"$-1\r\n"),
+fn expected_to_frame(expected: &ExpectedResponse) -> Option<RespFrame> {
+    Some(match expected {
+        ExpectedResponse::Simple(value) => RespFrame::SimpleStatic(value),
+        ExpectedResponse::Bulk(None) => RespFrame::Bulk(None),
         ExpectedResponse::Bulk(Some(value)) => {
-            out.push(b'$');
-            append_u64(out, value.len() as u64);
-            out.extend_from_slice(b"\r\n");
-            out.extend_from_slice(value);
-            out.extend_from_slice(b"\r\n");
+            RespFrame::Bulk(Some(BulkData::from_vec(value.clone())))
         }
-        ExpectedResponse::Array(items) => {
-            out.push(b'*');
-            append_u64(out, items.len() as u64);
-            out.extend_from_slice(b"\r\n");
-            for item in items {
-                append_expected_response(out, item)?;
-            }
-        }
-    }
-    Some(())
-}
-
-pub(crate) fn append_u64(out: &mut Vec<u8>, value: u64) {
-    let mut tmp = itoa::Buffer::new();
-    out.extend_from_slice(tmp.format(value).as_bytes());
+        ExpectedResponse::Array(items) => RespFrame::Array(Some(
+            items
+                .iter()
+                .map(expected_to_frame)
+                .collect::<Option<Vec<_>>>()?,
+        )),
+    })
 }
