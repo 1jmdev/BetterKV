@@ -468,7 +468,8 @@ async fn run_case(args: &Args, case: &crate::model::TestCase) -> CaseOutcome {
             }
         }
 
-        if matches!(outcome, CaseOutcome::Passed) && !no_reply
+        if matches!(outcome, CaseOutcome::Passed)
+            && !no_reply
             && let Err(error) = validate_run_results(&case.expect, &responses, &mut captures)
         {
             outcome = CaseOutcome::Failed(error);

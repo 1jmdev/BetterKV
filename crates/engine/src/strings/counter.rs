@@ -29,9 +29,7 @@ impl Store {
 
         // Fast path: key exists and is a string — update in-place with get_mut,
         // avoiding a second full hash lookup that insert() would do.
-        if !expired
-            && let Some(entry) = shard.entries.get_mut::<[u8]>(key)
-        {
+        if !expired && let Some(entry) = shard.entries.get_mut::<[u8]>(key) {
             let Some(value) = entry.as_string() else {
                 return Err(StringIntOpError::WrongType);
             };
@@ -68,9 +66,7 @@ impl Store {
 
         let expired = purge_if_expired(&mut shard, key, now_ms);
 
-        if !expired
-            && let Some(entry) = shard.entries.get_mut::<[u8]>(key)
-        {
+        if !expired && let Some(entry) = shard.entries.get_mut::<[u8]>(key) {
             let Some(value) = entry.as_string() else {
                 return Err(());
             };
