@@ -62,7 +62,9 @@ pub struct BenchResult {
 
 #[derive(Clone, Copy)]
 struct ProgressSnapshot {
+    warming_up: bool,
     completed: u64,
+    warmup_completed: u64,
     current_rps: f64,
     overall_rps: f64,
     current_avg_ms: f64,
@@ -77,12 +79,15 @@ struct Shared {
     password: Option<String>,
     strict: bool,
     spec: BenchRun,
+    started: Instant,
     progress: Arc<ProgressState>,
 }
 
 struct ProgressState {
     completed: AtomicU64,
+    warmup_completed: AtomicU64,
     latency_ns: AtomicU64,
+    counted_start_ns: AtomicU64,
     stop: AtomicBool,
 }
 
@@ -263,9 +268,13 @@ pub async fn run_single_benchmark(
 
     let progress = Arc::new(ProgressState {
         completed: AtomicU64::new(0),
+        warmup_completed: AtomicU64::new(0),
         latency_ns: AtomicU64::new(0),
+        counted_start_ns: AtomicU64::new(u64::MAX),
         stop: AtomicBool::new(false),
     });
+
+    let start = Instant::now();
 
     let shared = Arc::new(Shared {
         host: connection.host.clone(),
@@ -274,6 +283,7 @@ pub async fn run_single_benchmark(
         password: connection.password.clone(),
         strict: args.strict,
         spec,
+        started: start,
         progress: Arc::clone(&progress),
     });
 
@@ -297,7 +307,6 @@ pub async fn run_single_benchmark(
         shards[index % thread_count].push(plan);
     }
 
-    let start = Instant::now();
     let progress_handle = if !args.quiet && !args.csv {
         let state = Arc::clone(&progress);
         let name = shared.spec.name.clone();
@@ -344,7 +353,12 @@ pub async fn run_single_benchmark(
     }
 
     let elapsed = start.elapsed();
-    let elapsed_secs = elapsed.as_secs_f64();
+    let counted_start_ns = progress.counted_start_ns.load(Ordering::Relaxed);
+    let elapsed_secs = if counted_start_ns == u64::MAX {
+        elapsed.as_secs_f64()
+    } else {
+        (elapsed.as_nanos() as f64 - counted_start_ns as f64).max(0.0) / 1_000_000_000.0
+    };
     if total_completed == 0 || elapsed_secs == 0.0 {
         return Err("benchmark completed with zero successful requests".to_string());
     }
@@ -492,6 +506,9 @@ async fn run_worker(
             } else {
                 Vec::new()
             };
+            if track {
+                mark_counted_phase_started(&cfg.progress, cfg.started);
+            }
             let started = Instant::now();
             if batch == cfg.spec.pipeline {
                 stream
@@ -530,6 +547,9 @@ async fn run_worker(
                 cfg.progress.completed.fetch_add(batch as u64, Ordering::Relaxed);
                 tracked_remaining = tracked_remaining.saturating_sub(batch as u64);
             } else {
+                cfg.progress
+                    .warmup_completed
+                    .fetch_add(batch as u64, Ordering::Relaxed);
                 warmup_remaining = warmup_remaining.saturating_sub(batch as u64);
             }
         }
@@ -563,6 +583,9 @@ async fn run_worker(
             sequence = sequence.wrapping_add(1);
         }
 
+        if track {
+            mark_counted_phase_started(&cfg.progress, cfg.started);
+        }
         let started = Instant::now();
         stream
             .write_all(&payload)
@@ -593,6 +616,9 @@ async fn run_worker(
             cfg.progress.completed.fetch_add(batch as u64, Ordering::Relaxed);
             tracked_remaining = tracked_remaining.saturating_sub(batch as u64);
         } else {
+            cfg.progress
+                .warmup_completed
+                .fetch_add(batch as u64, Ordering::Relaxed);
             warmup_remaining = warmup_remaining.saturating_sub(batch as u64);
         }
     }
@@ -618,14 +644,19 @@ fn progress_loop(name: &str, total_requests: u64, state: Arc<ProgressState>, sta
         thread::sleep(Duration::from_millis(250));
 
         let snapshot = progress_snapshot(&state, started, last_tick, last_count, last_latency);
-        last_count = snapshot.completed;
+        last_count = if snapshot.warming_up {
+            snapshot.warmup_completed
+        } else {
+            snapshot.completed
+        };
         last_latency = state.latency_ns.load(Ordering::Relaxed);
         last_tick = Instant::now();
 
         progress.set_position(snapshot.completed.min(total_requests));
         progress.set_message(format!(
-            "{} | live {} | overall {} | lat {} / {} | elapsed {}",
+            "{} | {} | live {} | overall {} | lat {} / {} | elapsed {}",
             name,
+            if snapshot.warming_up { "warmup" } else { "measured" },
             format_rps(snapshot.current_rps),
             format_rps(snapshot.overall_rps),
             format_latency_brief(snapshot.current_avg_ms),
@@ -648,17 +679,30 @@ fn progress_snapshot(
     last_latency: u64,
 ) -> ProgressSnapshot {
     let completed = state.completed.load(Ordering::Relaxed);
+    let warmup_completed = state.warmup_completed.load(Ordering::Relaxed);
     let total_latency = state.latency_ns.load(Ordering::Relaxed);
+    let counted_start_ns = state.counted_start_ns.load(Ordering::Relaxed);
     let now = Instant::now();
     let dt = now.duration_since(last_tick).as_secs_f64().max(0.000_001);
-    let elapsed_secs = now.duration_since(started).as_secs_f64().max(0.000_001);
-    let delta = completed.saturating_sub(last_count);
+    let total_elapsed_secs = now.duration_since(started).as_secs_f64().max(0.000_001);
+    let warming_up = counted_start_ns == u64::MAX;
+    let elapsed_secs = if warming_up {
+        total_elapsed_secs
+    } else {
+        (now.duration_since(started).as_nanos() as f64 - counted_start_ns as f64).max(0.0)
+            / 1_000_000_000.0
+    }
+    .max(0.000_001);
+    let active_completed = if warming_up { warmup_completed } else { completed };
+    let delta = active_completed.saturating_sub(last_count);
     let delta_latency = total_latency.saturating_sub(last_latency);
 
     ProgressSnapshot {
+        warming_up,
         completed,
+        warmup_completed,
         current_rps: delta as f64 / dt,
-        overall_rps: completed as f64 / elapsed_secs,
+        overall_rps: active_completed as f64 / elapsed_secs,
         current_avg_ms: if delta == 0 {
             0.0
         } else {
@@ -1115,4 +1159,14 @@ fn total_latency_ns_add(
     stats.total_latency_ns = stats.total_latency_ns.saturating_add(latency_ns);
     progress.latency_ns.fetch_add(latency_ns, Ordering::Relaxed);
     Ok(())
+}
+
+fn mark_counted_phase_started(progress: &ProgressState, started: Instant) {
+    let counted_start_ns = started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64;
+    let _ = progress.counted_start_ns.compare_exchange(
+        u64::MAX,
+        counted_start_ns,
+        Ordering::Relaxed,
+        Ordering::Relaxed,
+    );
 }
