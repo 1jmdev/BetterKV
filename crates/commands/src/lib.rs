@@ -1,3 +1,5 @@
+#![allow(clippy::result_unit_err)]
+
 pub mod command;
 pub mod connection;
 pub mod dispatch;

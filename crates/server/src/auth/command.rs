@@ -1309,7 +1309,7 @@ fn all_specs() -> &'static [CommandSpec] {
     ALL_SPECS
 }
 
-fn extract_keys<'a>(extractor: KeyExtractor, args: &'a [CompactArg]) -> Vec<&'a [u8]> {
+fn extract_keys(extractor: KeyExtractor, args: &[CompactArg]) -> Vec<&[u8]> {
     match extractor {
         KeyExtractor::None => Vec::new(),
         KeyExtractor::Single => get_arg(args, 1).into_iter().collect(),
@@ -1372,7 +1372,7 @@ fn extract_keys<'a>(extractor: KeyExtractor, args: &'a [CompactArg]) -> Vec<&'a 
     }
 }
 
-fn extract_channels<'a>(extractor: ChannelExtractor, args: &'a [CompactArg]) -> Vec<&'a [u8]> {
+fn extract_channels(extractor: ChannelExtractor, args: &[CompactArg]) -> Vec<&[u8]> {
     match extractor {
         ChannelExtractor::None => Vec::new(),
         ChannelExtractor::First => get_arg(args, 1).into_iter().collect(),

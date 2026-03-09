@@ -35,7 +35,7 @@ fn load_file_recursive(
         if tokens.is_empty() {
             continue;
         }
-        if tokens[0].to_ascii_lowercase() == "include" {
+        if tokens[0].eq_ignore_ascii_case("include") {
             for include in &tokens[1..] {
                 let include_path = if Path::new(include).is_absolute() {
                     PathBuf::from(include)

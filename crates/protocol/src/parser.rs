@@ -76,12 +76,12 @@ impl<'a> Cursor<'a> {
         // (often < 16 bytes — well within L1 and branch-predictor range).
         let mut i = start + 1; // need at least one byte before \n
         while i < len {
-            if unsafe { *data.get_unchecked(i) } == b'\n' {
-                if unsafe { *data.get_unchecked(i - 1) } == b'\r' {
-                    let line = unsafe { data.get_unchecked(start..i - 1) };
-                    self.pos = i + 1;
-                    return Ok(line);
-                }
+            if unsafe { *data.get_unchecked(i) } == b'\n'
+                && unsafe { *data.get_unchecked(i - 1) } == b'\r'
+            {
+                let line = unsafe { data.get_unchecked(start..i - 1) };
+                self.pos = i + 1;
+                return Ok(line);
             }
             i += 1;
         }

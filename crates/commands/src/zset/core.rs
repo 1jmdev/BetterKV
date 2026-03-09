@@ -38,7 +38,7 @@ pub(crate) fn zadd(store: &Store, args: &Args) -> RespFrame {
     }
 
     let pair_args = &args[index..];
-    if pair_args.len() < 2 || pair_args.len() % 2 != 0 || (incr && pair_args.len() != 2) {
+    if pair_args.len() < 2 || !pair_args.len().is_multiple_of(2) || (incr && pair_args.len() != 2) {
         return wrong_args("ZADD");
     }
 

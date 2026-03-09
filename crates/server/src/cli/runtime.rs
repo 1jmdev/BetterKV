@@ -29,10 +29,10 @@ pub(crate) fn run(cli: Cli) -> Result<(), String> {
     if let Some(v) = cli.shards {
         config.shards = v.max(1).next_power_of_two();
     }
-    if let Some(hz) = cli.hz {
-        if hz > 0 {
-            config.sweep_interval_ms = (1000 / hz).max(1);
-        }
+    if let Some(hz) = cli.hz
+        && let Some(interval_ms) = 1000_u64.checked_div(hz)
+    {
+        config.sweep_interval_ms = interval_ms.max(1);
     }
     if let Some(v) = cli.sweep_interval_ms {
         config.sweep_interval_ms = v;
@@ -148,8 +148,8 @@ pub(crate) fn parse_config_content_into(content: &str, config: &mut Config) -> R
                 let hz = values[0]
                     .parse::<u64>()
                     .map_err(|_| format!("invalid hz value '{}'", values[0]))?;
-                if hz > 0 {
-                    config.sweep_interval_ms = (1000 / hz).max(1);
+                if let Some(interval_ms) = 1000_u64.checked_div(hz) {
+                    config.sweep_interval_ms = interval_ms.max(1);
                 }
             }
             "sweep-interval-ms" => {
@@ -204,7 +204,7 @@ fn parse_save_interval(values: &[String]) -> Result<u64, String> {
             .parse::<u64>()
             .map_err(|_| format!("invalid save value '{}'", values[0]));
     }
-    if values.len() % 2 != 0 {
+    if !values.len().is_multiple_of(2) {
         return Err("save expects pairs of <seconds> <changes>".to_string());
     }
     let mut interval: Option<u64> = None;

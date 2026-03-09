@@ -122,10 +122,10 @@ impl Store {
             let mut out = Vec::with_capacity(take);
             while out.len() < take {
                 let idx = (random_next(&mut state) as usize) % len;
-                if selected.insert(idx) {
-                    if let Some(member) = set.get_index(idx) {
-                        out.push(member.clone());
-                    }
+                if selected.insert(idx)
+                    && let Some(member) = set.get_index(idx)
+                {
+                    out.push(member.clone());
                 }
             }
             Ok(Some(out))

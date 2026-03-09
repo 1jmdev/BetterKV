@@ -18,10 +18,10 @@ pub(crate) fn parse_json(raw: &[u8]) -> Result<JsonValue, RespFrame> {
                 return Err(RespFrame::error_static("ERR invalid JSON"));
             };
             let is_bare_string = !matches!(first, b'{' | b'[' | b'"' | b'-' | b'0'..=b'9');
-            if is_bare_string {
-                if let Ok(value) = std::str::from_utf8(raw) {
-                    return Ok(JsonValue::String(value.to_owned()));
-                }
+            if is_bare_string
+                && let Ok(value) = std::str::from_utf8(raw)
+            {
+                return Ok(JsonValue::String(value.to_owned()));
             }
             Err(RespFrame::error_static("ERR invalid JSON"))
         }

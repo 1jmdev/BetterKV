@@ -23,12 +23,11 @@ pub(crate) fn collect_matches<'a>(
     }
     match &tokens[0] {
         JsonPathToken::Field(field) => {
-            if let JsonValue::Object(object) = value {
-                if let Ok(field) = std::str::from_utf8(field) {
-                    if let Some(child) = object.get(field) {
-                        collect_matches(child, &tokens[1..], out);
-                    }
-                }
+            if let JsonValue::Object(object) = value
+                && let Ok(field) = std::str::from_utf8(field)
+                && let Some(child) = object.get(field)
+            {
+                collect_matches(child, &tokens[1..], out);
             }
         }
         JsonPathToken::RecursiveField(field) => {
@@ -37,12 +36,11 @@ pub(crate) fn collect_matches<'a>(
             }
         }
         JsonPathToken::Index(index) => {
-            if let JsonValue::Array(array) = value {
-                if let Some(index) = normalize_index(array.len(), *index) {
-                    if let Some(child) = array.get(index) {
-                        collect_matches(child, &tokens[1..], out);
-                    }
-                }
+            if let JsonValue::Array(array) = value
+                && let Some(index) = normalize_index(array.len(), *index)
+                && let Some(child) = array.get(index)
+            {
+                collect_matches(child, &tokens[1..], out);
             }
         }
         JsonPathToken::Wildcard => match value {

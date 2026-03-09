@@ -40,6 +40,12 @@ where
         self.metas.len()
     }
 
+    #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        let _trace = profiler::scope("rehash::types::is_empty");
+        self.metas.is_empty()
+    }
+
     pub fn clear(&mut self) {
         let _trace = profiler::scope("rehash::types::clear");
         self.table = Table::with_buckets(INITIAL_BUCKETS);
@@ -223,6 +229,15 @@ where
         }
 
         false
+    }
+}
+
+impl<K, V> Default for RehashingMap<K, V>
+where
+    K: Eq + AsRef<[u8]>,
+{
+    fn default() -> Self {
+        Self::new()
     }
 }
 

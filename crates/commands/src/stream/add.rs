@@ -41,7 +41,7 @@ pub(crate) fn xadd(store: &Store, args: &Args) -> RespFrame {
     };
     index += 1;
 
-    if index >= args.len() || (args.len() - index) % 2 != 0 {
+    if index >= args.len() || !(args.len() - index).is_multiple_of(2) {
         return RespFrame::Error("ERR wrong number of arguments for 'xadd' command".to_string());
     }
     let fields: Vec<_> = args[index..]

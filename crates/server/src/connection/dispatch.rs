@@ -29,6 +29,7 @@ fn bulk_static(value: &'static [u8]) -> RespFrame {
     RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(value))))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn execute_regular_command(
     store: &Store,
     hub: &PubSubHub,
@@ -57,10 +58,10 @@ pub(super) fn execute_regular_command(
         return auth.acl_command(auth_state, args);
     }
 
-    if command == CommandId::Hello {
-        if let Some(response) = hello_with_auth(auth, auth_state, args) {
-            return response;
-        }
+    if command == CommandId::Hello
+        && let Some(response) = hello_with_auth(auth, auth_state, args)
+    {
+        return response;
     }
 
     // Hot path: already authorized
@@ -69,14 +70,14 @@ pub(super) fn execute_regular_command(
         if auth_state.acl_epoch() != acl_epoch && !auth.refresh_session(auth_state, acl_epoch) {
             return auth::no_auth();
         }
-        if auth_state.acl_check_required() {
-            if let Err(error) = auth.dry_run(
+        if auth_state.acl_check_required()
+            && let Err(error) = auth.dry_run(
                 auth_state.user().unwrap_or_default().as_bytes(),
                 command,
                 args,
-            ) {
-                return no_perm(error);
-            }
+            )
+        {
+            return no_perm(error);
         }
         return dispatch_authorized(
             store,
@@ -107,6 +108,7 @@ pub(super) fn execute_regular_command(
 }
 
 #[inline]
+#[allow(clippy::too_many_arguments)]
 fn dispatch_authorized(
     store: &Store,
     hub: &PubSubHub,

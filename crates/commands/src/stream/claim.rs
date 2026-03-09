@@ -38,7 +38,7 @@ pub(crate) fn xreadgroup(store: &Store, args: &Args) -> RespFrame {
     index += 1;
 
     let remaining = args.len() - index;
-    if remaining == 0 || remaining % 2 != 0 {
+    if remaining == 0 || !remaining.is_multiple_of(2) {
         return RespFrame::Error("ERR Unbalanced XREADGROUP list of streams".to_string());
     }
     let stream_count = remaining / 2;

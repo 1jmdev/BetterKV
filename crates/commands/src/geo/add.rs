@@ -19,7 +19,7 @@ pub(crate) fn geoadd(store: &Store, args: &Args) -> RespFrame {
         }
         break;
     }
-    if args.len() <= index || (args.len() - index) % 3 != 0 {
+    if args.len() <= index || !(args.len() - index).is_multiple_of(3) {
         return wrong_args("GEOADD");
     }
 

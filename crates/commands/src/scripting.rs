@@ -75,14 +75,13 @@ impl LuaRuntime {
                 ..HookTriggers::default()
             },
             |lua, _debug| {
-                if let Some(context) = lua.app_data_ref::<LuaCallContext>() {
-                    if context.debug_mode != ScriptDebugMode::Sync
-                        && context.kill_requested.load(Ordering::Relaxed)
-                    {
-                        return Err(mlua::Error::RuntimeError(
-                            "Script killed by user with SCRIPT KILL...".to_string(),
-                        ));
-                    }
+                if let Some(context) = lua.app_data_ref::<LuaCallContext>()
+                    && context.debug_mode != ScriptDebugMode::Sync
+                    && context.kill_requested.load(Ordering::Relaxed)
+                {
+                    return Err(mlua::Error::RuntimeError(
+                        "Script killed by user with SCRIPT KILL...".to_string(),
+                    ));
                 }
                 Ok(VmState::Continue)
             },

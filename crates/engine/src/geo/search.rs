@@ -71,6 +71,7 @@ impl Store {
         Ok(out)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn geosearchstore(
         &self,
         destination: &[u8],

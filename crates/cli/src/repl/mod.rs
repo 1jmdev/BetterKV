@@ -85,10 +85,10 @@ fn run_blocking(
 
         let selection = parse_select_db(command.as_slice());
         let response = tokio::runtime::Handle::current().block_on(client.execute(command))?;
-        if let Some(next_db) = selection {
-            if !matches!(response, protocol::types::RespFrame::Error(_)) {
-                state.db = next_db;
-            }
+        if let Some(next_db) = selection
+            && !matches!(response, protocol::types::RespFrame::Error(_))
+        {
+            state.db = next_db;
         }
         println!("{}", output::render(&response, state.raw));
     }

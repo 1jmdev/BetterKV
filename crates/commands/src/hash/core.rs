@@ -4,7 +4,7 @@ use protocol::types::{BulkData, RespFrame};
 
 pub(crate) fn hset(store: &Store, args: &Args) -> RespFrame {
     let _trace = profiler::scope("commands::hash::core::hset");
-    if args.len() < 4 || args.len() % 2 != 0 {
+    if args.len() < 4 || !args.len().is_multiple_of(2) {
         return wrong_args("HSET");
     }
 
@@ -16,7 +16,7 @@ pub(crate) fn hset(store: &Store, args: &Args) -> RespFrame {
 
 pub(crate) fn hmset(store: &Store, args: &Args) -> RespFrame {
     let _trace = profiler::scope("commands::hash::core::hmset");
-    if args.len() < 4 || args.len() % 2 != 0 {
+    if args.len() < 4 || !args.len().is_multiple_of(2) {
         return wrong_args("HMSET");
     }
 

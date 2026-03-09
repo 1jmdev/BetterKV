@@ -1,3 +1,5 @@
+#![allow(clippy::result_unit_err)]
+
 pub mod auth;
 pub mod backup;
 pub mod config;

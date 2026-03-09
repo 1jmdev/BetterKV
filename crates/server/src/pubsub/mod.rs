@@ -305,6 +305,12 @@ impl PubSubHub {
     }
 }
 
+impl Default for PubSubHub {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 fn pattern_prefix(pattern: &[u8]) -> Vec<u8> {
     let _trace = profiler::scope("server::pubsub::pattern_prefix");
     let prefix_len = pattern

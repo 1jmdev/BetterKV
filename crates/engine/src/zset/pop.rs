@@ -4,6 +4,8 @@ use types::value::{CompactArg, CompactKey};
 use super::super::helpers::{monotonic_now_ms, purge_if_expired};
 use super::get_zset_mut;
 
+type ZPopItems = (CompactKey, Vec<(CompactKey, f64)>);
+
 impl Store {
     pub fn zpopmin(&self, key: &[u8], count: usize) -> Result<Option<Vec<(CompactKey, f64)>>, ()> {
         let _trace = profiler::scope("engine::zset::pop::zpopmin");
@@ -45,7 +47,7 @@ impl Store {
         keys: &[CompactArg],
         max: bool,
         count: usize,
-    ) -> Result<Option<(CompactKey, Vec<(CompactKey, f64)>)>, ()> {
+    ) -> Result<Option<ZPopItems>, ()> {
         let _trace = profiler::scope("engine::zset::pop::zmpop");
         let take = count.max(1);
         for key in keys {

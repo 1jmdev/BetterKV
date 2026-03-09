@@ -4,6 +4,7 @@ use protocol::types::RespFrame;
 use types::value::StreamId;
 
 const ERR_STREAM_ID: &str = "ERR Invalid stream ID specified";
+type ParsedTrimArgs = (Option<(XTrimMode, StreamId, Option<usize>)>, usize);
 
 pub(super) fn parse_stream_id(raw: &[u8]) -> Result<StreamId, RespFrame> {
     if raw == b"-" {
@@ -50,10 +51,7 @@ pub(super) fn parse_count(raw: &[u8]) -> Result<usize, RespFrame> {
     usize::try_from(v).map_err(|_| int_error())
 }
 
-pub(super) fn parse_xtrim_args(
-    args: &Args,
-    mut index: usize,
-) -> Result<(Option<(XTrimMode, StreamId, Option<usize>)>, usize), RespFrame> {
+pub(super) fn parse_xtrim_args(args: &Args, mut index: usize) -> Result<ParsedTrimArgs, RespFrame> {
     let _trace = profiler::scope("commands::stream::parse::parse_xtrim_args");
     if index >= args.len() || !args[index].eq_ignore_ascii_case(b"MAXLEN") {
         return Ok((None, index));

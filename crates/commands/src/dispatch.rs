@@ -890,17 +890,14 @@ pub fn dispatch_safe(input: &[u8]) -> Option<CommandId> {
             _ => {}
         },
 
-        15 => match f {
-            b'z' => {
-                if eq(input, b"ZREMRANGEBYRANK") {
-                    return Some(CommandId::ZRemRangeByRank);
-                }
+        15 => {
+            if f == b'z' && eq(input, b"ZREMRANGEBYRANK") {
+                return Some(CommandId::ZRemRangeByRank);
             }
-            _ => {}
-        },
+        }
 
-        16 => match f {
-            b'z' => {
+        16 => {
+            if f == b'z' {
                 if eq(input, b"ZREVRANGEBYSCORE") {
                     return Some(CommandId::ZRevRangeByScore);
                 }
@@ -908,26 +905,19 @@ pub fn dispatch_safe(input: &[u8]) -> Option<CommandId> {
                     return Some(CommandId::ZRemRangeByScore);
                 }
             }
-            _ => {}
-        },
+        }
 
-        17 => match f {
-            b'g' => {
-                if eq(input, b"GEORADIUSBYMEMBER") {
-                    return Some(CommandId::GeoRadiusByMember);
-                }
+        17 => {
+            if f == b'g' && eq(input, b"GEORADIUSBYMEMBER") {
+                return Some(CommandId::GeoRadiusByMember);
             }
-            _ => {}
-        },
+        }
 
-        20 => match f {
-            b'g' => {
-                if eq(input, b"GEORADIUSBYMEMBER_RO") {
-                    return Some(CommandId::GeoRadiusByMemberRo);
-                }
+        20 => {
+            if f == b'g' && eq(input, b"GEORADIUSBYMEMBER_RO") {
+                return Some(CommandId::GeoRadiusByMemberRo);
             }
-            _ => {}
-        },
+        }
 
         _ => {}
     }

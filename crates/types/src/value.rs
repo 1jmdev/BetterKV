@@ -106,6 +106,11 @@ impl<const INLINE_CAPACITY: usize> CompactBytes<INLINE_CAPACITY> {
         self.as_slice().len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        let _trace = profiler::scope("crates::types::src::value::is_empty");
+        self.as_slice().is_empty()
+    }
+
     pub fn to_vec(&self) -> Vec<u8> {
         let _trace = profiler::scope("crates::types::src::value::to_vec");
         self.as_slice().to_vec()
@@ -178,10 +183,11 @@ impl<const INLINE_CAPACITY: usize> Ord for CompactBytes<INLINE_CAPACITY> {
     }
 }
 
+#[allow(clippy::non_canonical_partial_ord_impl)]
 impl<const INLINE_CAPACITY: usize> PartialOrd for CompactBytes<INLINE_CAPACITY> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         let _trace = profiler::scope("crates::types::src::value::partial_cmp");
-        Some(self.cmp(other))
+        Some(Ord::cmp(self, other))
     }
 }
 
@@ -260,6 +266,12 @@ impl StreamValue {
     }
 }
 
+impl Default for StreamValue {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct ZSetOrderEntry {
     score: f64,
@@ -291,10 +303,11 @@ impl Ord for ZSetOrderEntry {
     }
 }
 
+#[allow(clippy::non_canonical_partial_ord_impl)]
 impl PartialOrd for ZSetOrderEntry {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         let _trace = profiler::scope("crates::types::src::value::partial_cmp");
-        Some(self.cmp(other))
+        Some(Ord::cmp(self, other))
     }
 }
 

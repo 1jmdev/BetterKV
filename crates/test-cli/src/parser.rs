@@ -17,18 +17,18 @@ pub fn parse_test_file(path: &Path) -> Result<TestFile, String> {
 
     while index < lines.len() {
         let line = lines[index].trim();
-        if line.starts_with("@name ") {
-            metadata.name = Some(line[6..].trim().to_string());
+        if let Some(stripped) = line.strip_prefix("@name ") {
+            metadata.name = Some(stripped.trim().to_string());
             index += 1;
             continue;
         }
-        if line.starts_with("@group ") {
-            metadata.group = Some(line[7..].trim().to_string());
+        if let Some(stripped) = line.strip_prefix("@group ") {
+            metadata.group = Some(stripped.trim().to_string());
             index += 1;
             continue;
         }
-        if line.starts_with("@since ") {
-            metadata.since = Some(line[7..].trim().to_string());
+        if let Some(stripped) = line.strip_prefix("@since ") {
+            metadata.since = Some(stripped.trim().to_string());
             index += 1;
             continue;
         }
@@ -235,7 +235,7 @@ fn parse_array_group(
 
         items.push(parse_scalar_expected(content, true, path, test_name)?);
 
-        while index < lines.len() && line_indent(&lines[index]) > base_indent {
+        if index < lines.len() && line_indent(&lines[index]) > base_indent {
             return Err(format!(
                 "{} test `{test_name}` has unexpected indented array line `{}`",
                 path.display(),

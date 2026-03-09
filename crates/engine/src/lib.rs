@@ -1,3 +1,5 @@
+#![allow(clippy::result_unit_err)]
+
 mod geo;
 mod hash;
 pub mod helpers;
@@ -280,10 +282,10 @@ impl Shard {
 
     pub fn insert_entry(&mut self, key: CompactKey, entry: Entry, deadline: Option<u64>) {
         let _trace = profiler::scope("engine::lib::insert_entry");
-        if let Some(old_entry) = self.entries.insert(key, StoredEntry::new(entry, deadline)) {
-            if old_entry.deadline().is_some() {
-                self.ttl_count -= 1;
-            }
+        if let Some(old_entry) = self.entries.insert(key, StoredEntry::new(entry, deadline))
+            && old_entry.deadline().is_some()
+        {
+            self.ttl_count -= 1;
         }
         if let Some(deadline) = deadline {
             self.ttl_count += 1;

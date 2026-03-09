@@ -26,7 +26,7 @@ pub(crate) async fn run_accept_loop(
         let shared_store = store.clone();
         let shared_pubsub = pubsub.clone();
         let shared_auth = auth.clone();
-        let shared_profiler = profiler.clone();
+        let shared_profiler = profiler;
         tokio::spawn(async move {
             if let Err(err) = handle_connection(
                 socket,

@@ -457,26 +457,21 @@ async fn run_case(args: &Args, case: &crate::model::TestCase) -> CaseOutcome {
                     outcome = CaseOutcome::Skipped(reason);
                     break;
                 }
-                responses.push(frame);
-                if let Some(ExpectedValue::Capture(_)) =
+                if let Some(expectation @ ExpectedValue::Capture(_)) =
                     sequence_expectations.and_then(|items| items.get(index))
+                    && let Err(error) = validate_expected(expectation, &frame, &mut captures)
                 {
-                    if let Err(error) = validate_expected(
-                        sequence_expectations.unwrap().get(index).unwrap(),
-                        responses.last().unwrap(),
-                        &mut captures,
-                    ) {
-                        outcome = CaseOutcome::Failed(error);
-                        break;
-                    }
+                    outcome = CaseOutcome::Failed(error);
+                    break;
                 }
+                responses.push(frame);
             }
         }
 
-        if matches!(outcome, CaseOutcome::Passed) && !no_reply {
-            if let Err(error) = validate_run_results(&case.expect, &responses, &mut captures) {
-                outcome = CaseOutcome::Failed(error);
-            }
+        if matches!(outcome, CaseOutcome::Passed) && !no_reply
+            && let Err(error) = validate_run_results(&case.expect, &responses, &mut captures)
+        {
+            outcome = CaseOutcome::Failed(error);
         }
     }
 

@@ -32,6 +32,7 @@ impl Store {
         Ok(ordered[from..to_exclusive].to_vec())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn zrange_by_score(
         &self,
         key: &[u8],

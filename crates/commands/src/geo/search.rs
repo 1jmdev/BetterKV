@@ -183,10 +183,9 @@ fn run_search(
     }
 }
 
-fn parse_shape(
-    args: &Args,
-    index: usize,
-) -> Result<(Option<f64>, Option<(f64, f64)>, usize), RespFrame> {
+type ParsedSearchShape = (Option<f64>, Option<(f64, f64)>, usize);
+
+fn parse_shape(args: &Args, index: usize) -> Result<ParsedSearchShape, RespFrame> {
     let _trace = profiler::scope("commands::geo::search::parse_shape");
     if index >= args.len() {
         return Err(crate::util::syntax_error());
