@@ -1,10 +1,16 @@
-use crate::Store;
 use crate::store::{XAddId, XTrimMode};
+use crate::Store;
 use types::value::{CompactArg, CompactKey, Entry, StreamId, StreamValue};
 
 use super::super::helpers::{is_expired, monotonic_now_ms, purge_if_expired};
 use super::stream_types::{apply_trim, xadd_into_stream};
 use super::{get_stream, get_stream_mut};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StreamWriteError {
+    WrongType,
+    InternalInvariant,
+}
 
 impl Store {
     pub fn xadd(
@@ -14,7 +20,7 @@ impl Store {
         fields: &[(CompactArg, CompactArg)],
         trim: Option<(XTrimMode, StreamId, Option<usize>)>,
         nomkstream: bool,
-    ) -> Result<Option<StreamId>, ()> {
+    ) -> Result<Option<StreamId>, StreamWriteError> {
         let _trace = profiler::scope("engine::stream::write::xadd");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
@@ -34,16 +40,19 @@ impl Store {
                 Entry::Stream(Box::new(StreamValue::new())),
                 None,
             );
-            let created = shard.entries.get_mut(key).expect("stream created");
-            let stream = get_stream_mut(created).ok_or(())?;
-            return xadd_into_stream(stream, id, fields, trim);
+            let Some(created) = shard.entries.get_mut(key) else {
+                return Err(StreamWriteError::InternalInvariant);
+            };
+            let stream = get_stream_mut(created).ok_or(StreamWriteError::WrongType)?;
+            return xadd_into_stream(stream, id, fields, trim)
+                .map_err(|()| StreamWriteError::WrongType);
         };
 
-        let stream = get_stream_mut(entry).ok_or(())?;
-        xadd_into_stream(stream, id, fields, trim)
+        let stream = get_stream_mut(entry).ok_or(StreamWriteError::WrongType)?;
+        xadd_into_stream(stream, id, fields, trim).map_err(|()| StreamWriteError::WrongType)
     }
 
-    pub fn xlen(&self, key: &[u8]) -> Result<i64, ()> {
+    pub fn xlen(&self, key: &[u8]) -> Result<i64, StreamWriteError> {
         let _trace = profiler::scope("engine::stream::write::xlen");
         let idx = self.shard_index(key);
         let shard = self.shards[idx].read();
@@ -54,11 +63,11 @@ impl Store {
         let Some(entry) = shard.entries.get(key) else {
             return Ok(0);
         };
-        let stream = get_stream(entry).ok_or(())?;
+        let stream = get_stream(entry).ok_or(StreamWriteError::WrongType)?;
         Ok(stream.entries.len() as i64)
     }
 
-    pub fn xdel(&self, key: &[u8], ids: &[StreamId]) -> Result<i64, ()> {
+    pub fn xdel(&self, key: &[u8], ids: &[StreamId]) -> Result<i64, StreamWriteError> {
         let _trace = profiler::scope("engine::stream::write::xdel");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
@@ -69,7 +78,7 @@ impl Store {
         let Some(entry) = shard.entries.get_mut(key) else {
             return Ok(0);
         };
-        let stream = get_stream_mut(entry).ok_or(())?;
+        let stream = get_stream_mut(entry).ok_or(StreamWriteError::WrongType)?;
 
         let mut removed = 0i64;
         for id in ids {
@@ -89,7 +98,7 @@ impl Store {
         mode: XTrimMode,
         threshold: StreamId,
         limit: Option<usize>,
-    ) -> Result<i64, ()> {
+    ) -> Result<i64, StreamWriteError> {
         let _trace = profiler::scope("engine::stream::write::xtrim");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
@@ -100,7 +109,7 @@ impl Store {
         let Some(entry) = shard.entries.get_mut(key) else {
             return Ok(0);
         };
-        let stream = get_stream_mut(entry).ok_or(())?;
+        let stream = get_stream_mut(entry).ok_or(StreamWriteError::WrongType)?;
         let before = stream.entries.len();
         apply_trim(stream, mode, threshold, limit);
         Ok((before.saturating_sub(stream.entries.len())) as i64)

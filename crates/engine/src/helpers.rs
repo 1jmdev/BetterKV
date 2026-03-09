@@ -1,11 +1,27 @@
-use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::OnceLock;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use super::{Shard, StoredEntry};
 
 static START: OnceLock<Instant> = OnceLock::new();
 static CACHED_TIME_MS: AtomicU64 = AtomicU64::new(0);
+
+#[inline(always)]
+fn saturating_u128_to_u64(value: u128) -> u64 {
+    match u64::try_from(value) {
+        Ok(value) => value,
+        Err(_) => u64::MAX,
+    }
+}
+
+#[inline(always)]
+fn saturating_u64_to_i64(value: u64) -> i64 {
+    match i64::try_from(value) {
+        Ok(value) => value,
+        Err(_) => i64::MAX,
+    }
+}
 
 pub(super) fn monotonic_now_ms() -> u64 {
     let _trace = profiler::scope("engine::helpers::monotonic_now_ms");
@@ -14,30 +30,23 @@ pub(super) fn monotonic_now_ms() -> u64 {
         return cached;
     }
 
-    let now = START
-        .get_or_init(Instant::now)
-        .elapsed()
-        .as_millis()
-        .try_into()
-        .unwrap_or(u64::MAX);
+    let now = START.get_or_init(Instant::now).elapsed().as_millis();
+    let now = saturating_u128_to_u64(now);
     CACHED_TIME_MS.store(now, Ordering::Relaxed);
     now
 }
 
 pub(super) fn refresh_monotonic_now_ms() {
     let _trace = profiler::scope("engine::helpers::refresh_monotonic_now_ms");
-    let now = START
-        .get_or_init(Instant::now)
-        .elapsed()
-        .as_millis()
-        .try_into()
-        .unwrap_or(u64::MAX);
+    let now = START.get_or_init(Instant::now).elapsed().as_millis();
+    let now = saturating_u128_to_u64(now);
     CACHED_TIME_MS.store(now, Ordering::Relaxed);
 }
 
 pub(super) fn deadline_from_ttl(ttl: Duration) -> u64 {
     let _trace = profiler::scope("engine::helpers::deadline_from_ttl");
-    monotonic_now_ms().saturating_add(ttl.as_millis().try_into().unwrap_or(u64::MAX))
+    let ttl_ms = saturating_u128_to_u64(ttl.as_millis());
+    monotonic_now_ms().saturating_add(ttl_ms)
 }
 
 pub(super) fn remaining_ttl_ms(deadline_ms: u64) -> i64 {
@@ -50,7 +59,7 @@ pub(super) fn remaining_ttl_ms(deadline_ms: u64) -> i64 {
     if deadline_ms <= now_ms {
         0
     } else {
-        (deadline_ms - now_ms).try_into().unwrap_or(i64::MAX)
+        saturating_u64_to_i64(deadline_ms - now_ms)
     }
 }
 

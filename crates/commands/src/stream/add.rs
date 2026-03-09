@@ -1,8 +1,17 @@
 use crate::stream::parse::{parse_stream_id, parse_xadd_id, parse_xtrim_args, stream_id_to_bulk};
-use crate::util::{Args, wrong_args, wrong_type};
-use engine::store::{Store, XTrimMode};
+use crate::util::{wrong_args, wrong_type, Args};
+use engine::store::{Store, StreamWriteError, XTrimMode};
 use protocol::types::RespFrame;
 use types::value::StreamId;
+
+fn stream_write_error_response(error: StreamWriteError) -> RespFrame {
+    match error {
+        StreamWriteError::WrongType => wrong_type(),
+        StreamWriteError::InternalInvariant => {
+            RespFrame::ErrorStatic("ERR internal stream state inconsistency")
+        }
+    }
+}
 
 pub(crate) fn xadd(store: &Store, args: &Args) -> RespFrame {
     let _trace = profiler::scope("commands::stream::add::xadd");
@@ -43,7 +52,7 @@ pub(crate) fn xadd(store: &Store, args: &Args) -> RespFrame {
     match store.xadd(&args[1], id, &fields, trim, nomkstream) {
         Ok(Some(id)) => stream_id_to_bulk(id),
         Ok(None) => RespFrame::Bulk(None),
-        Err(_) => wrong_type(),
+        Err(error) => stream_write_error_response(error),
     }
 }
 
@@ -54,7 +63,7 @@ pub(crate) fn xlen(store: &Store, args: &Args) -> RespFrame {
     }
     match store.xlen(&args[1]) {
         Ok(value) => RespFrame::Integer(value),
-        Err(_) => wrong_type(),
+        Err(error) => stream_write_error_response(error),
     }
 }
 
@@ -72,7 +81,7 @@ pub(crate) fn xdel(store: &Store, args: &Args) -> RespFrame {
     }
     match store.xdel(&args[1], &ids) {
         Ok(value) => RespFrame::Integer(value),
-        Err(_) => wrong_type(),
+        Err(error) => stream_write_error_response(error),
     }
 }
 
@@ -124,6 +133,6 @@ pub(crate) fn xtrim(store: &Store, args: &Args) -> RespFrame {
 
     match store.xtrim(&args[1], mode, threshold, limit) {
         Ok(value) => RespFrame::Integer(value),
-        Err(_) => wrong_type(),
+        Err(error) => stream_write_error_response(error),
     }
 }

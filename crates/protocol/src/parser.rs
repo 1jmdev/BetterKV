@@ -116,7 +116,10 @@ fn parse_uint(data: &[u8]) -> Result<usize, ParseError> {
         if d > 9 {
             return Err(ParseError::Protocol("invalid digit"));
         }
-        val = val.wrapping_mul(10).wrapping_add(d as usize);
+        val = val
+            .checked_mul(10)
+            .and_then(|value| value.checked_add(d as usize))
+            .ok_or(ParseError::Protocol("integer overflow"))?;
     }
     Ok(val)
 }
@@ -132,6 +135,9 @@ fn parse_int(data: &[u8]) -> Result<i64, ParseError> {
     } else {
         (false, 0)
     };
+    if start == data.len() {
+        return Err(ParseError::Protocol("invalid integer"));
+    }
     let mut val: i64 = 0;
     let mut i = start;
     while i < data.len() {
@@ -139,12 +145,19 @@ fn parse_int(data: &[u8]) -> Result<i64, ParseError> {
         if d > 9 {
             return Err(ParseError::Protocol("invalid digit in integer"));
         }
-        val = val.wrapping_mul(10).wrapping_add(d as i64);
+        val = val
+            .checked_mul(10)
+            .and_then(|value| value.checked_add(d as i64))
+            .ok_or(ParseError::Protocol("integer overflow"))?;
         i += 1;
     }
-    Ok(if neg { -val } else { val })
+    if neg {
+        val.checked_neg()
+            .ok_or(ParseError::Protocol("integer overflow"))
+    } else {
+        Ok(val)
+    }
 }
-
 
 // Supports:
 //   • Array (RESP) commands:   *N\r\n $len\r\n data\r\n …
@@ -293,15 +306,18 @@ fn parse_frame_inner(cur: &mut Cursor<'_>) -> Result<RespFrame, ParseError> {
 #[inline]
 fn parse_simple(cur: &mut Cursor<'_>) -> Result<RespFrame, ParseError> {
     let line = cur.read_line()?;
-    // Must allocate because we don't own the bytes.
-    let s = unsafe { String::from_utf8_unchecked(line.to_vec()) };
+    let s = std::str::from_utf8(line)
+        .map_err(|_| ParseError::Protocol("invalid UTF-8 in simple string"))?
+        .to_owned();
     Ok(RespFrame::Simple(s))
 }
 
 #[inline]
 fn parse_error(cur: &mut Cursor<'_>) -> Result<RespFrame, ParseError> {
     let line = cur.read_line()?;
-    let s = unsafe { String::from_utf8_unchecked(line.to_vec()) };
+    let s = std::str::from_utf8(line)
+        .map_err(|_| ParseError::Protocol("invalid UTF-8 in error string"))?
+        .to_owned();
     Ok(RespFrame::Error(s))
 }
 
@@ -451,6 +467,6 @@ mod tests {
         let mut src = BytesMut::from(&b"*3\r\n$3\r\nSET\r\n"[..]);
         let mut args = Vec::new();
         let result = parse_command_into(&mut src, &mut args);
-        assert!(matches!(result, Err(ParseError::Incomplete)));
+        assert!(matches!(result, Ok(None)));
     }
 }

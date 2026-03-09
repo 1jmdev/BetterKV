@@ -20,7 +20,7 @@ pub mod store {
     };
     pub use super::json::{JsonError, JsonPath, JsonPathToken, JsonSetMode, JsonSetResult, JsonType};
     pub use super::strings::{HyperLogLogError, StringIntOpError};
-    pub use super::stream::{StreamRangeItem, XPendingSummary};
+    pub use super::stream::{StreamRangeItem, StreamWriteError, XPendingSummary};
     pub use super::zset::LexBound;
     pub use super::{
         BitFieldEncoding, BitFieldOp, BitFieldOverflow, BitOp, GetExMode, HashFloatOpError,

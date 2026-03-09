@@ -7,6 +7,7 @@ mod write;
 use types::value::{Entry, StreamValue};
 
 pub use stream_types::{StreamRangeItem, XPendingSummary};
+pub use write::StreamWriteError;
 
 fn get_stream(entry: &Entry) -> Option<&StreamValue> {
     let _trace = profiler::scope("engine::stream::get_stream");
