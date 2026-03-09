@@ -1,5 +1,6 @@
 mod geo;
 mod hash;
+mod json;
 pub mod helpers;
 mod keyspace;
 mod list;
@@ -17,6 +18,7 @@ pub mod store {
     pub use super::keyspace::{
         PreDecodedRestoreEntry, RestoreError, SortError, SortOptions, SortOrder, SortResult,
     };
+    pub use super::json::{JsonError, JsonPath, JsonPathToken, JsonSetMode, JsonSetResult, JsonType};
     pub use super::strings::{HyperLogLogError, StringIntOpError};
     pub use super::stream::{StreamRangeItem, XPendingSummary};
     pub use super::zset::LexBound;

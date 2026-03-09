@@ -27,4 +27,5 @@ parking_lot.workspace = true
 thiserror.workspace = true
 ryu.workspace = true
 mlua.workspace = true
+serde_json.workspace = true
 tokio.workspace = true

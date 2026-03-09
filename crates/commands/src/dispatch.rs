@@ -592,6 +592,17 @@ pub fn dispatch_safe(input: &[u8]) -> Option<CommandId> {
                     return Some(CommandId::GetRange);
                 }
             }
+            b'j' => {
+                if eq(input, b"JSON.GET") {
+                    return Some(CommandId::JsonGet);
+                }
+                if eq(input, b"JSON.SET") {
+                    return Some(CommandId::JsonSet);
+                }
+                if eq(input, b"JSON.DEL") {
+                    return Some(CommandId::JsonDel);
+                }
+            }
             b'r' => {
                 if eq(input, b"RENAMENX") {
                     return Some(CommandId::RenameNx);
@@ -628,6 +639,20 @@ pub fn dispatch_safe(input: &[u8]) -> Option<CommandId> {
                 }
                 if eq(input, b"GEORADIUS") {
                     return Some(CommandId::GeoRadius);
+                }
+            }
+            b'j' => {
+                if eq(input, b"JSON.MGET") {
+                    return Some(CommandId::JsonMGet);
+                }
+                if eq(input, b"JSON.MSET") {
+                    return Some(CommandId::JsonMSet);
+                }
+                if eq(input, b"JSON.TYPE") {
+                    return Some(CommandId::JsonType);
+                }
+                if eq(input, b"JSON.RESP") {
+                    return Some(CommandId::JsonResp);
                 }
             }
             b'p' => {
@@ -685,6 +710,17 @@ pub fn dispatch_safe(input: &[u8]) -> Option<CommandId> {
                     return Some(CommandId::PSubscribe);
                 }
             }
+            b'j' => {
+                if eq(input, b"JSON.CLEAR") {
+                    return Some(CommandId::JsonClear);
+                }
+                if eq(input, b"JSON.DEBUG") {
+                    return Some(CommandId::JsonDebug);
+                }
+                if eq(input, b"JSON.MERGE") {
+                    return Some(CommandId::JsonMerge);
+                }
+            }
             b's' => {
                 if eq(input, b"SINTERCARD") {
                     return Some(CommandId::SInterCard);
@@ -721,6 +757,26 @@ pub fn dispatch_safe(input: &[u8]) -> Option<CommandId> {
             b'i' => {
                 if eq(input, b"INCRBYFLOAT") {
                     return Some(CommandId::IncrByFloat);
+                }
+            }
+            b'j' => {
+                if eq(input, b"JSON.ARRLEN") {
+                    return Some(CommandId::JsonArrLen);
+                }
+                if eq(input, b"JSON.ARRPOP") {
+                    return Some(CommandId::JsonArrPop);
+                }
+                if eq(input, b"JSON.FORGET") {
+                    return Some(CommandId::JsonForget);
+                }
+                if eq(input, b"JSON.OBJLEN") {
+                    return Some(CommandId::JsonObjLen);
+                }
+                if eq(input, b"JSON.STRLEN") {
+                    return Some(CommandId::JsonStrLen);
+                }
+                if eq(input, b"JSON.TOGGLE") {
+                    return Some(CommandId::JsonToggle);
                 }
             }
             b's' => {
@@ -770,6 +826,14 @@ pub fn dispatch_safe(input: &[u8]) -> Option<CommandId> {
                     return Some(CommandId::HIncrByFloat);
                 }
             }
+            b'j' => {
+                if eq(input, b"JSON.ARRTRIM") {
+                    return Some(CommandId::JsonArrTrim);
+                }
+                if eq(input, b"JSON.OBJKEYS") {
+                    return Some(CommandId::JsonObjKeys);
+                }
+            }
             b'p' => {
                 if eq(input, b"PUNSUBSCRIBE") {
                     return Some(CommandId::PUnsubscribe);
@@ -779,6 +843,11 @@ pub fn dispatch_safe(input: &[u8]) -> Option<CommandId> {
         },
 
         13 => match f {
+            b'j' => {
+                if eq(input, b"JSON.ARRINDEX") {
+                    return Some(CommandId::JsonArrIndex);
+                }
+            }
             b'z' => {
                 if eq(input, b"ZRANGEBYSCORE") {
                     return Some(CommandId::ZRangeByScore);
@@ -791,6 +860,23 @@ pub fn dispatch_safe(input: &[u8]) -> Option<CommandId> {
             b'g' => {
                 if eq(input, b"GEOSEARCHSTORE") {
                     return Some(CommandId::GeoSearchStore);
+                }
+            }
+            b'j' => {
+                if eq(input, b"JSON.ARRINSERT") {
+                    return Some(CommandId::JsonArrInsert);
+                }
+                if eq(input, b"JSON.STRAPPEND") {
+                    return Some(CommandId::JsonStrAppend);
+                }
+                if eq(input, b"JSON.ARRAPPEND") {
+                    return Some(CommandId::JsonArrAppend);
+                }
+                if eq(input, b"JSON.NUMINCRBY") {
+                    return Some(CommandId::JsonNumIncrBy);
+                }
+                if eq(input, b"JSON.NUMMULTBY") {
+                    return Some(CommandId::JsonNumMultBy);
                 }
             }
             b'z' => {

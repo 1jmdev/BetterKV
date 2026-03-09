@@ -1,6 +1,8 @@
-use crate::dispatch::identify;
 use crate::command::CommandId;
-use crate::{connection, geo, hash, keyspace, list, scripting, set, stream, string, ttl, zset};
+use crate::dispatch::identify;
+use crate::{
+    connection, geo, hash, json, keyspace, list, scripting, set, stream, string, ttl, zset,
+};
 use engine::store::Store;
 use protocol::types::{BulkData, RespFrame};
 use types::value::CompactArg;
@@ -211,6 +213,30 @@ pub fn dispatch_with_id(store: &Store, command: CommandId, args: &[CompactArg]) 
         CommandId::XPending => stream::xpending(store, args),
         CommandId::XReadGroup => stream::xreadgroup(store, args),
         CommandId::XAutoClaim => stream::xautoclaim(store, args),
+        CommandId::JsonArrAppend => json::json_arrappend(store, args),
+        CommandId::JsonArrIndex => json::json_arrindex(store, args),
+        CommandId::JsonArrInsert => json::json_arrinsert(store, args),
+        CommandId::JsonArrLen => json::json_arrlen(store, args),
+        CommandId::JsonArrPop => json::json_arrpop(store, args),
+        CommandId::JsonArrTrim => json::json_arrtrim(store, args),
+        CommandId::JsonClear => json::json_clear(store, args),
+        CommandId::JsonDebug => json::json_debug(store, args),
+        CommandId::JsonDel => json::json_del(store, args),
+        CommandId::JsonForget => json::json_forget(store, args),
+        CommandId::JsonGet => json::json_get(store, args),
+        CommandId::JsonMerge => json::json_merge(store, args),
+        CommandId::JsonMGet => json::json_mget(store, args),
+        CommandId::JsonMSet => json::json_mset(store, args),
+        CommandId::JsonNumIncrBy => json::json_numincrby(store, args),
+        CommandId::JsonNumMultBy => json::json_nummultby(store, args),
+        CommandId::JsonObjKeys => json::json_objkeys(store, args),
+        CommandId::JsonObjLen => json::json_objlen(store, args),
+        CommandId::JsonResp => json::json_resp(store, args),
+        CommandId::JsonSet => json::json_set(store, args),
+        CommandId::JsonStrAppend => json::json_strappend(store, args),
+        CommandId::JsonStrLen => json::json_strlen(store, args),
+        CommandId::JsonToggle => json::json_toggle(store, args),
+        CommandId::JsonType => json::json_type(store, args),
         CommandId::Exists => keyspace::exists(store, args),
         CommandId::Touch => keyspace::touch(store, args),
         CommandId::Unlink => keyspace::unlink(store, args),

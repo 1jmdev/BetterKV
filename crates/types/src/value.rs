@@ -11,6 +11,7 @@ use std::slice;
 use ahash::RandomState;
 use hashbrown::HashMap;
 use indexmap::IndexSet;
+use serde_json::Value as JsonValue;
 
 const INLINE_BYTES_CAPACITY: usize = 15;
 const INLINE_VALUE_CAPACITY: usize = 15;
@@ -438,6 +439,7 @@ pub enum Entry {
     ZSet(Box<ZSetValueMap>),
     Geo(Box<GeoValue>),
     Stream(Box<StreamValue>),
+    Json(Box<JsonValue>),
 }
 
 impl Entry {
@@ -465,7 +467,8 @@ impl Entry {
             | Self::Set(_)
             | Self::ZSet(_)
             | Self::Geo(_)
-            | Self::Stream(_) => None,
+            | Self::Stream(_)
+            | Self::Json(_) => None,
         }
     }
 
@@ -478,7 +481,8 @@ impl Entry {
             | Self::Set(_)
             | Self::ZSet(_)
             | Self::Geo(_)
-            | Self::Stream(_) => None,
+            | Self::Stream(_)
+            | Self::Json(_) => None,
         }
     }
 
@@ -491,7 +495,8 @@ impl Entry {
             | Self::Set(_)
             | Self::ZSet(_)
             | Self::Geo(_)
-            | Self::Stream(_) => None,
+            | Self::Stream(_)
+            | Self::Json(_) => None,
         }
     }
 
@@ -505,6 +510,7 @@ impl Entry {
             Self::ZSet(_) => None,
             Self::Geo(_) => None,
             Self::Stream(_) => None,
+            Self::Json(_) => None,
         }
     }
 
@@ -517,7 +523,8 @@ impl Entry {
             | Self::Set(_)
             | Self::ZSet(_)
             | Self::Geo(_)
-            | Self::Stream(_) => None,
+            | Self::Stream(_)
+            | Self::Json(_) => None,
         }
     }
 
@@ -530,7 +537,8 @@ impl Entry {
             | Self::Set(_)
             | Self::ZSet(_)
             | Self::Geo(_)
-            | Self::Stream(_) => None,
+            | Self::Stream(_)
+            | Self::Json(_) => None,
         }
     }
 
@@ -543,7 +551,8 @@ impl Entry {
             | Self::List(_)
             | Self::ZSet(_)
             | Self::Geo(_)
-            | Self::Stream(_) => None,
+            | Self::Stream(_)
+            | Self::Json(_) => None,
         }
     }
 
@@ -556,7 +565,8 @@ impl Entry {
             | Self::List(_)
             | Self::ZSet(_)
             | Self::Geo(_)
-            | Self::Stream(_) => None,
+            | Self::Stream(_)
+            | Self::Json(_) => None,
         }
     }
 
@@ -569,7 +579,8 @@ impl Entry {
             | Self::List(_)
             | Self::Set(_)
             | Self::Geo(_)
-            | Self::Stream(_) => None,
+            | Self::Stream(_)
+            | Self::Json(_) => None,
         }
     }
 
@@ -582,7 +593,8 @@ impl Entry {
             | Self::List(_)
             | Self::Set(_)
             | Self::Geo(_)
-            | Self::Stream(_) => None,
+            | Self::Stream(_)
+            | Self::Json(_) => None,
         }
     }
 
@@ -595,7 +607,8 @@ impl Entry {
             | Self::List(_)
             | Self::Set(_)
             | Self::ZSet(_)
-            | Self::Stream(_) => None,
+            | Self::Stream(_)
+            | Self::Json(_) => None,
         }
     }
 
@@ -608,7 +621,8 @@ impl Entry {
             | Self::List(_)
             | Self::Set(_)
             | Self::ZSet(_)
-            | Self::Stream(_) => None,
+            | Self::Stream(_)
+            | Self::Json(_) => None,
         }
     }
 
@@ -621,7 +635,8 @@ impl Entry {
             | Self::List(_)
             | Self::Set(_)
             | Self::ZSet(_)
-            | Self::Geo(_) => None,
+            | Self::Geo(_)
+            | Self::Json(_) => None,
         }
     }
 
@@ -634,7 +649,36 @@ impl Entry {
             | Self::List(_)
             | Self::Set(_)
             | Self::ZSet(_)
-            | Self::Geo(_) => None,
+            | Self::Geo(_)
+            | Self::Json(_) => None,
+        }
+    }
+
+    pub fn as_json(&self) -> Option<&JsonValue> {
+        let _trace = profiler::scope("crates::types::src::value::as_json");
+        match self {
+            Self::Json(value) => Some(value),
+            Self::String(_)
+            | Self::Hash(_)
+            | Self::List(_)
+            | Self::Set(_)
+            | Self::ZSet(_)
+            | Self::Geo(_)
+            | Self::Stream(_) => None,
+        }
+    }
+
+    pub fn as_json_mut(&mut self) -> Option<&mut JsonValue> {
+        let _trace = profiler::scope("crates::types::src::value::as_json_mut");
+        match self {
+            Self::Json(value) => Some(value),
+            Self::String(_)
+            | Self::Hash(_)
+            | Self::List(_)
+            | Self::Set(_)
+            | Self::ZSet(_)
+            | Self::Geo(_)
+            | Self::Stream(_) => None,
         }
     }
 
@@ -648,6 +692,7 @@ impl Entry {
             Self::ZSet(_) => "zset",
             Self::Geo(_) => "zset",
             Self::Stream(_) => "stream",
+            Self::Json(_) => "json",
         }
     }
 }

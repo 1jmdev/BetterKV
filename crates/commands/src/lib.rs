@@ -4,6 +4,7 @@ pub mod dispatch;
 pub mod dispatcher;
 pub mod geo;
 pub mod hash;
+pub mod json;
 pub mod keyspace;
 pub mod list;
 pub mod scripting;

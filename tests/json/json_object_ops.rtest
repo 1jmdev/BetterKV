@@ -27,7 +27,7 @@ JSON.SET obj $ '{}'
 RUN:
 JSON.OBJKEYS obj $
 EXPECT:
-(empty)
+(empty array)
 
 ---
 

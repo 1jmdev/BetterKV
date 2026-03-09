@@ -464,7 +464,7 @@ impl Store {
                 .map(|(member, _)| member.to_vec())
                 .collect::<Vec<_>>(),
             Entry::Geo(geo) => geo.keys().map(CompactKey::to_vec).collect::<Vec<_>>(),
-            Entry::String(_) | Entry::Hash(_) | Entry::Stream(_) => {
+            Entry::String(_) | Entry::Hash(_) | Entry::Stream(_) | Entry::Json(_) => {
                 return Err(SortError::WrongType);
             }
         };
@@ -594,6 +594,11 @@ fn serialize_entry(entry: &Entry) -> Vec<u8> {
                 }
             }
         }
+        Entry::Json(value) => {
+            out.push(7);
+            let encoded = serde_json::to_vec(value).unwrap_or_default();
+            write_bytes(&mut out, &encoded);
+        }
     }
     out
 }
@@ -691,6 +696,14 @@ fn deserialize_entry(payload: &[u8]) -> Option<Entry> {
                 return None;
             }
             Some(Entry::Geo(Box::new(geo)))
+        }
+        7 => {
+            let value = read_bytes(&mut input)?;
+            if !input.is_empty() {
+                return None;
+            }
+            let value = serde_json::from_slice(&value).ok()?;
+            Some(Entry::Json(Box::new(value)))
         }
         6 => {
             let count = read_u32(&mut input)? as usize;
