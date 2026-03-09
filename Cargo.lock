@@ -113,7 +113,6 @@ version = "0.1.0"
 dependencies = [
  "bytes",
  "clap",
- "criterion",
  "itoa",
  "protocol",
  "tikv-jemallocator",
