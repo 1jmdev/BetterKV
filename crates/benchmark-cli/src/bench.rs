@@ -1,6 +1,10 @@
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::thread;
+use std::time::Duration;
 use std::time::Instant;
+
+use std::io::{self, Write};
 
 use bytes::BytesMut;
 use protocol::parser::{self, ParseError};
@@ -9,7 +13,7 @@ use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
 
-use crate::args::Args;
+use crate::args::{Args, Connection};
 use crate::resp::{
     ExpectedResponse, encode_expected_response, encode_resp_parts, make_key, read_n_responses,
     read_n_strict_responses, read_n_unchecked_responses, repeat_payload,
@@ -28,15 +32,18 @@ struct WorkerStats {
 
 pub struct BenchResult {
     pub name: String,
-    pub scenario: Option<&'static str>,
     pub requests: u64,
+    pub warmup_requests: u64,
     pub clients: usize,
     pub elapsed_secs: f64,
     pub req_per_sec: f64,
     pub avg_ms: f64,
+    pub min_ms: f64,
     pub p50_ms: f64,
     pub p95_ms: f64,
     pub p99_ms: f64,
+    pub max_ms: f64,
+    pub samples_ns: Vec<u64>,
     pub data_size: usize,
     pub pipeline: usize,
     pub random_keys: bool,
@@ -46,9 +53,17 @@ pub struct BenchResult {
 struct Shared {
     host: String,
     port: u16,
-    auth: Option<String>,
+    user: Option<String>,
+    password: Option<String>,
     strict: bool,
     spec: BenchRun,
+    progress: Arc<ProgressState>,
+}
+
+struct ProgressState {
+    completed: AtomicU64,
+    latency_ns: AtomicU64,
+    stop: AtomicBool,
 }
 
 struct ResponseModel {
@@ -210,32 +225,50 @@ fn has_fixed_response_shape(kind: BenchKind) -> bool {
 #[derive(Clone, Copy)]
 struct ClientPlan {
     client_id: u64,
-    quota: u64,
+    warmup_quota: u64,
+    tracked_quota: u64,
 }
 
-pub async fn run_single_benchmark(_args: &Args, spec: BenchRun) -> Result<BenchResult, String> {
-    let clients = spec.clients.min(spec.requests as usize).max(1);
-    let base = spec.requests / clients as u64;
-    let extra = (spec.requests % clients as u64) as usize;
+pub async fn run_single_benchmark(
+    args: &Args,
+    connection: &Connection,
+    spec: BenchRun,
+) -> Result<BenchResult, String> {
+    let total_ops = spec.requests.saturating_add(spec.warmup_requests);
+    let clients = spec.clients.min(total_ops.max(1) as usize).max(1);
+    let tracked_base = spec.requests / clients as u64;
+    let tracked_extra = (spec.requests % clients as u64) as usize;
+    let warmup_base = spec.warmup_requests / clients as u64;
+    let warmup_extra = (spec.warmup_requests % clients as u64) as usize;
 
-    let shared = Arc::new(Shared {
-        host: _args.host.clone(),
-        port: _args.port,
-        auth: _args.auth.clone(),
-        strict: _args.strict,
-        spec,
+    let progress = Arc::new(ProgressState {
+        completed: AtomicU64::new(0),
+        latency_ns: AtomicU64::new(0),
+        stop: AtomicBool::new(false),
     });
 
-    let thread_count = _args.threads.min(clients).max(1);
+    let shared = Arc::new(Shared {
+        host: connection.host.clone(),
+        port: connection.port,
+        user: connection.user.clone(),
+        password: connection.password.clone(),
+        strict: args.strict,
+        spec,
+        progress: Arc::clone(&progress),
+    });
+
+    let thread_count = args.threads.min(clients).max(1);
     let mut plans = Vec::with_capacity(clients);
     for client_id in 0..clients {
-        let quota = base + u64::from(client_id < extra);
-        if quota == 0 {
+        let tracked_quota = tracked_base + u64::from(client_id < tracked_extra);
+        let warmup_quota = warmup_base + u64::from(client_id < warmup_extra);
+        if tracked_quota == 0 && warmup_quota == 0 {
             continue;
         }
         plans.push(ClientPlan {
             client_id: client_id as u64,
-            quota,
+            warmup_quota,
+            tracked_quota,
         });
     }
 
@@ -245,6 +278,14 @@ pub async fn run_single_benchmark(_args: &Args, spec: BenchRun) -> Result<BenchR
     }
 
     let start = Instant::now();
+    let progress_handle = if !args.quiet && !args.csv {
+        let state = Arc::clone(&progress);
+        let name = shared.spec.name.clone();
+        Some(thread::spawn(move || progress_loop(&name, state, start)))
+    } else {
+        None
+    };
+
     let mut handles = Vec::with_capacity(thread_count);
     for (thread_index, shard) in shards.into_iter().enumerate() {
         if shard.is_empty() {
@@ -271,6 +312,12 @@ pub async fn run_single_benchmark(_args: &Args, spec: BenchRun) -> Result<BenchR
         }
     }
 
+    progress.stop.store(true, Ordering::Relaxed);
+    if let Some(handle) = progress_handle {
+        let _ = handle.join();
+        println!();
+    }
+
     let elapsed = start.elapsed();
     let elapsed_secs = elapsed.as_secs_f64();
     if total_completed == 0 || elapsed_secs == 0.0 {
@@ -279,21 +326,26 @@ pub async fn run_single_benchmark(_args: &Args, spec: BenchRun) -> Result<BenchR
 
     samples.sort_unstable();
     let avg_ms = elapsed_secs * 1000.0 / total_completed as f64;
+    let min_ms = samples.first().copied().unwrap_or(0) as f64 / 1_000_000.0;
     let p50_ms = percentile_ms(&samples, 0.50);
     let p95_ms = percentile_ms(&samples, 0.95);
     let p99_ms = percentile_ms(&samples, 0.99);
+    let max_ms = samples.last().copied().unwrap_or(0) as f64 / 1_000_000.0;
 
     Ok(BenchResult {
         name: shared.spec.name.clone(),
-        scenario: shared.spec.scenario,
         requests: total_completed,
+        warmup_requests: shared.spec.warmup_requests,
         clients,
         elapsed_secs,
         req_per_sec: total_completed as f64 / elapsed_secs,
         avg_ms,
+        min_ms,
         p50_ms,
         p95_ms,
         p99_ms,
+        max_ms,
+        samples_ns: samples,
         data_size: shared.spec.data_size,
         pipeline: shared.spec.pipeline,
         random_keys: shared.spec.random_keys,
@@ -312,7 +364,7 @@ fn run_thread_shard(cfg: Arc<Shared>, shard: Vec<ClientPlan>) -> Result<Vec<Work
         for plan in shard {
             let worker_cfg = Arc::clone(&cfg);
             handles.push(tokio::spawn(async move {
-                run_worker(plan.client_id, plan.quota, worker_cfg).await
+                run_worker(plan.client_id, plan.warmup_quota, plan.tracked_quota, worker_cfg).await
             }));
         }
 
@@ -328,7 +380,12 @@ fn run_thread_shard(cfg: Arc<Shared>, shard: Vec<ClientPlan>) -> Result<Vec<Work
     })
 }
 
-async fn run_worker(client_id: u64, quota: u64, cfg: Arc<Shared>) -> Result<WorkerStats, String> {
+async fn run_worker(
+    client_id: u64,
+    mut warmup_remaining: u64,
+    mut tracked_remaining: u64,
+    cfg: Arc<Shared>,
+) -> Result<WorkerStats, String> {
     let addr = format!("{}:{}", cfg.host, cfg.port);
     let mut stream = TcpStream::connect(&addr)
         .await
@@ -339,8 +396,12 @@ async fn run_worker(client_id: u64, quota: u64, cfg: Arc<Shared>) -> Result<Work
 
     let mut parse_buf = BytesMut::with_capacity(8192);
 
-    if let Some(pass) = cfg.auth.as_deref() {
-        let auth = encode_resp_parts(&[b"AUTH", pass.as_bytes()]);
+    if let Some(pass) = cfg.password.as_deref() {
+        let auth = if let Some(user) = cfg.user.as_deref() {
+            encode_resp_parts(&[b"AUTH", user.as_bytes(), pass.as_bytes()])
+        } else {
+            encode_resp_parts(&[b"AUTH", pass.as_bytes()])
+        };
         stream
             .write_all(&auth)
             .await
@@ -380,10 +441,14 @@ async fn run_worker(client_id: u64, quota: u64, cfg: Arc<Shared>) -> Result<Work
             script_sha.as_deref(),
         );
         let full_batch = repeat_payload(&one, cfg.spec.pipeline);
-        let mut remaining = quota;
-
-        while remaining > 0 {
-            let batch = remaining.min(cfg.spec.pipeline as u64) as usize;
+        while warmup_remaining > 0 || tracked_remaining > 0 {
+            let phase_remaining = if warmup_remaining > 0 {
+                warmup_remaining
+            } else {
+                tracked_remaining
+            };
+            let batch = phase_remaining.min(cfg.spec.pipeline as u64) as usize;
+            let track = warmup_remaining == 0;
             let expected = if cfg.strict {
                 (0..batch)
                     .map(|_| response_model.expected(0))
@@ -422,18 +487,31 @@ async fn run_worker(client_id: u64, quota: u64, cfg: Arc<Shared>) -> Result<Work
                 read_n_unchecked_responses(&mut stream, &mut parse_buf, &encoded).await?;
             }
 
-            let per_req_ns =
-                (started.elapsed().as_nanos() / batch as u128).min(u128::from(u64::MAX));
-            stats.lat_samples_ns.push(per_req_ns as u64);
-            stats.completed += batch as u64;
-            remaining -= batch as u64;
+            if track {
+                let elapsed_ns = started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64;
+                let per_req_ns = (elapsed_ns as u128 / batch as u128).min(u128::from(u64::MAX));
+                stats.lat_samples_ns.push(per_req_ns as u64);
+                stats.completed += batch as u64;
+                cfg.progress.completed.fetch_add(batch as u64, Ordering::Relaxed);
+                cfg.progress
+                    .latency_ns
+                    .fetch_add(elapsed_ns, Ordering::Relaxed);
+                tracked_remaining = tracked_remaining.saturating_sub(batch as u64);
+            } else {
+                warmup_remaining = warmup_remaining.saturating_sub(batch as u64);
+            }
         }
         return Ok(stats);
     }
 
-    let mut remaining = quota;
-    while remaining > 0 {
-        let batch = remaining.min(cfg.spec.pipeline as u64) as usize;
+    while warmup_remaining > 0 || tracked_remaining > 0 {
+        let phase_remaining = if warmup_remaining > 0 {
+            warmup_remaining
+        } else {
+            tracked_remaining
+        };
+        let batch = phase_remaining.min(cfg.spec.pipeline as u64) as usize;
+        let track = warmup_remaining == 0;
         let mut payload = Vec::with_capacity(batch * (cfg.spec.data_size + 128));
         let mut expected = Vec::with_capacity(batch);
         let mut encoded = Vec::with_capacity(batch);
@@ -464,13 +542,68 @@ async fn run_worker(client_id: u64, quota: u64, cfg: Arc<Shared>) -> Result<Work
             read_n_unchecked_responses(&mut stream, &mut parse_buf, &encoded).await?;
         }
 
-        let per_req_ns = (started.elapsed().as_nanos() / batch as u128).min(u128::from(u64::MAX));
-        stats.lat_samples_ns.push(per_req_ns as u64);
-        stats.completed += batch as u64;
-        remaining -= batch as u64;
+        if track {
+            let elapsed_ns = started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64;
+            let per_req_ns = (elapsed_ns as u128 / batch as u128).min(u128::from(u64::MAX));
+            stats.lat_samples_ns.push(per_req_ns as u64);
+            stats.completed += batch as u64;
+            cfg.progress.completed.fetch_add(batch as u64, Ordering::Relaxed);
+            cfg.progress
+                .latency_ns
+                .fetch_add(elapsed_ns, Ordering::Relaxed);
+            tracked_remaining = tracked_remaining.saturating_sub(batch as u64);
+        } else {
+            warmup_remaining = warmup_remaining.saturating_sub(batch as u64);
+        }
     }
 
     Ok(stats)
+}
+
+fn progress_loop(name: &str, state: Arc<ProgressState>, started: Instant) {
+    let mut last_count = 0u64;
+    let mut last_latency = 0u64;
+    let mut last_tick = started;
+
+    loop {
+        thread::sleep(Duration::from_millis(1000));
+
+        let total = state.completed.load(Ordering::Relaxed);
+        let total_latency = state.latency_ns.load(Ordering::Relaxed);
+        let now = Instant::now();
+
+        let dt = now.duration_since(last_tick).as_secs_f64().max(0.000_001);
+        let elapsed = now.duration_since(started).as_secs_f64().max(0.000_001);
+        let delta = total.saturating_sub(last_count);
+        let delta_latency = total_latency.saturating_sub(last_latency);
+
+        let rps = delta as f64 / dt;
+        let overall_rps = total as f64 / elapsed;
+        let avg_ms = if delta == 0 {
+            0.0
+        } else {
+            delta_latency as f64 / delta as f64 / 1_000_000.0
+        };
+        let overall_avg_ms = if total == 0 {
+            0.0
+        } else {
+            total_latency as f64 / total as f64 / 1_000_000.0
+        };
+
+        print!(
+            "\rT: rps={:.1} (overall: {:.1}) avg_msec={:.3} (overall: {:.3}) - {}",
+            rps, overall_rps, avg_ms, overall_avg_ms, name
+        );
+        let _ = io::stdout().flush();
+
+        last_count = total;
+        last_latency = total_latency;
+        last_tick = now;
+
+        if state.stop.load(Ordering::Relaxed) {
+            break;
+        }
+    }
 }
 
 async fn setup_worker_state(
