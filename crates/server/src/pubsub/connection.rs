@@ -23,14 +23,14 @@ impl ConnectionPubSub {
     pub fn subscribe(&mut self, hub: &PubSubHub, channel: &[u8], tx: &UnboundedSender<RespFrame>) {
         let _trace = profiler::scope("server::pubsub::subscribe");
         if self.channels.insert(channel.to_vec()) {
-            let _ = hub.subscribe(self.id, channel, tx);
+            hub.subscribe(self.id, channel, tx);
         }
     }
 
     pub fn unsubscribe(&mut self, hub: &PubSubHub, channel: &[u8]) -> bool {
         let _trace = profiler::scope("server::pubsub::unsubscribe");
         if self.channels.remove(channel) {
-            let _ = hub.unsubscribe(self.id, channel);
+            hub.unsubscribe(self.id, channel);
             true
         } else {
             false
@@ -40,14 +40,14 @@ impl ConnectionPubSub {
     pub fn psubscribe(&mut self, hub: &PubSubHub, pattern: &[u8], tx: &UnboundedSender<RespFrame>) {
         let _trace = profiler::scope("server::pubsub::psubscribe");
         if self.patterns.insert(pattern.to_vec()) {
-            let _ = hub.psubscribe(self.id, pattern, tx);
+            hub.psubscribe(self.id, pattern, tx);
         }
     }
 
     pub fn punsubscribe(&mut self, hub: &PubSubHub, pattern: &[u8]) -> bool {
         let _trace = profiler::scope("server::pubsub::punsubscribe");
         if self.patterns.remove(pattern) {
-            let _ = hub.punsubscribe(self.id, pattern);
+            hub.punsubscribe(self.id, pattern);
             true
         } else {
             false
@@ -58,7 +58,7 @@ impl ConnectionPubSub {
         let _trace = profiler::scope("server::pubsub::unsubscribe_all");
         let channels = self.channels.drain().collect::<Vec<_>>();
         for channel in &channels {
-            let _ = hub.unsubscribe(self.id, channel);
+            hub.unsubscribe(self.id, channel);
         }
         channels
     }
@@ -67,7 +67,7 @@ impl ConnectionPubSub {
         let _trace = profiler::scope("server::pubsub::punsubscribe_all");
         let patterns = self.patterns.drain().collect::<Vec<_>>();
         for pattern in &patterns {
-            let _ = hub.punsubscribe(self.id, pattern);
+            hub.punsubscribe(self.id, pattern);
         }
         patterns
     }

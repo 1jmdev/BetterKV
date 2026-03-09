@@ -204,10 +204,7 @@ fn client_command(client_state: &mut ClientState, args: &[CompactArg]) -> RespFr
         return RespFrame::error_static("ERR syntax error");
     }
 
-    RespFrame::Error(format!(
-        "ERR unknown subcommand '{}'.",
-        String::from_utf8_lossy(sub)
-    ))
+    unknown_subcommand_error(sub)
 }
 
 fn auth_command(
@@ -349,7 +346,9 @@ fn subscribe_command(
         pubsub_state.subscribe(hub, channel, push_tx);
         responses.push(RespFrame::Array(Some(vec![
             bulk_static(b"subscribe"),
-            RespFrame::Bulk(Some(BulkData::Arg(channel.clone()))),
+            RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(
+                channel.as_slice(),
+            )))),
             RespFrame::Integer(pubsub_state.subscription_count()),
         ])));
     }
@@ -370,12 +369,18 @@ fn unsubscribe_command(
             existing.into_iter().map(CompactArg::from_vec).collect()
         }
     } else {
-        let mut out = Vec::with_capacity(args.len() - 1);
+        let mut responses = Vec::with_capacity(args.len() - 1);
         for channel in &args[1..] {
-            let _ = pubsub_state.unsubscribe(hub, channel);
-            out.push(channel.clone());
+            pubsub_state.unsubscribe(hub, channel);
+            responses.push(RespFrame::Array(Some(vec![
+                bulk_static(b"unsubscribe"),
+                RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(
+                    channel.as_slice(),
+                )))),
+                RespFrame::Integer(pubsub_state.subscription_count()),
+            ])));
         }
-        out
+        return collapse_pubsub_responses(responses);
     };
 
     let mut responses = Vec::with_capacity(channels.len());
@@ -409,7 +414,9 @@ fn psubscribe_command(
         pubsub_state.psubscribe(hub, pattern, push_tx);
         responses.push(RespFrame::Array(Some(vec![
             bulk_static(b"psubscribe"),
-            RespFrame::Bulk(Some(BulkData::Arg(pattern.clone()))),
+            RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(
+                pattern.as_slice(),
+            )))),
             RespFrame::Integer(pubsub_state.subscription_count()),
         ])));
     }
@@ -430,12 +437,18 @@ fn punsubscribe_command(
             existing.into_iter().map(CompactArg::from_vec).collect()
         }
     } else {
-        let mut out = Vec::with_capacity(args.len() - 1);
+        let mut responses = Vec::with_capacity(args.len() - 1);
         for pattern in &args[1..] {
-            let _ = pubsub_state.punsubscribe(hub, pattern);
-            out.push(pattern.clone());
+            pubsub_state.punsubscribe(hub, pattern);
+            responses.push(RespFrame::Array(Some(vec![
+                bulk_static(b"punsubscribe"),
+                RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(
+                    pattern.as_slice(),
+                )))),
+                RespFrame::Integer(pubsub_state.subscription_count()),
+            ])));
         }
-        out
+        return collapse_pubsub_responses(responses);
     };
 
     let mut responses = Vec::with_capacity(patterns.len());
@@ -498,10 +511,7 @@ fn pubsub_command(hub: &PubSubHub, args: &[CompactArg]) -> RespFrame {
         return RespFrame::Integer(hub.pubsub_numpat());
     }
 
-    RespFrame::Error(format!(
-        "ERR unknown subcommand '{}'.",
-        String::from_utf8_lossy(subcommand)
-    ))
+    unknown_subcommand_error(subcommand)
 }
 
 fn config_command(hub: &PubSubHub, args: &[CompactArg]) -> RespFrame {
@@ -555,6 +565,10 @@ fn config_command(hub: &PubSubHub, args: &[CompactArg]) -> RespFrame {
         return RespFrame::ok();
     }
 
+    unknown_subcommand_error(subcommand)
+}
+
+fn unknown_subcommand_error(subcommand: &[u8]) -> RespFrame {
     RespFrame::Error(format!(
         "ERR unknown subcommand '{}'.",
         String::from_utf8_lossy(subcommand)

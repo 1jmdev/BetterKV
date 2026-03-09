@@ -10,13 +10,17 @@ pub(crate) async fn shutdown_signal() {
                 }
             }
             Err(_) => {
-                let _ = tokio::signal::ctrl_c().await;
+                if let Err(err) = tokio::signal::ctrl_c().await {
+                    tracing::warn!(error = %err, "failed to listen for ctrl-c signal");
+                }
             }
         }
     }
 
     #[cfg(not(unix))]
     {
-        let _ = tokio::signal::ctrl_c().await;
+        if let Err(err) = tokio::signal::ctrl_c().await {
+            tracing::warn!(error = %err, "failed to listen for ctrl-c signal");
+        }
     }
 }

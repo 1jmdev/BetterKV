@@ -12,7 +12,7 @@ pub(crate) fn spawn_expiry_sweeper(store: Store, interval: Duration) {
     tokio::spawn(async move {
         loop {
             sleep(interval).await;
-            let _ = block_in_place(|| store.sweep_expired());
+            block_in_place(|| store.sweep_expired());
         }
     });
 }
@@ -32,7 +32,7 @@ pub(crate) fn spawn_periodic_snapshot(store: Store, snapshot_path: PathBuf, inte
     tokio::spawn(async move {
         loop {
             sleep(interval).await;
-            let _ = write_snapshot_with_log(store.clone(), snapshot_path.clone(), "periodic").await;
+            write_snapshot_with_log(store.clone(), snapshot_path.clone(), "periodic").await;
         }
     });
 }

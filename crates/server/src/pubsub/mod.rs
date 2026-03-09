@@ -235,11 +235,11 @@ impl PubSubHub {
 
         if notifications_enabled_keyspace(mask) {
             let channel = make_notification_channel(b"__keyspace@0__:", key);
-            let _ = self.publish(&channel, event);
+            self.publish(&channel, event);
         }
         if notifications_enabled_keyevent(mask) {
             let channel = make_notification_channel(b"__keyevent@0__:", event);
-            let _ = self.publish(&channel, key);
+            self.publish(&channel, key);
         }
     }
 

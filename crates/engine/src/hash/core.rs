@@ -86,7 +86,10 @@ impl Store {
 
         let mut created = 0;
         for chunk in pairs.chunks_exact(2) {
-            if map.insert(chunk[0].clone(), chunk[1].clone()).is_none() {
+            let [field, value] = chunk else {
+                continue;
+            };
+            if map.insert(field.clone(), value.clone()).is_none() {
                 created += 1;
             }
         }

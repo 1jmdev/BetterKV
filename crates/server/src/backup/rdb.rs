@@ -208,7 +208,7 @@ pub(super) fn parse_rdb(input: &[u8]) -> Result<Vec<LoadedEntry>, String> {
         match op {
             OP_EOF => break,
             OP_SELECTDB => {
-                let _ = decode_len(input, &mut cursor)?;
+                decode_len(input, &mut cursor)?;
                 expire_at_s = None;
             }
             OP_EXPIRETIME => {
@@ -226,12 +226,12 @@ pub(super) fn parse_rdb(input: &[u8]) -> Result<Vec<LoadedEntry>, String> {
                 expire_at_s = Some(expire_s_u32);
             }
             0xFA => {
-                let _ = decode_string(input, &mut cursor)?;
-                let _ = decode_string(input, &mut cursor)?;
+                decode_string(input, &mut cursor)?;
+                decode_string(input, &mut cursor)?;
             }
             0xFB => {
-                let _ = decode_len(input, &mut cursor)?;
-                let _ = decode_len(input, &mut cursor)?;
+                decode_len(input, &mut cursor)?;
+                decode_len(input, &mut cursor)?;
             }
             TYPE_STRING | TYPE_LIST | TYPE_SET | TYPE_ZSET | TYPE_HASH => {
                 let key = decode_string(input, &mut cursor)?;

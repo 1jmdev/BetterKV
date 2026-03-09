@@ -120,8 +120,8 @@ pub async fn handle_connection(
         }
     };
 
-    let _ = pubsub_state.unsubscribe_all(&pubsub_hub);
-    let _ = pubsub_state.punsubscribe_all(&pubsub_hub);
+    pubsub_state.unsubscribe_all(&pubsub_hub);
+    pubsub_state.punsubscribe_all(&pubsub_hub);
     result
 }
 
