@@ -71,6 +71,7 @@ pub async fn read_n_strict_responses(
     parse_buf: &mut BytesMut,
     expected: &[ExpectedResponse],
     encoded: &[Option<Vec<u8>>],
+    mut on_response: impl FnMut() -> Result<(), String>,
 ) -> Result<(), String> {
     for (expected_response, encoded_response) in expected.iter().zip(encoded.iter()) {
         if let Some(encoded_response) = encoded_response {
@@ -79,6 +80,7 @@ pub async fn read_n_strict_responses(
             let frame = read_one_response(stream, parse_buf).await?;
             validate_response(expected_response, &frame)?;
         }
+        on_response()?;
     }
 
     Ok(())
@@ -88,6 +90,7 @@ pub async fn read_n_unchecked_responses(
     stream: &mut TcpStream,
     parse_buf: &mut BytesMut,
     encoded: &[Option<Vec<u8>>],
+    mut on_response: impl FnMut() -> Result<(), String>,
 ) -> Result<(), String> {
     for encoded_response in encoded {
         if let Some(encoded) = encoded_response {
@@ -95,6 +98,7 @@ pub async fn read_n_unchecked_responses(
         } else {
             skip_one_response(stream, parse_buf).await?;
         }
+        on_response()?;
     }
 
     Ok(())

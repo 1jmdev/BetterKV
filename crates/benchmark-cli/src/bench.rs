@@ -5,6 +5,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 use bytes::BytesMut;
+use hdrhistogram::Histogram;
 use indicatif::{ProgressBar, ProgressStyle};
 use protocol::parser::{self, ParseError};
 use protocol::types::{BulkData, RespFrame};
@@ -23,16 +24,20 @@ const SCRIPT_SET_BODY: &[u8] = b"redis.call('SET', KEYS[1], ARGV[1]); return ARG
 const SCRIPT_GET_BODY: &[u8] = b"return redis.call('GET', KEYS[1])";
 const SETUP_BATCH: usize = 64;
 
-#[derive(Default)]
 struct WorkerStats {
     completed: u64,
-    latencies: Vec<LatencyObservation>,
+    histogram: Histogram<u64>,
+    total_latency_ns: u64,
 }
 
-#[derive(Clone, Copy)]
-pub struct LatencyObservation {
-    pub per_request_ns: u64,
-    pub request_count: u64,
+impl WorkerStats {
+    fn new() -> Result<Self, String> {
+        Ok(Self {
+            completed: 0,
+            histogram: latency_histogram()?,
+            total_latency_ns: 0,
+        })
+    }
 }
 
 pub struct BenchResult {
@@ -48,7 +53,7 @@ pub struct BenchResult {
     pub p95_ms: f64,
     pub p99_ms: f64,
     pub max_ms: f64,
-    pub latencies: Vec<LatencyObservation>,
+    pub histogram: Histogram<u64>,
     pub data_size: usize,
     pub pipeline: usize,
     pub random_keys: bool,
@@ -317,7 +322,7 @@ pub async fn run_single_benchmark(
     }
 
     let mut total_completed = 0u64;
-    let mut latencies = Vec::<LatencyObservation>::new();
+    let mut histogram = latency_histogram()?;
     let mut total_latency_ns = 0u64;
     for handle in handles {
         let thread_stats = handle
@@ -325,11 +330,10 @@ pub async fn run_single_benchmark(
             .map_err(|_| "benchmark thread panicked".to_string())??;
         for stats in thread_stats {
             total_completed += stats.completed;
-            for latency in stats.latencies {
-                total_latency_ns = total_latency_ns
-                    .saturating_add(latency.per_request_ns.saturating_mul(latency.request_count));
-                latencies.push(latency);
-            }
+            total_latency_ns = total_latency_ns.saturating_add(stats.total_latency_ns);
+            histogram
+                .add(&stats.histogram)
+                .map_err(|err| format!("failed to merge latency histogram: {err}"))?;
         }
     }
 
@@ -345,13 +349,12 @@ pub async fn run_single_benchmark(
         return Err("benchmark completed with zero successful requests".to_string());
     }
 
-    latencies.sort_unstable_by_key(|entry| entry.per_request_ns);
     let avg_ms = total_latency_ns as f64 / total_completed as f64 / 1_000_000.0;
-    let min_ms = latencies.first().map_or(0.0, |entry| entry.per_request_ns as f64 / 1_000_000.0);
-    let p50_ms = percentile_ms(&latencies, 0.50);
-    let p95_ms = percentile_ms(&latencies, 0.95);
-    let p99_ms = percentile_ms(&latencies, 0.99);
-    let max_ms = latencies.last().map_or(0.0, |entry| entry.per_request_ns as f64 / 1_000_000.0);
+    let min_ms = histogram.min() as f64 / 1_000_000.0;
+    let p50_ms = percentile_ms(&histogram, 0.50);
+    let p95_ms = percentile_ms(&histogram, 0.95);
+    let p99_ms = percentile_ms(&histogram, 0.99);
+    let max_ms = histogram.max() as f64 / 1_000_000.0;
 
     Ok(BenchResult {
         name: shared.spec.name.clone(),
@@ -366,7 +369,7 @@ pub async fn run_single_benchmark(
         p95_ms,
         p99_ms,
         max_ms,
-        latencies,
+        histogram,
         data_size: shared.spec.data_size,
         pipeline: shared.spec.pipeline,
         random_keys: shared.spec.random_keys,
@@ -449,7 +452,7 @@ async fn run_worker(
     )
     .await?;
 
-    let mut stats = WorkerStats::default();
+    let mut stats = WorkerStats::new()?;
     let mut response_model = ResponseModel::new(&cfg.spec, value.clone());
     let mut sequence = 0u64;
 
@@ -503,23 +506,28 @@ async fn run_worker(
                     .map_err(|err| format!("write failed: {err}"))?;
             }
             if cfg.strict {
-                read_n_strict_responses(&mut stream, &mut parse_buf, &expected, &encoded).await?;
+                read_n_strict_responses(&mut stream, &mut parse_buf, &expected, &encoded, || {
+                    if track {
+                        let latency_ns = started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64;
+                        total_latency_ns_add(&cfg.progress, &mut stats, latency_ns)?;
+                    }
+                    Ok(())
+                })
+                .await?;
             } else {
-                read_n_unchecked_responses(&mut stream, &mut parse_buf, &encoded).await?;
+                read_n_unchecked_responses(&mut stream, &mut parse_buf, &encoded, || {
+                    if track {
+                        let latency_ns = started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64;
+                        total_latency_ns_add(&cfg.progress, &mut stats, latency_ns)?;
+                    }
+                    Ok(())
+                })
+                .await?;
             }
 
             if track {
-                let elapsed_ns = started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64;
-                let per_req_ns = (elapsed_ns as u128 / batch as u128).min(u128::from(u64::MAX));
-                stats.latencies.push(LatencyObservation {
-                    per_request_ns: per_req_ns as u64,
-                    request_count: batch as u64,
-                });
                 stats.completed += batch as u64;
                 cfg.progress.completed.fetch_add(batch as u64, Ordering::Relaxed);
-                cfg.progress
-                    .latency_ns
-                    .fetch_add(elapsed_ns, Ordering::Relaxed);
                 tracked_remaining = tracked_remaining.saturating_sub(batch as u64);
             } else {
                 warmup_remaining = warmup_remaining.saturating_sub(batch as u64);
@@ -561,23 +569,28 @@ async fn run_worker(
             .await
             .map_err(|err| format!("write failed: {err}"))?;
         if cfg.strict {
-            read_n_strict_responses(&mut stream, &mut parse_buf, &expected, &encoded).await?;
+            read_n_strict_responses(&mut stream, &mut parse_buf, &expected, &encoded, || {
+                if track {
+                    let latency_ns = started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64;
+                    total_latency_ns_add(&cfg.progress, &mut stats, latency_ns)?;
+                }
+                Ok(())
+            })
+            .await?;
         } else {
-            read_n_unchecked_responses(&mut stream, &mut parse_buf, &encoded).await?;
+            read_n_unchecked_responses(&mut stream, &mut parse_buf, &encoded, || {
+                if track {
+                    let latency_ns = started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64;
+                    total_latency_ns_add(&cfg.progress, &mut stats, latency_ns)?;
+                }
+                Ok(())
+            })
+            .await?;
         }
 
         if track {
-            let elapsed_ns = started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64;
-            let per_req_ns = (elapsed_ns as u128 / batch as u128).min(u128::from(u64::MAX));
-            stats.latencies.push(LatencyObservation {
-                per_request_ns: per_req_ns as u64,
-                request_count: batch as u64,
-            });
             stats.completed += batch as u64;
             cfg.progress.completed.fetch_add(batch as u64, Ordering::Relaxed);
-            cfg.progress
-                .latency_ns
-                .fetch_add(elapsed_ns, Ordering::Relaxed);
             tracked_remaining = tracked_remaining.saturating_sub(batch as u64);
         } else {
             warmup_remaining = warmup_remaining.saturating_sub(batch as u64);
@@ -1077,28 +1090,29 @@ fn splitmix64(mut value: u64) -> u64 {
     value ^ (value >> 31)
 }
 
-fn percentile_ms(latencies: &[LatencyObservation], percentile: f64) -> f64 {
-    if latencies.is_empty() {
+fn percentile_ms(histogram: &Histogram<u64>, percentile: f64) -> f64 {
+    if histogram.is_empty() {
         return 0.0;
     }
 
-    let total = latencies
-        .iter()
-        .fold(0u64, |sum, entry| sum.saturating_add(entry.request_count));
-    if total == 0 {
-        return 0.0;
-    }
+    histogram.value_at_quantile(percentile) as f64 / 1_000_000.0
+}
 
-    let rank = ((total - 1) as f64 * percentile).round() as u64;
-    let mut seen = 0u64;
-    for entry in latencies {
-        seen = seen.saturating_add(entry.request_count);
-        if seen > rank {
-            return entry.per_request_ns as f64 / 1_000_000.0;
-        }
-    }
+fn latency_histogram() -> Result<Histogram<u64>, String> {
+    Histogram::<u64>::new_with_bounds(1, 60_000_000_000, 3)
+        .map_err(|err| format!("failed to create latency histogram: {err}"))
+}
 
-    latencies
-        .last()
-        .map_or(0.0, |entry| entry.per_request_ns as f64 / 1_000_000.0)
+fn total_latency_ns_add(
+    progress: &ProgressState,
+    stats: &mut WorkerStats,
+    latency_ns: u64,
+) -> Result<(), String> {
+    stats
+        .histogram
+        .record(latency_ns.max(1))
+        .map_err(|err| format!("failed to record latency: {err}"))?;
+    stats.total_latency_ns = stats.total_latency_ns.saturating_add(latency_ns);
+    progress.latency_ns.fetch_add(latency_ns, Ordering::Relaxed);
+    Ok(())
 }

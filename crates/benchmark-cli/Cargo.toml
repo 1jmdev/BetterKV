@@ -16,3 +16,4 @@ protocol.workspace = true
 tokio.workspace = true
 indicatif = "0.18"
 comfy-table = "7"
+hdrhistogram = "7"

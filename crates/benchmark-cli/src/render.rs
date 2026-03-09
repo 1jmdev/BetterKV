@@ -1,6 +1,7 @@
 use crate::args::Args;
-use crate::bench::{BenchResult, LatencyObservation};
+use crate::bench::BenchResult;
 use comfy_table::{presets::UTF8_FULL, Cell, ContentArrangement, Table};
+use hdrhistogram::Histogram;
 
 pub fn render_result(args: &Args, result: &BenchResult) {
     if args.csv {
@@ -101,7 +102,7 @@ fn print_summary_table(result: &BenchResult) {
 }
 
 fn print_latency_distributions(result: &BenchResult) {
-    if result.latencies.is_empty() {
+    if result.histogram.is_empty() {
         return;
     }
 
@@ -111,60 +112,55 @@ fn print_latency_distributions(result: &BenchResult) {
     ];
     const CDF_BINS_MS: &[f64] = &[0.1, 0.2, 0.3, 0.4, 0.5];
 
-    println!("\nLatency by percentile distribution:");
+    println!("\nLatency by percentile distribution (per request):");
     for pct in PCTS {
-        let (ms, count) = percentile_value_and_count(&result.latencies, *pct);
+        let (ms, count) = percentile_value_and_count(&result.histogram, *pct);
         println!("{pct:.3}% <= {ms:.3} milliseconds (cumulative count {count})");
     }
 
-    println!("\nCumulative distribution of latencies:");
+    println!("\nCumulative distribution of latencies (per request):");
     for max_ms in CDF_BINS_MS {
-        let count = cumulative_count_at_or_below(&result.latencies, *max_ms);
+        let count = cumulative_count_at_or_below(&result.histogram, *max_ms);
         let pct = count as f64 * 100.0 / result.requests as f64;
         println!("{pct:.3}% <= {max_ms:.3} milliseconds (cumulative count {count})");
     }
 }
 
-fn percentile_value_and_count(latencies: &[LatencyObservation], pct: f64) -> (f64, u64) {
-    let total = latencies
-        .iter()
-        .fold(0u64, |sum, entry| sum.saturating_add(entry.request_count));
+fn percentile_value_and_count(histogram: &Histogram<u64>, pct: f64) -> (f64, u64) {
+    let total = histogram.len();
     if total == 0 {
         return (0.0, 0);
     }
 
-    let rank = if pct <= 0.0 {
-        0u64
+    let quantile = if pct <= 0.0 {
+        0.0
     } else if pct >= 100.0 {
-        total - 1
+        1.0
     } else {
-        ((pct / 100.0) * (total as f64 - 1.0)).round() as u64
+        pct / 100.0
     };
 
     let mut seen = 0u64;
-    for entry in latencies {
-        seen = seen.saturating_add(entry.request_count);
-        if seen > rank {
-            return (entry.per_request_ns as f64 / 1_000_000.0, seen);
+    let mut chosen = 0u64;
+    for value in histogram.iter_recorded() {
+        seen = seen.saturating_add(value.count_since_last_iteration());
+        chosen = value.value_iterated_to();
+        let seen_pct = seen as f64 / total as f64;
+        if seen_pct >= quantile {
+            break;
         }
     }
 
-    let last = latencies.last().copied().unwrap_or(LatencyObservation {
-        per_request_ns: 0,
-        request_count: 0,
-    });
-    (last.per_request_ns as f64 / 1_000_000.0, total)
+    let count = if pct <= 0.0 {
+        histogram.count_between(chosen, chosen)
+    } else {
+        seen
+    };
+    (chosen as f64 / 1_000_000.0, count)
 }
 
-fn cumulative_count_at_or_below(latencies: &[LatencyObservation], max_ms: f64) -> u64 {
-    let cutoff_ns = max_ms * 1_000_000.0;
-    latencies.iter().fold(0u64, |sum, entry| {
-        if entry.per_request_ns as f64 <= cutoff_ns {
-            sum.saturating_add(entry.request_count)
-        } else {
-            sum
-        }
-    })
+fn cumulative_count_at_or_below(histogram: &Histogram<u64>, max_ms: f64) -> u64 {
+    histogram.count_between(1, (max_ms * 1_000_000.0) as u64)
 }
 
 fn format_latency(ms: f64) -> String {
