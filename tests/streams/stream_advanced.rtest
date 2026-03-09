@@ -1,0 +1,157 @@
+@name XAUTOCLAIM
+@group streams
+@since 6.2.0
+
+=== TEST: Auto-claim pending messages
+SETUP:
+XADD mystream * field1 value1
+XGROUP CREATE mystream mygroup 0
+XCLAIM mystream mygroup consumer1 0 field1value1
+RUN:
+XAUTOCLAIM mystream mygroup consumer2 3600000 0
+EXPECT:
+(any)
+
+---
+
+@name XGROUP CREATECONSUMER
+@group streams
+@since 6.2.0
+
+=== TEST: Create consumer in group
+SETUP:
+XADD stream1 * f v
+XGROUP CREATE stream1 grp1 0
+RUN:
+XGROUP CREATECONSUMER stream1 grp1 consumer1
+EXPECT:
+(match) (integer) [0-1]
+
+---
+
+@name XSETID
+@group streams
+@since 6.2.0
+
+=== TEST: Set stream ID
+SETUP:
+XADD stream:id * field value
+RUN:
+XSETID stream:id 1000
+EXPECT:
+OK
+
+---
+
+@name XTRIM
+@group streams
+@since 6.2.0
+
+=== TEST: Trim stream by count
+SETUP:
+XADD trimstream * f1 v1
+XADD trimstream * f2 v2
+XADD trimstream * f3 v3
+RUN:
+XTRIM trimstream MAXLEN 2
+EXPECT:
+(match) (integer) [0-9]+
+
+=== TEST: Trim with approximate
+SETUP:
+XADD approxstream * x y
+XADD approxstream * a b
+RUN:
+XTRIM approxstream MAXLEN ~ 1
+EXPECT:
+(match) (integer) [0-9]+
+
+=== TEST: Trim by ID
+SETUP:
+XADD idstream * f v
+XADD idstream * g w
+RUN:
+XTRIM idstream MINID 999
+EXPECT:
+(match) (integer) [0-9]+
+
+---
+
+@name XINFO STREAM
+@group streams
+@since 6.2.0
+
+=== TEST: Get stream info
+SETUP:
+XADD infostream * field value
+RUN:
+XINFO STREAM infostream
+EXPECT:
+(match) .*
+
+=== TEST: Stream info for empty stream
+SETUP:
+XADD emptystream * x y
+XDEL emptystream *
+RUN:
+XINFO STREAM emptystream
+EXPECT:
+(match) .*
+
+---
+
+@name XINFO GROUPS
+@group streams
+@since 6.2.0
+
+=== TEST: List consumer groups
+SETUP:
+XADD groupstream * f v
+XGROUP CREATE groupstream g1 0
+XGROUP CREATE groupstream g2 0
+RUN:
+XINFO GROUPS groupstream
+EXPECT:
+(match) .*
+
+---
+
+@name XINFO CONSUMERS
+@group streams
+@since 6.2.0
+
+=== TEST: List group consumers
+SETUP:
+XADD consstream * x y
+XGROUP CREATE consstream cgrp 0
+XREADGROUP GROUP cgrp c1 STREAMS consstream ">"
+RUN:
+XINFO CONSUMERS consstream cgrp
+EXPECT:
+(match) .*
+
+---
+
+@name XPENDING
+@group streams
+@since 6.2.0
+
+=== TEST: Get pending entries
+SETUP:
+XADD pendstream * field1 value1
+XGROUP CREATE pendstream pendgrp 0
+XREADGROUP GROUP pendgrp consumer1 STREAMS pendstream ">"
+RUN:
+XPENDING pendstream pendgrp
+EXPECT:
+(match) .*
+
+=== TEST: Get pending with range
+SETUP:
+XADD pendingstream * a b
+XGROUP CREATE pendingstream pg1 0
+XREADGROUP GROUP pg1 pc1 STREAMS pendingstream ">"
+RUN:
+XPENDING pendingstream pg1 - + 10
+EXPECT:
+(match) .*

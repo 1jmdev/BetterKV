@@ -1,0 +1,117 @@
+@name RESET
+@group connection
+@since 6.2.0
+
+=== TEST: Reset connection state
+RUN:
+RESET
+EXPECT:
+OK
+
+---
+
+@name SELECT
+@group connection
+@since 6.2.0
+
+=== TEST: Select database
+RUN:
+SELECT 1
+EXPECT:
+OK
+
+=== TEST: Select valid database
+RUN:
+SELECT 0
+EXPECT:
+OK
+
+=== TEST: Select invalid database fails
+RUN:
+SELECT 999
+EXPECT:
+(error)
+
+---
+
+@name ECHO
+@group connection
+@since 6.2.0
+
+=== TEST: Echo string
+RUN:
+ECHO "hello world"
+EXPECT:
+"hello world"
+
+=== TEST: Echo empty string
+RUN:
+ECHO ""
+EXPECT:
+""
+
+---
+
+@name PING
+@group connection
+@since 6.2.0
+
+=== TEST: Ping returns PONG
+RUN:
+PING
+EXPECT:
+PONG
+
+=== TEST: Ping with message
+RUN:
+PING "message"
+EXPECT:
+"message"
+
+---
+
+@name QUIT
+@group connection
+@since 6.2.0
+
+=== TEST: Quit connection
+RUN:
+QUIT
+EXPECT:
+OK
+
+---
+
+@name HELLO
+@group connection
+@since 6.2.0
+
+=== TEST: HELLO with RESP3
+RUN:
+HELLO 3
+EXPECT:
+(match) .*
+
+=== TEST: HELLO with AUTH
+RUN:
+HELLO 3 AUTH default ""
+EXPECT:
+(match) .*
+
+---
+
+@name SWAPDB
+@group connection
+@since 6.2.0
+
+=== TEST: Swap two databases
+RUN:
+SWAPDB 0 1
+EXPECT:
+OK
+
+=== TEST: Swap same database
+RUN:
+SWAPDB 0 0
+EXPECT:
+OK

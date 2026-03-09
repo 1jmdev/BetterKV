@@ -1,0 +1,57 @@
+@name SPUBLISH
+@group pubsub
+@since 7.0.0
+
+=== TEST: Publish to shard channel
+RUN:
+SPUBLISH channel "message"
+EXPECT:
+(integer) (any)
+
+---
+
+@name SSUBSCRIBE
+@group pubsub
+@since 7.0.0
+
+=== TEST: Subscribe to shard channel
+RUN:
+SSUBSCRIBE channel
+EXPECT:
+(match) .*
+
+---
+
+@name SUNSUBSCRIBE
+@group pubsub
+@since 7.0.0
+
+=== TEST: Unsubscribe from shard channel
+RUN:
+SUNSUBSCRIBE channel
+EXPECT:
+(match) .*
+
+---
+
+@name PUBSUB SHARDCHANNELS
+@group pubsub
+@since 7.0.0
+
+=== TEST: List active shard channels
+RUN:
+PUBSUB SHARDCHANNELS
+EXPECT:
+(match) .*
+
+---
+
+@name PUBSUB SHARDNUMSUB
+@group pubsub
+@since 7.0.0
+
+=== TEST: Get shard subscribers count
+RUN:
+PUBSUB SHARDNUMSUB channel1 channel2
+EXPECT:
+(match) .*

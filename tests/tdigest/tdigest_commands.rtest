@@ -1,0 +1,227 @@
+@name TDIGEST.CREATE
+@group tdigest
+@since 6.2.0
+
+=== TEST: Create t-digest
+RUN:
+TDIGEST.CREATE td1
+EXPECT:
+OK
+
+=== TEST: Create with compression
+RUN:
+TDIGEST.CREATE td2 COMPRESSION 100
+EXPECT:
+OK
+
+---
+
+@name TDIGEST.ADD
+@group tdigest
+@since 6.2.0
+
+=== TEST: Add single value
+SETUP:
+TDIGEST.CREATE td:add
+RUN:
+TDIGEST.ADD td:add 50
+EXPECT:
+OK
+
+=== TEST: Add multiple values
+SETUP:
+TDIGEST.CREATE td:multi
+RUN:
+TDIGEST.ADD td:multi 10 20 30 40 50
+EXPECT:
+OK
+
+---
+
+@name TDIGEST.QUANTILE
+@group tdigest
+@since 6.2.0
+
+=== TEST: Get quantile
+SETUP:
+TDIGEST.CREATE td:quant
+TDIGEST.ADD td:quant 1 2 3 4 5 6 7 8 9 10
+RUN:
+TDIGEST.QUANTILE td:quant 0.5
+EXPECT:
+(match) [0-9.]+
+
+=== TEST: Get multiple quantiles
+SETUP:
+TDIGEST.CREATE td:mquant
+TDIGEST.ADD td:mquant 1 2 3 4 5
+RUN:
+TDIGEST.QUANTILE td:mquant 0.25 0.5 0.75
+EXPECT:
+(match) .*
+
+---
+
+@name TDIGEST.CDF
+@group tdigest
+@since 6.2.0
+
+=== TEST: Get CDF values
+SETUP:
+TDIGEST.CREATE td:cdf
+TDIGEST.ADD td:cdf 1 2 3 4 5
+RUN:
+TDIGEST.CDF td:cdf 2 4
+EXPECT:
+(match) .*
+
+---
+
+@name TDIGEST.MIN
+@group tdigest
+@since 6.2.0
+
+=== TEST: Get minimum
+SETUP:
+TDIGEST.CREATE td:min
+TDIGEST.ADD td:min 10 20 5 30
+RUN:
+TDIGEST.MIN td:min
+EXPECT:
+(match) [0-9.]+
+
+---
+
+@name TDIGEST.MAX
+@group tdigest
+@since 6.2.0
+
+=== TEST: Get maximum
+SETUP:
+TDIGEST.CREATE td:max
+TDIGEST.ADD td:max 10 20 50 30
+RUN:
+TDIGEST.MAX td:max
+EXPECT:
+(match) [0-9.]+
+
+---
+
+@name TDIGEST.TRIMMED_MEAN
+@group tdigest
+@since 6.2.0
+
+=== TEST: Get trimmed mean
+SETUP:
+TDIGEST.CREATE td:trimean
+TDIGEST.ADD td:trimean 1 2 3 4 5 6 7 8 9 10
+RUN:
+TDIGEST.TRIMMED_MEAN td:trimean 0.1 0.1
+EXPECT:
+(match) [0-9.]+
+
+---
+
+@name TDIGEST.RANK
+@group tdigest
+@since 6.2.0
+
+=== TEST: Get rank of value
+SETUP:
+TDIGEST.CREATE td:rank
+TDIGEST.ADD td:rank 10 20 30 40 50
+RUN:
+TDIGEST.RANK td:rank 30
+EXPECT:
+(match) (integer) [0-9]+
+
+---
+
+@name TDIGEST.BYRANK
+@group tdigest
+@since 6.2.0
+
+=== TEST: Get value by rank
+SETUP:
+TDIGEST.CREATE td:byrank
+TDIGEST.ADD td:byrank 10 20 30 40 50
+RUN:
+TDIGEST.BYRANK td:byrank 2
+EXPECT:
+(match) [0-9.]+
+
+---
+
+@name TDIGEST.REVRANK
+@group tdigest
+@since 6.2.0
+
+=== TEST: Get reverse rank
+SETUP:
+TDIGEST.CREATE td:revrank
+TDIGEST.ADD td:revrank 10 20 30 40 50
+RUN:
+TDIGEST.REVRANK td:revrank 30
+EXPECT:
+(match) (integer) [0-9]+
+
+---
+
+@name TDIGEST.BYREVRANK
+@group tdigest
+@since 6.2.0
+
+=== TEST: Get value by reverse rank
+SETUP:
+TDIGEST.CREATE td:byrevrank
+TDIGEST.ADD td:byrevrank 10 20 30 40 50
+RUN:
+TDIGEST.BYREVRANK td:byrevrank 1
+EXPECT:
+(match) [0-9.]+
+
+---
+
+@name TDIGEST.MERGE
+@group tdigest
+@since 6.2.0
+
+=== TEST: Merge t-digests
+SETUP:
+TDIGEST.CREATE td:merge1
+TDIGEST.CREATE td:merge2
+TDIGEST.ADD td:merge1 1 2 3
+TDIGEST.ADD td:merge2 4 5 6
+RUN:
+TDIGEST.MERGE td:merged td:merge1 td:merge2
+EXPECT:
+OK
+
+---
+
+@name TDIGEST.INFO
+@group tdigest
+@since 6.2.0
+
+=== TEST: Get digest info
+SETUP:
+TDIGEST.CREATE td:info
+RUN:
+TDIGEST.INFO td:info
+EXPECT:
+(match) .*
+
+---
+
+@name TDIGEST.RESET
+@group tdigest
+@since 6.2.0
+
+=== TEST: Reset digest
+SETUP:
+TDIGEST.CREATE td:reset
+TDIGEST.ADD td:reset 1 2 3
+RUN:
+TDIGEST.RESET td:reset
+EXPECT:
+OK

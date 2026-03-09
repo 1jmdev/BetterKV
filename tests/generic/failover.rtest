@@ -1,0 +1,21 @@
+@name FAILOVER
+@group generic
+@since 6.2.0
+
+=== TEST: Initiate failover
+RUN:
+FAILOVER
+EXPECT:
+(any)
+
+=== TEST: Failover with TO target
+RUN:
+FAILOVER TO 127.0.0.1 6380
+EXPECT:
+(any)
+
+=== TEST: Failover with FORCE
+RUN:
+FAILOVER FORCE
+EXPECT:
+(any)

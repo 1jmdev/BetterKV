@@ -1,0 +1,185 @@
+@name GETDEL
+@group strings
+@since 6.2.0
+
+=== TEST: Get and delete
+SETUP:
+SET key1 "value1"
+RUN:
+GETDEL key1
+EXPECT:
+"value1"
+
+=== TEST: Key is deleted
+SETUP:
+SET key2 "data"
+GETDEL key2
+RUN:
+EXISTS key2
+EXPECT:
+(integer) 0
+
+=== TEST: GETDEL non-existing returns nil
+RUN:
+GETDEL nonexist
+EXPECT:
+(nil)
+
+---
+
+@name GETEX
+@group strings
+@since 6.2.0
+
+=== TEST: Get with EX option
+SETUP:
+SET expire:key "value"
+RUN:
+GETEX expire:key EX 60
+EXPECT:
+"value"
+
+=== TEST: Get with PX option
+SETUP:
+SET pxkey "data"
+RUN:
+GETEX pxkey PX 60000
+EXPECT:
+"data"
+
+=== TEST: Get with EXAT option
+SETUP:
+SET exatkey "content"
+RUN:
+GETEX exatkey EXAT 9999999999
+EXPECT:
+"content"
+
+=== TEST: Get with PXAT option
+SETUP:
+SET pxatkey "info"
+RUN:
+GETEX pxatkey PXAT 9999999999999
+EXPECT:
+"info"
+
+=== TEST: Get with PERSIST option
+SETUP:
+SET oldkey "value"
+EXPIRE oldkey 60
+RUN:
+GETEX oldkey PERSIST
+EXPECT:
+"value"
+
+=== TEST: GETEX non-existing returns nil
+RUN:
+GETEX nothere
+EXPECT:
+(nil)
+
+---
+
+@name COPY
+@group strings
+@since 6.2.0
+
+=== TEST: Copy key
+SETUP:
+SET source "original"
+RUN:
+COPY source destination
+EXPECT:
+(integer) 1
+
+=== TEST: Copied value is correct
+SETUP:
+SET src "data"
+COPY src dst
+RUN:
+GET dst
+EXPECT:
+"data"
+
+=== TEST: COPY to existing key without REPLACE fails
+SETUP:
+SET key1 "val1"
+SET key2 "val2"
+RUN:
+COPY key1 key2
+EXPECT:
+(integer) 0
+
+=== TEST: COPY with REPLACE overwrites
+SETUP:
+SET original "first"
+SET target "second"
+RUN:
+COPY original target REPLACE
+EXPECT:
+(integer) 1
+
+=== TEST: COPY to different database
+SETUP:
+SET copydb "value"
+RUN:
+COPY copydb copydb:copy DB 1
+EXPECT:
+(integer) 1
+
+=== TEST: COPY non-existing returns 0
+RUN:
+COPY notexist dest
+EXPECT:
+(integer) 0
+
+---
+
+@name LCS
+@group strings
+@since 6.2.0
+
+=== TEST: Longest common subsequence
+SETUP:
+SET str1 "ohmytext"
+SET str2 "mynewtext"
+RUN:
+LCS str1 str2
+EXPECT:
+"mytext"
+
+=== TEST: LCS with LEN option
+SETUP:
+SET s1 "abc"
+SET s2 "axc"
+RUN:
+LCS s1 s2 LEN
+EXPECT:
+(integer) 3
+
+=== TEST: LCS with IDX option
+SETUP:
+SET a "hello"
+SET b "hallo"
+RUN:
+LCS a b IDX
+EXPECT:
+(match) .*
+
+=== TEST: LCS identical strings
+SETUP:
+SET identical "same"
+SET also "same"
+RUN:
+LCS identical also
+EXPECT:
+"same"
+
+=== TEST: LCS no common subsequence
+SETUP:
+SET first "abc"
+SET second "xyz"
+RUN:
+LCS first second
+EXPECT:
+""

@@ -1,0 +1,98 @@
+@name CMS.INITBYDIM
+@group countmin
+@since 6.2.0
+
+=== TEST: Initialize by dimensions
+RUN:
+CMS.INITBYDIM sketch1 1000 5
+EXPECT:
+OK
+
+---
+
+@name CMS.INITBYPROB
+@group countmin
+@since 6.2.0
+
+=== TEST: Initialize by probability
+RUN:
+CMS.INITBYPROB sketch2 0.01 0.01
+EXPECT:
+OK
+
+---
+
+@name CMS.INCRBY
+@group countmin
+@since 6.2.0
+
+=== TEST: Increment item count
+SETUP:
+CMS.INITBYPROB cms:test 0.01 0.01
+RUN:
+CMS.INCRBY cms:test "item1" 10
+EXPECT:
+(match) (integer) [0-9]+
+
+=== TEST: Increment multiple items
+SETUP:
+CMS.INITBYPROB cms:multi 0.01 0.01
+RUN:
+CMS.INCRBY cms:multi "a" 5 "b" 3 "c" 7
+EXPECT:
+(match) (integer) [0-9]+
+
+---
+
+@name CMS.QUERY
+@group countmin
+@since 6.2.0
+
+=== TEST: Query item count
+SETUP:
+CMS.INITBYPROB cms:query 0.01 0.01
+CMS.INCRBY cms:query "test" 42
+RUN:
+CMS.QUERY cms:query "test"
+EXPECT:
+(match) (integer) [0-9]+
+
+=== TEST: Query multiple items
+SETUP:
+CMS.INITBYPROB cms:qmulti 0.01 0.01
+CMS.INCRBY cms:qmulti "x" 10 "y" 20
+RUN:
+CMS.QUERY cms:qmulti "x" "y" "z"
+EXPECT:
+(match) [0-9]+
+
+---
+
+@name CMS.MERGE
+@group countmin
+@since 6.2.0
+
+=== TEST: Merge sketches
+SETUP:
+CMS.INITBYPROB cms:1 0.01 0.01
+CMS.INITBYPROB cms:2 0.01 0.01
+CMS.INCRBY cms:1 "item" 5
+CMS.INCRBY cms:2 "item" 3
+RUN:
+CMS.MERGE merged CMS.1 CMS.2
+EXPECT:
+OK
+
+---
+
+@name CMS.INFO
+@group countmin
+@since 6.2.0
+
+=== TEST: Get sketch info
+SETUP:
+CMS.INITBYPROB cms:info 0.01 0.01
+RUN:
+CMS.INFO cms:info
+EXPECT:
+(match) .*

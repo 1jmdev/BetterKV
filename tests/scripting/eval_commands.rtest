@@ -1,0 +1,162 @@
+@name EVAL
+@group scripting
+@since 6.2.0
+
+=== TEST: Execute simple Lua script
+RUN:
+EVAL "return 1" 0
+EXPECT:
+(integer) 1
+
+=== TEST: Execute Lua with keys and args
+RUN:
+EVAL "return {KEYS[1],ARGV[1]}" 1 "key1" "arg1"
+EXPECT:
+1) "key1"
+2) "arg1"
+
+=== TEST: Return nil from Lua
+RUN:
+EVAL "return nil" 0
+EXPECT:
+(nil)
+
+---
+
+@name EVALSHA
+@group scripting
+@since 6.2.0
+
+=== TEST: Load and execute script
+SETUP:
+SCRIPT LOAD "return 42"
+RUN:
+EVALSHA "e0e1f9fabfc9d4800c877a703b823ac0578ff8db" 0
+EXPECT:
+(integer) 42
+
+---
+
+@name EVAL_RO
+@group scripting
+@since 6.2.0
+
+=== TEST: Execute read-only script
+SETUP:
+SET rokey "value"
+RUN:
+EVAL_RO "return redis.call('GET', KEYS[1])" 1 rokey
+EXPECT:
+"value"
+
+---
+
+@name EVALSHA_RO
+@group scripting
+@since 6.2.0
+
+=== TEST: Execute read-only script by SHA
+SETUP:
+SCRIPT LOAD "return 'read-only'"
+RUN:
+EVALSHA_RO "01b69b21dcf4ca65d325b3f0ad0c2a0e0c17ec6d" 0
+EXPECT:
+"read-only"
+
+---
+
+@name FCALL
+@group scripting
+@since 6.2.0
+
+=== TEST: Call Redis function
+RUN:
+FCALL "func_name" 0
+EXPECT:
+(any)
+
+---
+
+@name FCALL_RO
+@group scripting
+@since 6.2.0
+
+=== TEST: Call read-only function
+RUN:
+FCALL_RO "readonly_func" 0
+EXPECT:
+(any)
+
+---
+
+@name SCRIPT LOAD
+@group scripting
+@since 6.2.0
+
+=== TEST: Load Lua script
+RUN:
+SCRIPT LOAD "return 'loaded'"
+EXPECT:
+(match) [a-f0-9]{40}
+
+---
+
+@name SCRIPT EXISTS
+@group scripting
+@since 6.2.0
+
+=== TEST: Check if script exists
+SETUP:
+SCRIPT LOAD "return 100"
+RUN:
+SCRIPT EXISTS "e0e1f9fabfc9d4800c877a703b823ac0578ff8db"
+EXPECT:
+(match) [0-1]
+
+---
+
+@name SCRIPT FLUSH
+@group scripting
+@since 6.2.0
+
+=== TEST: Flush script cache
+RUN:
+SCRIPT FLUSH
+EXPECT:
+OK
+
+=== TEST: Flush with ASYNC
+RUN:
+SCRIPT FLUSH ASYNC
+EXPECT:
+OK
+
+---
+
+@name SCRIPT KILL
+@group scripting
+@since 6.2.0
+
+=== TEST: Kill script execution
+RUN:
+SCRIPT KILL
+EXPECT:
+(any)
+
+---
+
+@name SCRIPT DEBUG
+@group scripting
+@since 6.2.0
+
+=== TEST: Enable script debugging
+RUN:
+SCRIPT DEBUG YES
+EXPECT:
+OK
+
+=== TEST: Disable script debugging
+RUN:
+SCRIPT DEBUG NO
+EXPECT:
+OK

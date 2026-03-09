@@ -1,0 +1,191 @@
+@name FT.CREATE
+@group search
+@since 6.2.0
+
+=== TEST: Create text index
+RUN:
+FT.CREATE idx:products ON HASH PREFIX 1 "product:" SCHEMA title TEXT body TEXT price NUMERIC
+EXPECT:
+OK
+
+=== TEST: Create with field options
+RUN:
+FT.CREATE idx:users ON HASH SCHEMA name TEXT SORTABLE email TEXT NOINDEX age NUMERIC
+EXPECT:
+OK
+
+=== TEST: Create duplicate index fails
+SETUP:
+FT.CREATE idx:test ON HASH SCHEMA field1 TEXT
+RUN:
+FT.CREATE idx:test ON HASH SCHEMA field1 TEXT
+EXPECT:
+(error)
+
+---
+
+@name FT.SEARCH
+@group search
+@since 6.2.0
+
+=== TEST: Search empty index
+SETUP:
+FT.CREATE idx:empty ON HASH SCHEMA title TEXT
+RUN:
+FT.SEARCH idx:empty "*"
+EXPECT:
+(integer) 0
+
+=== TEST: Search with basic query
+SETUP:
+FT.CREATE idx:products ON HASH SCHEMA title TEXT
+HSET product:1 title "Red Shirt"
+HSET product:2 title "Blue Pants"
+RUN:
+FT.SEARCH idx:products "Red"
+EXPECT:
+(match) (integer) [0-9]+
+
+=== TEST: Search with LIMIT
+SETUP:
+FT.CREATE idx:docs ON HASH SCHEMA text TEXT
+HSET doc:1 text "hello world"
+HSET doc:2 text "hello redis"
+HSET doc:3 text "hello search"
+RUN:
+FT.SEARCH idx:docs "hello" LIMIT 0 1
+EXPECT:
+(match) (integer) [0-9]+
+
+---
+
+@name FT.AGGREGATE
+@group search
+@since 6.2.0
+
+=== TEST: Aggregate with grouping
+SETUP:
+FT.CREATE idx:sales ON HASH SCHEMA product TEXT amount NUMERIC
+HSET sale:1 product "A" amount 10
+HSET sale:2 product "A" amount 20
+HSET sale:3 product "B" amount 15
+RUN:
+FT.AGGREGATE idx:sales "*" GROUPBY 1 @product REDUCE SUM 1 @amount
+EXPECT:
+(match) (integer) [0-9]+
+
+---
+
+@name FT.INFO
+@group search
+@since 6.2.0
+
+=== TEST: Get index info
+SETUP:
+FT.CREATE idx:test ON HASH SCHEMA field1 TEXT field2 NUMERIC
+RUN:
+FT.INFO idx:test
+EXPECT:
+(match) .*index_name.*
+
+=== TEST: Info for non-existing index fails
+RUN:
+FT.INFO idx:nonexistent
+EXPECT:
+(error)
+
+---
+
+@name FT.DROPINDEX
+@group search
+@since 6.2.0
+
+=== TEST: Drop index
+SETUP:
+FT.CREATE idx:drop ON HASH SCHEMA field TEXT
+RUN:
+FT.DROPINDEX idx:drop
+EXPECT:
+OK
+
+=== TEST: Drop non-existing index fails
+RUN:
+FT.DROPINDEX idx:nonexistent
+EXPECT:
+(error)
+
+---
+
+@name FT.ALTER
+@group search
+@since 6.2.0
+
+=== TEST: Add field to index
+SETUP:
+FT.CREATE idx:alter ON HASH SCHEMA field1 TEXT
+RUN:
+FT.ALTER idx:alter SCHEMA ADD field2 NUMERIC
+EXPECT:
+OK
+
+---
+
+@name FT.EXPLAIN
+@group search
+@since 6.2.0
+
+=== TEST: Get query execution plan
+SETUP:
+FT.CREATE idx:explain ON HASH SCHEMA field TEXT
+RUN:
+FT.EXPLAIN idx:explain "hello"
+EXPECT:
+(match) .*
+
+---
+
+@name FT.CONFIG
+@group search
+@since 6.2.0
+
+=== TEST: Get FT config
+RUN:
+FT.CONFIG GET "TIMEOUT"
+EXPECT:
+(match) .*
+
+=== TEST: Set FT config
+RUN:
+FT.CONFIG SET "TIMEOUT" "500"
+EXPECT:
+OK
+
+---
+
+@name FT.DICTADD
+@group search
+@since 6.2.0
+
+=== TEST: Add terms to dictionary
+SETUP:
+FT.CREATE idx:dict ON HASH SCHEMA field TEXT PHONETIC "dm:en"
+RUN:
+FT.DICTADD mydict "hello" "world"
+EXPECT:
+(integer) 2
+
+---
+
+@name FT.TAGVALS
+@group search
+@since 6.2.0
+
+=== TEST: Get distinct tag values
+SETUP:
+FT.CREATE idx:tags ON HASH SCHEMA category TAG
+HSET doc:1 category "tech,news"
+HSET doc:2 category "tech,tutorial"
+RUN:
+FT.TAGVALS idx:tags category
+EXPECT:
+(any)

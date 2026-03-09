@@ -1,0 +1,147 @@
+@name LMOVE
+@group lists
+@since 6.2.0
+
+=== TEST: Move element left to right
+SETUP:
+RPUSH src 1 2 3
+RPUSH dst 4 5
+RUN:
+LMOVE src dst LEFT RIGHT
+EXPECT:
+"1"
+
+=== TEST: Move right to left
+SETUP:
+RPUSH list1 "a" "b" "c"
+RPUSH list2 "x"
+RUN:
+LMOVE list1 list2 RIGHT LEFT
+EXPECT:
+"c"
+
+=== TEST: Move between same list
+SETUP:
+RPUSH same 1 2 3
+RUN:
+LMOVE same same LEFT RIGHT
+EXPECT:
+"1"
+
+=== TEST: Move from empty list returns nil
+SETUP:
+RPUSH nonempty "value"
+RUN:
+LMOVE empty nonempty LEFT LEFT
+EXPECT:
+(nil)
+
+---
+
+@name LMPOP
+@group lists
+@since 6.2.0
+
+=== TEST: Pop from single list
+SETUP:
+RPUSH poplist 1 2 3
+RUN:
+LMPOP 1 poplist LEFT
+EXPECT:
+1) "poplist"
+2) 1) "1"
+
+=== TEST: LMPOP multiple lists returns first non-empty
+SETUP:
+RPUSH empty1 "a"
+RPUSH notempty 1 2 3
+RUN:
+LMPOP 2 empty1 notempty RIGHT
+EXPECT:
+(match) .*
+
+=== TEST: LMPOP with COUNT
+SETUP:
+RPUSH countlist "a" "b" "c" "d"
+RUN:
+LMPOP 1 countlist LEFT COUNT 2
+EXPECT:
+(match) .*
+
+=== TEST: LMPOP from right
+SETUP:
+RPUSH rightpop 10 20 30
+RUN:
+LMPOP 1 rightpop RIGHT
+EXPECT:
+(match) .*
+
+---
+
+@name BLMPOP
+@group lists
+@since 6.2.0
+
+=== TEST: Blocking pop with immediate value
+SETUP:
+RPUSH ready:list 1 2 3
+RUN:
+BLMPOP 1 1 ready:list LEFT
+EXPECT:
+(match) .*
+
+=== TEST: BLMPOP with COUNT
+SETUP:
+RPUSH bcount:list "x" "y" "z"
+RUN:
+BLMPOP 1 1 bcount:list LEFT COUNT 2
+EXPECT:
+(match) .*
+
+---
+
+@name LPOS
+@group lists
+@since 6.2.0
+
+=== TEST: Find element position
+SETUP:
+RPUSH positions "a" "b" "c" "b" "d"
+RUN:
+LPOS positions "b"
+EXPECT:
+(integer) 1
+
+=== TEST: LPOS with COUNT returns all positions
+SETUP:
+RPUSH allpos "x" "y" "x" "z" "x"
+RUN:
+LPOS allpos "x" COUNT 0
+EXPECT:
+1) (integer) 0
+2) (integer) 2
+3) (integer) 4
+
+=== TEST: LPOS with RANK
+SETUP:
+RPUSH ranked 1 2 1 3 1 4
+RUN:
+LPOS ranked 1 RANK 2
+EXPECT:
+(integer) 2
+
+=== TEST: LPOS with MAXLEN
+SETUP:
+RPUSH limited "a" "b" "a" "c" "a"
+RUN:
+LPOS limited "a" MAXLEN 3
+EXPECT:
+(integer) 0
+
+=== TEST: LPOS element not found
+SETUP:
+RPUSH notfound "a" "b" "c"
+RUN:
+LPOS notfound "missing"
+EXPECT:
+(nil)

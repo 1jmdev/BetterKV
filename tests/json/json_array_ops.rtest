@@ -1,0 +1,171 @@
+@name JSON.ARRAPPEND
+@group json
+@since 6.2.0
+
+=== TEST: Append single value to array
+SETUP:
+JSON.SET arr $ '[1,2,3]'
+RUN:
+JSON.ARRAPPEND arr $ 4
+EXPECT:
+(integer) 4
+
+=== TEST: Append multiple values to array
+SETUP:
+JSON.SET arr $ '[1,2,3]'
+RUN:
+JSON.ARRAPPEND arr $ 4 5 6
+EXPECT:
+(integer) 6
+
+=== TEST: Append object to array
+SETUP:
+JSON.SET arr $ '[]'
+RUN:
+JSON.ARRAPPEND arr $ '{"id":1}'
+EXPECT:
+(integer) 1
+
+=== TEST: Append to nested array
+SETUP:
+JSON.SET doc $ '{"list":[1,2]}'
+RUN:
+JSON.ARRAPPEND doc $.list 3
+EXPECT:
+(integer) 3
+
+=== TEST: Append string value
+SETUP:
+JSON.SET arr $ '[]'
+RUN:
+JSON.ARRAPPEND arr $ '"hello"'
+EXPECT:
+(integer) 1
+
+---
+
+@name JSON.ARRINDEX
+@group json
+@since 6.2.0
+
+=== TEST: Find index of value in array
+SETUP:
+JSON.SET arr $ '[1,2,3,2,1]'
+RUN:
+JSON.ARRINDEX arr $ 2
+EXPECT:
+(integer) 1
+
+=== TEST: Find index with start position
+SETUP:
+JSON.SET arr $ '[1,2,3,2,1]'
+RUN:
+JSON.ARRINDEX arr $ 2 2
+EXPECT:
+(integer) 3
+
+=== TEST: Find index of non-existing value returns -1
+SETUP:
+JSON.SET arr $ '[1,2,3]'
+RUN:
+JSON.ARRINDEX arr $ 99
+EXPECT:
+(integer) -1
+
+=== TEST: Find index with range
+SETUP:
+JSON.SET arr $ '[1,2,3,2,1]'
+RUN:
+JSON.ARRINDEX arr $ 2 0 3
+EXPECT:
+(integer) 1
+
+---
+
+@name JSON.ARRLEN
+@group json
+@since 6.2.0
+
+=== TEST: Get array length
+SETUP:
+JSON.SET arr $ '[1,2,3,4,5]'
+RUN:
+JSON.ARRLEN arr $
+EXPECT:
+(integer) 5
+
+=== TEST: Get empty array length
+SETUP:
+JSON.SET arr $ '[]'
+RUN:
+JSON.ARRLEN arr $
+EXPECT:
+(integer) 0
+
+=== TEST: Array length of non-existing path returns nil
+SETUP:
+JSON.SET doc $ '{"a":1}'
+RUN:
+JSON.ARRLEN doc $.nonexistent
+EXPECT:
+(nil)
+
+---
+
+@name JSON.ARRPOP
+@group json
+@since 6.2.0
+
+=== TEST: Pop last element
+SETUP:
+JSON.SET arr $ '[1,2,3,4,5]'
+RUN:
+JSON.ARRPOP arr $
+EXPECT:
+"5"
+
+=== TEST: Pop element at index
+SETUP:
+JSON.SET arr $ '[1,2,3,4,5]'
+RUN:
+JSON.ARRPOP arr $ 1
+EXPECT:
+"2"
+
+=== TEST: Pop from empty array returns nil
+SETUP:
+JSON.SET arr $ '[]'
+RUN:
+JSON.ARRPOP arr $
+EXPECT:
+(nil)
+
+---
+
+@name JSON.ARRTRIM
+@group json
+@since 6.2.0
+
+=== TEST: Trim array to inclusive range
+SETUP:
+JSON.SET arr $ '[1,2,3,4,5]'
+RUN:
+JSON.ARRTRIM arr $ 1 3
+EXPECT:
+(integer) 3
+
+=== TEST: Trim with negative indices
+SETUP:
+JSON.SET arr $ '[1,2,3,4,5]'
+RUN:
+JSON.ARRTRIM arr $ -2 -1
+EXPECT:
+(integer) 2
+
+=== TEST: Trim removes elements
+SETUP:
+JSON.SET arr $ '[1,2,3,4,5]'
+RUN:
+JSON.ARRTRIM arr $ 2 2
+EXPECT:
+(integer) 1

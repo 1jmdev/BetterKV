@@ -1,0 +1,196 @@
+@name FT.SPELLCHECK
+@group search
+@since 6.2.0
+
+=== TEST: Spell check query
+SETUP:
+FT.CREATE idx:spell ON HASH SCHEMA field TEXT
+RUN:
+FT.SPELLCHECK idx:spell "teh quikc brwon"
+EXPECT:
+(match) .*
+
+---
+
+@name FT.SUGADD
+@group search
+@since 6.2.0
+
+=== TEST: Add suggestion
+RUN:
+FT.SUGADD sug:dict 10 "hello"
+EXPECT:
+(integer) 1
+
+=== TEST: Add multiple suggestions
+RUN:
+FT.SUGADD sug:dict 5 "world" 8 "test"
+EXPECT:
+(integer) 3
+
+---
+
+@name FT.SUGGET
+@group search
+@since 6.2.0
+
+=== TEST: Get suggestions
+SETUP:
+FT.SUGADD suggestions 10 "suggestion1" 8 "suggestion2"
+RUN:
+FT.SUGGET suggestions "sug"
+EXPECT:
+(match) .*
+
+---
+
+@name FT.SUGLEN
+@group search
+@since 6.2.0
+
+=== TEST: Get suggestions count
+SETUP:
+FT.SUGADD sugglen 5 "item1" 5 "item2" 5 "item3"
+RUN:
+FT.SUGLEN sugglen
+EXPECT:
+(integer) 3
+
+---
+
+@name FT.SUGDEL
+@group search
+@since 6.2.0
+
+=== TEST: Delete suggestion
+SETUP:
+FT.SUGADD delsug 10 "remove_me"
+RUN:
+FT.SUGDEL delsug "remove_me"
+EXPECT:
+(integer) 1
+
+---
+
+@name FT.PROFILE
+@group search
+@since 6.2.0
+
+=== TEST: Profile search query
+SETUP:
+FT.CREATE idx:profile ON HASH SCHEMA field TEXT
+RUN:
+FT.PROFILE idx:profile SEARCH QUERY "test"
+EXPECT:
+(match) .*
+
+---
+
+@name FT.ALIASADD
+@group search
+@since 6.2.0
+
+=== TEST: Add index alias
+SETUP:
+FT.CREATE idx:original ON HASH SCHEMA field TEXT
+RUN:
+FT.ALIASADD myalias idx:original
+EXPECT:
+OK
+
+---
+
+@name FT.ALIASDEL
+@group search
+@since 6.2.0
+
+=== TEST: Delete alias
+SETUP:
+FT.CREATE idx:alias ON HASH SCHEMA field TEXT
+FT.ALIASADD delalias idx:alias
+RUN:
+FT.ALIASDEL delalias
+EXPECT:
+OK
+
+---
+
+@name FT.ALIASUPDATE
+@group search
+@since 6.2.0
+
+=== TEST: Update alias
+SETUP:
+FT.CREATE idx:v1 ON HASH SCHEMA field TEXT
+FT.CREATE idx:v2 ON HASH SCHEMA field TEXT
+FT.ALIASADD myalias idx:v1
+RUN:
+FT.ALIASUPDATE myalias idx:v2
+EXPECT:
+OK
+
+---
+
+@name FT.DICTADD
+@group search
+@since 6.2.0
+
+=== TEST: Add dictionary terms
+RUN:
+FT.DICTADD newdict "term1" "term2" "term3"
+EXPECT:
+(integer) 3
+
+---
+
+@name FT.DICTDEL
+@group search
+@since 6.2.0
+
+=== TEST: Delete dictionary terms
+SETUP:
+FT.DICTADD deldict "word1" "word2"
+RUN:
+FT.DICTDEL deldict "word1"
+EXPECT:
+(integer) 1
+
+---
+
+@name FT.DICTDUMP
+@group search
+@since 6.2.0
+
+=== TEST: Dump dictionary terms
+SETUP:
+FT.DICTADD dumpdict "alpha" "beta" "gamma"
+RUN:
+FT.DICTDUMP dumpdict
+EXPECT:
+(match) .*
+
+---
+
+@name FT.SYNUPDATE
+@group search
+@since 6.2.0
+
+=== TEST: Create synonym group
+RUN:
+FT.SYNUPDATE synonyms "fast" "quick" "speedy"
+EXPECT:
+OK
+
+---
+
+@name FT.SYNDUMP
+@group search
+@since 6.2.0
+
+=== TEST: Dump synonyms
+SETUP:
+FT.SYNUPDATE mysyn "big" "large" "huge"
+RUN:
+FT.SYNDUMP mysyn
+EXPECT:
+(match) .*

@@ -1,0 +1,247 @@
+@name TS.CREATE
+@group timeseries
+@since 6.2.0
+
+=== TEST: Create time series
+RUN:
+TS.CREATE temp:sensor
+EXPECT:
+OK
+
+=== TEST: Create with retention policy
+RUN:
+TS.CREATE sensor:1 RETENTION 3600000
+EXPECT:
+OK
+
+=== TEST: Create with labels
+RUN:
+TS.CREATE sensor:2 LABELS device "sensor1" location "office"
+EXPECT:
+OK
+
+---
+
+@name TS.ADD
+@group timeseries
+@since 6.2.0
+
+=== TEST: Add sample to time series
+SETUP:
+TS.CREATE temp:indoor
+RUN:
+TS.ADD temp:indoor * 22.5
+EXPECT:
+(integer) (any)
+
+=== TEST: Add with specific timestamp
+SETUP:
+TS.CREATE temp:outdoor
+RUN:
+TS.ADD temp:outdoor 1000 20.5
+EXPECT:
+(integer) 1000
+
+=== TEST: Add multiple samples
+SETUP:
+TS.CREATE power:usage
+RUN:
+TS.ADD power:usage 1000 100
+TS.ADD power:usage 2000 150
+TS.ADD power:usage 3000 120
+EXPECT:
+(integer) (any)
+
+---
+
+@name TS.GET
+@group timeseries
+@since 6.2.0
+
+=== TEST: Get latest sample
+SETUP:
+TS.CREATE cpu:load
+TS.ADD cpu:load 1000 45
+TS.ADD cpu:load 2000 52
+RUN:
+TS.GET cpu:load
+EXPECT:
+(match) .*2000.*52.*
+
+=== TEST: Get from empty series
+SETUP:
+TS.CREATE empty:series
+RUN:
+TS.GET empty:series
+EXPECT:
+(nil)
+
+---
+
+@name TS.RANGE
+@group timeseries
+@since 6.2.0
+
+=== TEST: Get range of samples
+SETUP:
+TS.CREATE values:range
+TS.ADD values:range 1000 10
+TS.ADD values:range 2000 20
+TS.ADD values:range 3000 30
+TS.ADD values:range 4000 40
+RUN:
+TS.RANGE values:range 1000 3000
+EXPECT:
+(match) .*
+
+=== TEST: Range with limit
+SETUP:
+TS.CREATE data:points
+TS.ADD data:points 1000 1
+TS.ADD data:points 2000 2
+TS.ADD data:points 3000 3
+RUN:
+TS.RANGE data:points 1000 3000 COUNT 2
+EXPECT:
+(match) .*
+
+---
+
+@name TS.REVRANGE
+@group timeseries
+@since 6.2.0
+
+=== TEST: Get range in reverse
+SETUP:
+TS.CREATE reverse:range
+TS.ADD reverse:range 1000 100
+TS.ADD reverse:range 2000 200
+TS.ADD reverse:range 3000 300
+RUN:
+TS.REVRANGE reverse:range 3000 1000
+EXPECT:
+(match) .*
+
+---
+
+@name TS.MGET
+@group timeseries
+@since 6.2.0
+
+=== TEST: Get latest from multiple series
+SETUP:
+TS.CREATE sensor:a LABELS type "temp"
+TS.CREATE sensor:b LABELS type "temp"
+TS.ADD sensor:a 1000 22
+TS.ADD sensor:b 1500 23
+RUN:
+TS.MGET FILTER type=temp
+EXPECT:
+(match) .*
+
+---
+
+@name TS.MRANGE
+@group timeseries
+@since 6.2.0
+
+=== TEST: Get range from multiple series
+SETUP:
+TS.CREATE metric:1 LABELS source "a"
+TS.CREATE metric:2 LABELS source "a"
+TS.ADD metric:1 1000 10
+TS.ADD metric:2 1000 20
+RUN:
+TS.MRANGE 1000 2000 FILTER source=a
+EXPECT:
+(match) .*
+
+---
+
+@name TS.MREVRANGE
+@group timeseries
+@since 6.2.0
+
+=== TEST: Get reverse range from multiple series
+SETUP:
+TS.CREATE data:x LABELS group "g1"
+TS.CREATE data:y LABELS group "g1"
+TS.ADD data:x 1000 50
+TS.ADD data:y 1000 60
+RUN:
+TS.MREVRANGE 2000 1000 FILTER group=g1
+EXPECT:
+(match) .*
+
+---
+
+@name TS.QUERYINDEX
+@group timeseries
+@since 6.2.0
+
+=== TEST: Query series by filter
+SETUP:
+TS.CREATE ts:1 LABELS env "prod" service "api"
+TS.CREATE ts:2 LABELS env "prod" service "web"
+RUN:
+TS.QUERYINDEX env=prod
+EXPECT:
+(match) .*
+
+---
+
+@name TS.INFO
+@group timeseries
+@since 6.2.0
+
+=== TEST: Get series info
+SETUP:
+TS.CREATE info:test
+RUN:
+TS.INFO info:test
+EXPECT:
+(match) .*
+
+---
+
+@name TS.ALTER
+@group timeseries
+@since 6.2.0
+
+=== TEST: Alter series retention
+SETUP:
+TS.CREATE alter:me
+RUN:
+TS.ALTER alter:me RETENTION 7200000
+EXPECT:
+OK
+
+---
+
+@name TS.INCRBY
+@group timeseries
+@since 6.2.0
+
+=== TEST: Increment latest value
+SETUP:
+TS.CREATE counter:test
+TS.ADD counter:test 1000 10
+RUN:
+TS.INCRBY counter:test 5
+EXPECT:
+(integer) (any)
+
+---
+
+@name TS.DECRBY
+@group timeseries
+@since 6.2.0
+
+=== TEST: Decrement latest value
+SETUP:
+TS.CREATE decrements:test
+TS.ADD decrements:test 1000 50
+RUN:
+TS.DECRBY decrements:test 10
+EXPECT:
+(integer) (any)

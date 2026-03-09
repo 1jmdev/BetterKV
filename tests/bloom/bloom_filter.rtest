@@ -1,0 +1,128 @@
+@name BF.RESERVE
+@group bloom
+@since 6.2.0
+
+=== TEST: Reserve Bloom filter
+RUN:
+BF.RESERVE mybloom 0.01 1000
+EXPECT:
+OK
+
+=== TEST: Reserve with expansion
+RUN:
+BF.RESERVE filter:2 0.05 5000 EXPANSION 2
+EXPECT:
+OK
+
+---
+
+@name BF.ADD
+@group bloom
+@since 6.2.0
+
+=== TEST: Add single element
+SETUP:
+BF.RESERVE bf:test 0.01 1000
+RUN:
+BF.ADD bf:test "element1"
+EXPECT:
+(integer) 1
+
+=== TEST: Add multiple elements
+SETUP:
+BF.RESERVE bf:multi 0.01 1000
+RUN:
+BF.MADD bf:multi "a" "b" "c"
+EXPECT:
+(match) (integer) [0-9]+
+
+---
+
+@name BF.EXISTS
+@group bloom
+@since 6.2.0
+
+=== TEST: Check element exists
+SETUP:
+BF.RESERVE bf:check 0.01 1000
+BF.ADD bf:check "hello"
+RUN:
+BF.EXISTS bf:check "hello"
+EXPECT:
+(integer) 1
+
+=== TEST: Check non-existing element
+SETUP:
+BF.RESERVE bf:nothere 0.01 1000
+BF.ADD bf:nothere "exists"
+RUN:
+BF.EXISTS bf:nothere "notexist"
+EXPECT:
+(integer) 0
+
+=== TEST: Check multiple elements
+SETUP:
+BF.RESERVE bf:many 0.01 1000
+BF.MADD bf:many "one" "two" "three"
+RUN:
+BF.MEXISTS bf:many "one" "missing" "three"
+EXPECT:
+1) (integer) 1
+2) (integer) 0
+3) (integer) 1
+
+---
+
+@name BF.INFO
+@group bloom
+@since 6.2.0
+
+=== TEST: Get filter info
+SETUP:
+BF.RESERVE bf:info 0.01 1000
+RUN:
+BF.INFO bf:info
+EXPECT:
+(match) .*
+
+---
+
+@name BF.INSERT
+@group bloom
+@since 6.2.0
+
+=== TEST: Insert with auto-reserve
+RUN:
+BF.INSERT bf:auto CAPACITY 1000 ERROR 0.01 ITEMS "item1" "item2"
+EXPECT:
+(match) (integer) [0-9]+
+
+---
+
+@name BF.LOADCHUNK
+@group bloom
+@since 6.2.0
+
+=== TEST: Get bloom filter chunks
+SETUP:
+BF.RESERVE bf:chunk 0.01 1000
+BF.ADD bf:chunk "data"
+RUN:
+BF.SCANDUMP bf:chunk 0
+EXPECT:
+(any)
+
+---
+
+@name BF.CARD
+@group bloom
+@since 6.2.0
+
+=== TEST: Get cardinality estimate
+SETUP:
+BF.RESERVE bf:card 0.01 1000
+BF.MADD bf:card "a" "b" "c"
+RUN:
+BF.CARD bf:card
+EXPECT:
+(match) (integer) [0-9]+

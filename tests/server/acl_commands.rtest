@@ -1,0 +1,163 @@
+@name ACL SETUSER
+@group server
+@since 6.2.0
+
+=== TEST: Create ACL user
+RUN:
+ACL SETUSER alice on >mypassword +@all ~*
+EXPECT:
+OK
+
+=== TEST: Set user permissions
+RUN:
+ACL SETUSER bob on >pass123 +get +set ~key*
+EXPECT:
+OK
+
+---
+
+@name ACL GETUSER
+@group server
+@since 6.2.0
+
+=== TEST: Get user info
+SETUP:
+ACL SETUSER testuser on >testpass +@all
+RUN:
+ACL GETUSER testuser
+EXPECT:
+(match) .*
+
+---
+
+@name ACL DELUSER
+@group server
+@since 6.2.0
+
+=== TEST: Delete user
+SETUP:
+ACL SETUSER delme on >pass +@all
+RUN:
+ACL DELUSER delme
+EXPECT:
+(integer) 1
+
+=== TEST: Delete non-existing user
+RUN:
+ACL DELUSER nonexistentuser
+EXPECT:
+(integer) 0
+
+---
+
+@name ACL CAT
+@group server
+@since 6.2.0
+
+=== TEST: List ACL categories
+RUN:
+ACL CAT
+EXPECT:
+(match) .*
+
+=== TEST: List commands in category
+RUN:
+ACL CAT string
+EXPECT:
+(match) .*
+
+---
+
+@name ACL LIST
+@group server
+@since 6.2.0
+
+=== TEST: List ACL rules
+RUN:
+ACL LIST
+EXPECT:
+(match) .*
+
+---
+
+@name ACL USERS
+@group server
+@since 6.2.0
+
+=== TEST: List all users
+RUN:
+ACL USERS
+EXPECT:
+(match) default
+
+---
+
+@name ACL WHOAMI
+@group server
+@since 6.2.0
+
+=== TEST: Get current user
+RUN:
+ACL WHOAMI
+EXPECT:
+"default"
+
+---
+
+@name ACL LOG
+@group server
+@since 6.2.0
+
+=== TEST: Get ACL log
+RUN:
+ACL LOG
+EXPECT:
+(match) .*
+
+=== TEST: ACL LOG with count
+RUN:
+ACL LOG 10
+EXPECT:
+(match) .*
+
+---
+
+@name ACL GENPASS
+@group server
+@since 6.2.0
+
+=== TEST: Generate secure password
+RUN:
+ACL GENPASS
+EXPECT:
+(match) [a-f0-9]{64}
+
+=== TEST: Generate password with custom bits
+RUN:
+ACL GENPASS 256
+EXPECT:
+(match) [a-f0-9]+
+
+---
+
+@name ACL SAVE
+@group server
+@since 6.2.0
+
+=== TEST: Save ACL configuration
+RUN:
+ACL SAVE
+EXPECT:
+OK
+
+---
+
+@name ACL LOAD
+@group server
+@since 6.2.0
+
+=== TEST: Load ACL configuration
+RUN:
+ACL LOAD
+EXPECT:
+OK

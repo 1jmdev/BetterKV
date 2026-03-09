@@ -1,0 +1,207 @@
+@name SCAN
+@group generic
+@since 6.2.0
+
+=== TEST: Scan keys from database
+SETUP:
+SET key1 "value1"
+SET key2 "value2"
+SET key3 "value3"
+RUN:
+SCAN 0
+EXPECT:
+(match) .*
+
+=== TEST: SCAN with MATCH pattern
+SETUP:
+SET prefix:1 "v1"
+SET prefix:2 "v2"
+SET other "v3"
+RUN:
+SCAN 0 MATCH "prefix:*"
+EXPECT:
+(match) .*
+
+=== TEST: SCAN with COUNT
+SETUP:
+SET a1 "x"
+SET a2 "y"
+SET a3 "z"
+RUN:
+SCAN 0 COUNT 100
+EXPECT:
+(match) .*
+
+---
+
+@name SORT
+@group generic
+@since 6.2.0
+
+=== TEST: Sort list
+SETUP:
+RPUSH mylist 3 1 2
+RUN:
+SORT mylist
+EXPECT:
+1) "1"
+2) "2"
+3) "3"
+
+=== TEST: Sort with LIMIT
+SETUP:
+RPUSH limited 5 4 3 2 1
+RUN:
+SORT limited LIMIT 0 2
+EXPECT:
+1) "1"
+2) "2"
+
+=== TEST: Sort DESC
+SETUP:
+RPUSH desc 1 2 3
+RUN:
+SORT desc DESC
+EXPECT:
+1) "3"
+2) "2"
+3) "1"
+
+=== TEST: Sort ALPHA
+SETUP:
+RPUSH alpha "banana" "apple" "cherry"
+RUN:
+SORT alpha ALPHA
+EXPECT:
+1) "apple"
+2) "banana"
+3) "cherry"
+
+---
+
+@name SORT_RO
+@group generic
+@since 7.0.0
+
+=== TEST: Read-only sort
+SETUP:
+RPUSH readonly 3 1 2
+RUN:
+SORT_RO readonly
+EXPECT:
+1) "1"
+2) "2"
+3) "3"
+
+---
+
+@name MIGRATE
+@group generic
+@since 6.2.0
+
+=== TEST: Migrate key to another host
+RUN:
+MIGRATE 127.0.0.1 6380 mykey 0 5000
+EXPECT:
+(any)
+
+---
+
+@name MOVE
+@group generic
+@since 6.2.0
+
+=== TEST: Move key to another database
+SETUP:
+SET movekey "value"
+RUN:
+MOVE movekey 1
+EXPECT:
+(integer) 1
+
+=== TEST: Move non-existing key fails
+RUN:
+MOVE nonexistent 1
+EXPECT:
+(integer) 0
+
+---
+
+@name OBJECT ENCODING
+@group generic
+@since 6.2.0
+
+=== TEST: Get object encoding
+SETUP:
+SET strkey "value"
+RUN:
+OBJECT ENCODING strkey
+EXPECT:
+(match) .*
+
+---
+
+@name OBJECT FREQ
+@group generic
+@since 6.2.0
+
+=== TEST: Get access frequency
+SETUP:
+SET freqkey "value"
+GET freqkey
+RUN:
+OBJECT FREQ freqkey
+EXPECT:
+(match) (integer) [0-9]+
+
+---
+
+@name OBJECT IDLETIME
+@group generic
+@since 6.2.0
+
+=== TEST: Get idle time
+SETUP:
+SET idlekey "value"
+RUN:
+OBJECT IDLETIME idlekey
+EXPECT:
+(match) (integer) [0-9]+
+
+---
+
+@name OBJECT REFCOUNT
+@group generic
+@since 6.2.0
+
+=== TEST: Get reference count
+SETUP:
+SET refkey "value"
+RUN:
+OBJECT REFCOUNT refkey
+EXPECT:
+(match) (integer) [0-9]+
+
+---
+
+@name WAIT
+@group generic
+@since 6.2.0
+
+=== TEST: Wait for replicas
+RUN:
+WAIT 1 1000
+EXPECT:
+(match) (integer) [0-9]+
+
+---
+
+@name WAITAOF
+@group generic
+@since 7.2.0
+
+=== TEST: Wait for AOF fsync
+RUN:
+WAITAOF 1 1 1000
+EXPECT:
+(any)

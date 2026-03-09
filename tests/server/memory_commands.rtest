@@ -1,0 +1,67 @@
+@name MEMORY STATS
+@group server
+@since 6.2.0
+
+=== TEST: Get memory statistics
+RUN:
+MEMORY STATS
+EXPECT:
+(match) .*
+
+---
+
+@name MEMORY USAGE
+@group server
+@since 6.2.0
+
+=== TEST: Estimate memory usage
+SETUP:
+SET testkey "value"
+RUN:
+MEMORY USAGE testkey
+EXPECT:
+(match) (integer) [0-9]+
+
+=== TEST: Memory usage of large value
+SETUP:
+SET bigkey "x" "x" "x" "x" "x"
+RUN:
+MEMORY USAGE bigkey
+EXPECT:
+(match) (integer) [0-9]+
+
+---
+
+@name MEMORY DOCTOR
+@group server
+@since 6.2.0
+
+=== TEST: Get memory report
+RUN:
+MEMORY DOCTOR
+EXPECT:
+(match) .*
+
+---
+
+@name MEMORY PURGE
+@group server
+@since 6.2.0
+
+=== TEST: Purge memory
+RUN:
+MEMORY PURGE
+EXPECT:
+OK
+
+---
+
+@name MEMORY MALLOC-STATS
+@group server
+@since 6.2.0
+
+=== TEST: Get allocator stats
+RUN:
+MEMORY MALLOC-STATS
+EXPECT:
+(match) .*

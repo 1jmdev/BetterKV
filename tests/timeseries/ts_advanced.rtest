@@ -1,0 +1,56 @@
+@name TS.MADD
+@group timeseries
+@since 6.2.0
+
+=== TEST: Add multiple samples
+RUN:
+TS.MADD ts:1 1000 10 ts:2 2000 20 ts:3 3000 30
+EXPECT:
+(match) [0-9]+
+
+---
+
+@name TS.DEL
+@group timeseries
+@since 6.2.0
+
+=== TEST: Delete time range
+SETUP:
+TS.CREATE ts:delrange
+TS.ADD ts:delrange 1000 10
+TS.ADD ts:delrange 2000 20
+TS.ADD ts:delrange 3000 30
+RUN:
+TS.DEL ts:delrange 1500 2500
+EXPECT:
+(integer) 1
+
+---
+
+@name TS.CREATERULE
+@group timeseries
+@since 6.2.0
+
+=== TEST: Create compaction rule
+SETUP:
+TS.CREATE source:ts
+RUN:
+TS.CREATERULE source:ts dest:ts 60000 AVG
+EXPECT:
+OK
+
+---
+
+@name TS.DELETERULE
+@group timeseries
+@since 6.2.0
+
+=== TEST: Delete compaction rule
+SETUP:
+TS.CREATE src:ts
+TS.CREATE dst:ts
+TS.CREATERULE src:ts dst:ts 60000 SUM
+RUN:
+TS.DELETERULE src:ts dst:ts
+EXPECT:
+OK

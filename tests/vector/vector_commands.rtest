@@ -1,0 +1,184 @@
+@name VADD
+@group vector
+@since 6.2.0
+
+=== TEST: Add vector
+RUN:
+VADD vectors:1 1 0.1 0.2 0.3
+EXPECT:
+OK
+
+=== TEST: Add multiple vectors
+RUN:
+VADD vectors:2 2 0.1 0.2 0.3 0.4 0.5
+EXPECT:
+OK
+
+---
+
+@name VDIM
+@group vector
+@since 6.2.0
+
+=== TEST: Get vector dimension
+SETUP:
+VADD vec:test 1 1.0 2.0 3.0 4.0 5.0
+RUN:
+VDIM vec:test
+EXPECT:
+(integer) 5
+
+---
+
+@name VCARD
+@group vector
+@since 6.2.0
+
+=== TEST: Get vector count
+SETUP:
+VADD vec:store 2 0.1 0.2 0.3 0.4 0.5
+RUN:
+VCARD vec:store
+EXPECT:
+(match) (integer) [0-9]+
+
+---
+
+@name VRANGE
+@group vector
+@since 6.2.0
+
+=== TEST: Get vector range
+SETUP:
+VADD vec:range 5 0.1 0.2 0.3 0.4 0.5
+RUN:
+VRANGE vec:range 0 2
+EXPECT:
+(match) .*
+
+---
+
+@name VREM
+@group vector
+@since 6.2.0
+
+=== TEST: Remove vector
+SETUP:
+VADD vec:del 3 0.1 0.2 0.3
+RUN:
+VREM vec:del 1
+EXPECT:
+(match) (integer) [0-9]+
+
+---
+
+@name VSIM
+@group vector
+@since 6.2.0
+
+=== TEST: Calculate vector similarity
+SETUP:
+VADD vec:a 3 1.0 0.0 0.0
+VADD vec:b 3 0.0 1.0 0.0
+RUN:
+VSIM vec:a vec:b
+EXPECT:
+(match) [0-9.-]+
+
+---
+
+@name VISMEMBER
+@group vector
+@since 6.2.0
+
+=== TEST: Check if vector member
+SETUP:
+VADD vec:member 2 0.5 0.5
+RUN:
+VISMEMBER vec:member 1
+EXPECT:
+(match) (integer) [0-1]
+
+---
+
+@name VRANDMEMBER
+@group vector
+@since 6.2.0
+
+=== TEST: Get random vector member
+SETUP:
+VADD vec:rand 5 0.1 0.2 0.3 0.4 0.5
+RUN:
+VRANDMEMBER vec:rand
+EXPECT:
+(match) (integer) [0-9]+
+
+---
+
+@name VEMB
+@group vector
+@since 6.2.0
+
+=== TEST: Get vector embeddings
+SETUP:
+VADD vec:emb 3 0.1 0.2 0.3
+RUN:
+VEMB vec:emb 1
+EXPECT:
+(match) .*
+
+---
+
+@name VINFO
+@group vector
+@since 6.2.0
+
+=== TEST: Get vector info
+SETUP:
+VADD vec:info 4 0.25 0.25 0.25 0.25
+RUN:
+VINFO vec:info
+EXPECT:
+(match) .*
+
+---
+
+@name VLINKS
+@group vector
+@since 6.2.0
+
+=== TEST: Get vector links
+SETUP:
+VADD vec:links 3 0.5 0.5 0.0
+RUN:
+VLINKS vec:links 1
+EXPECT:
+(match) .*
+
+---
+
+@name VGETATTR
+@group vector
+@since 6.2.0
+
+=== TEST: Get vector attribute
+SETUP:
+VADD vec:attr 2 0.7 0.3
+RUN:
+VGETATTR vec:attr 1 "attr_name"
+EXPECT:
+(any)
+
+---
+
+@name VSETATTR
+@group vector
+@since 6.2.0
+
+=== TEST: Set vector attribute
+SETUP:
+VADD vec:setattr 2 0.4 0.6
+RUN:
+VSETATTR vec:setattr 1 "label" "important"
+EXPECT:
+OK

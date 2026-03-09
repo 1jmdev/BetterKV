@@ -1,0 +1,69 @@
+@name CONFIG GET
+@group server
+@since 6.2.0
+
+=== TEST: Get single config
+RUN:
+CONFIG GET "maxmemory"
+EXPECT:
+(match) .*
+
+=== TEST: Get multiple configs
+RUN:
+CONFIG GET "maxmemory" "timeout"
+EXPECT:
+(match) .*
+
+=== TEST: Get wildcard config
+RUN:
+CONFIG GET "max*"
+EXPECT:
+(match) .*
+
+=== TEST: Get non-existing config
+RUN:
+CONFIG GET "nonexistentparam"
+EXPECT:
+(empty)
+
+---
+
+@name CONFIG SET
+@group server
+@since 6.2.0
+
+=== TEST: Set config parameter
+RUN:
+CONFIG SET "timeout" "300"
+EXPECT:
+OK
+
+=== TEST: Set maxmemory
+RUN:
+CONFIG SET "maxmemory" "1gb"
+EXPECT:
+OK
+
+---
+
+@name CONFIG RESETSTAT
+@group server
+@since 6.2.0
+
+=== TEST: Reset statistics
+RUN:
+CONFIG RESETSTAT
+EXPECT:
+OK
+
+---
+
+@name CONFIG REWRITE
+@group server
+@since 6.2.0
+
+=== TEST: Rewrite config file
+RUN:
+CONFIG REWRITE
+EXPECT:
+OK

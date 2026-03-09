@@ -1,0 +1,240 @@
+@name JSON.OBJKEYS
+@group json
+@since 6.2.0
+
+=== TEST: Get object keys
+SETUP:
+JSON.SET obj $ '{"name":"Alice","age":30,"city":"NYC"}'
+RUN:
+JSON.OBJKEYS obj $
+EXPECT:
+1) "name"
+2) "age"
+3) "city"
+
+=== TEST: Get keys of nested object
+SETUP:
+JSON.SET doc $ '{"user":{"id":1,"email":"test@example.com"}}'
+RUN:
+JSON.OBJKEYS doc $.user
+EXPECT:
+1) "id"
+2) "email"
+
+=== TEST: Empty object returns empty array
+SETUP:
+JSON.SET obj $ '{}'
+RUN:
+JSON.OBJKEYS obj $
+EXPECT:
+(empty)
+
+---
+
+@name JSON.OBJLEN
+@group json
+@since 6.2.0
+
+=== TEST: Get object field count
+SETUP:
+JSON.SET obj $ '{"name":"Alice","age":30,"city":"NYC"}'
+RUN:
+JSON.OBJLEN obj $
+EXPECT:
+(integer) 3
+
+=== TEST: Get nested object field count
+SETUP:
+JSON.SET doc $ '{"user":{"id":1,"email":"test@example.com"}}'
+RUN:
+JSON.OBJLEN doc $.user
+EXPECT:
+(integer) 2
+
+=== TEST: Empty object field count is 0
+SETUP:
+JSON.SET obj $ '{}'
+RUN:
+JSON.OBJLEN obj $
+EXPECT:
+(integer) 0
+
+---
+
+@name JSON.STRAPPEND
+@group json
+@since 6.2.0
+
+=== TEST: Append to JSON string
+SETUP:
+JSON.SET doc $ '{"greeting":"Hello"}'
+RUN:
+JSON.STRAPPEND doc $.greeting '" World"'
+EXPECT:
+(integer) 11
+
+=== TEST: Append multiple times
+SETUP:
+JSON.SET doc $ '{"text":"A"}'
+RUN:
+JSON.STRAPPEND doc $.text '"B"' '"C"'
+EXPECT:
+(integer) 3
+
+=== TEST: Append to path with multiple strings
+SETUP:
+JSON.SET arr $ '["Hello","World"]'
+RUN:
+JSON.STRAPPEND arr $[0] '"!"'
+EXPECT:
+(integer) 6
+
+---
+
+@name JSON.STRLEN
+@group json
+@since 6.2.0
+
+=== TEST: Get string length
+SETUP:
+JSON.SET doc $ '{"text":"Hello World"}'
+RUN:
+JSON.STRLEN doc $.text
+EXPECT:
+(integer) 11
+
+=== TEST: Empty string length is 0
+SETUP:
+JSON.SET doc $ '{"text":""}'
+RUN:
+JSON.STRLEN doc $.text
+EXPECT:
+(integer) 0
+
+=== TEST: String length for array strings
+SETUP:
+JSON.SET arr $ '["Hello","World","!"]'
+RUN:
+JSON.STRLEN arr $[1]
+EXPECT:
+(integer) 5
+
+---
+
+@name JSON.NUMINCRBY
+@group json
+@since 6.2.0
+
+=== TEST: Increment integer value
+SETUP:
+JSON.SET doc $ '{"count":5}'
+RUN:
+JSON.NUMINCRBY doc $.count 3
+EXPECT:
+"8"
+
+=== TEST: Increment by negative value
+SETUP:
+JSON.SET doc $ '{"count":10}'
+RUN:
+JSON.NUMINCRBY doc $.count -4
+EXPECT:
+"6"
+
+=== TEST: Increment float value
+SETUP:
+JSON.SET doc $ '{"price":10.5}'
+RUN:
+JSON.NUMINCRBY doc $.price 2.5
+EXPECT:
+"13"
+
+---
+
+@name JSON.NUMMULTBY
+@group json
+@since 6.2.0
+
+=== TEST: Multiply number
+SETUP:
+JSON.SET doc $ '{"value":10}'
+RUN:
+JSON.NUMMULTBY doc $.value 3
+EXPECT:
+"30"
+
+=== TEST: Multiply by fraction
+SETUP:
+JSON.SET doc $ '{"value":100}'
+RUN:
+JSON.NUMMULTBY doc $.value 0.5
+EXPECT:
+"50"
+
+=== TEST: Multiply float value
+SETUP:
+JSON.SET doc $ '{"price":25.5}'
+RUN:
+JSON.NUMMULTBY doc $.price 2
+EXPECT:
+"51"
+
+---
+
+@name JSON.TOGGLE
+@group json
+@since 6.2.0
+
+=== TEST: Toggle boolean true to false
+SETUP:
+JSON.SET doc $ '{"active":true}'
+RUN:
+JSON.TOGGLE doc $.active
+EXPECT:
+(integer) 0
+
+=== TEST: Toggle boolean false to true
+SETUP:
+JSON.SET doc $ '{"active":false}'
+RUN:
+JSON.TOGGLE doc $.active
+EXPECT:
+(integer) 1
+
+---
+
+@name JSON.TYPE
+@group json
+@since 6.2.0
+
+=== TEST: Get type of value
+SETUP:
+JSON.SET doc $ '{"a":1,"b":"text","c":true,"d":null,"e":[1,2],"f":{}}'
+RUN:
+JSON.TYPE doc $.a
+EXPECT:
+(match) integer|number
+
+=== TEST: Type of string
+SETUP:
+JSON.SET doc $ '{"text":"value"}'
+RUN:
+JSON.TYPE doc $.text
+EXPECT:
+string
+
+=== TEST: Type of array
+SETUP:
+JSON.SET doc $ '{"arr":[1,2,3]}'
+RUN:
+JSON.TYPE doc $.arr
+EXPECT:
+array
+
+=== TEST: Type of object
+SETUP:
+JSON.SET doc $ '{"obj":{"a":1}}'
+RUN:
+JSON.TYPE doc $.obj
+EXPECT:
+object

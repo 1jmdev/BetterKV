@@ -1,0 +1,189 @@
+@name CLUSTER INFO
+@group cluster
+@since 6.2.0
+
+=== TEST: Get cluster info
+RUN:
+CLUSTER INFO
+EXPECT:
+(any)
+
+---
+
+@name CLUSTER NODES
+@group cluster
+@since 6.2.0
+
+=== TEST: Get cluster nodes
+RUN:
+CLUSTER NODES
+EXPECT:
+(any)
+
+---
+
+@name CLUSTER SLOTS
+@group cluster
+@since 6.2.0
+
+=== TEST: Get cluster slot mapping
+RUN:
+CLUSTER SLOTS
+EXPECT:
+(any)
+
+---
+
+@name CLUSTER MYID
+@group cluster
+@since 6.2.0
+
+=== TEST: Get this node ID
+RUN:
+CLUSTER MYID
+EXPECT:
+(any)
+
+---
+
+@name CLUSTER KEYSLOT
+@group cluster
+@since 6.2.0
+
+=== TEST: Get hash slot for key
+RUN:
+CLUSTER KEYSLOT "mykey"
+EXPECT:
+(match) (integer) [0-9]+
+
+---
+
+@name CLUSTER MEET
+@group cluster
+@since 6.2.0
+
+=== TEST: Make cluster node handshake
+RUN:
+CLUSTER MEET 127.0.0.1 7000
+EXPECT:
+(any)
+
+---
+
+@name CLUSTER ADDSLOTS
+@group cluster
+@since 6.2.0
+
+=== TEST: Assign slot to node
+RUN:
+CLUSTER ADDSLOTS 1000
+EXPECT:
+(any)
+
+---
+
+@name CLUSTER DELSLOTS
+@group cluster
+@since 6.2.0
+
+=== TEST: Unassign slot from node
+RUN:
+CLUSTER DELSLOTS 1000
+EXPECT:
+(any)
+
+---
+
+@name CLUSTER ADDSLOTSRANGE
+@group cluster
+@since 7.0.0
+
+=== TEST: Assign slot range
+RUN:
+CLUSTER ADDSLOTSRANGE 1000 1100
+EXPECT:
+(any)
+
+---
+
+@name CLUSTER DELSLOTSRANGE
+@group cluster
+@since 7.0.0
+
+=== TEST: Unassign slot range
+RUN:
+CLUSTER DELSLOTSRANGE 1000 1100
+EXPECT:
+(any)
+
+---
+
+@name CLUSTER REPLICATE
+@group cluster
+@since 6.2.0
+
+=== TEST: Set master for replication
+RUN:
+CLUSTER REPLICATE "node-id"
+EXPECT:
+(any)
+
+---
+
+@name CLUSTER SAVECONFIG
+@group cluster
+@since 6.2.0
+
+=== TEST: Save cluster configuration
+RUN:
+CLUSTER SAVECONFIG
+EXPECT:
+(any)
+
+---
+
+@name CLUSTER RESET
+@group cluster
+@since 6.2.0
+
+=== TEST: Reset cluster node
+RUN:
+CLUSTER RESET SOFT
+EXPECT:
+(any)
+
+---
+
+@name ASKING
+@group cluster
+@since 6.2.0
+
+=== TEST: Signal ASK redirect
+RUN:
+ASKING
+EXPECT:
+OK
+
+---
+
+@name READONLY
+@group cluster
+@since 6.2.0
+
+=== TEST: Enable read-only replica
+RUN:
+READONLY
+EXPECT:
+OK
+
+---
+
+@name READWRITE
+@group cluster
+@since 6.2.0
+
+=== TEST: Disable read-only replica
+RUN:
+READWRITE
+EXPECT:
+OK

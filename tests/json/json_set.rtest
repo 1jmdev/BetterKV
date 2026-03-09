@@ -1,0 +1,73 @@
+@name JSON.SET
+@group json
+@since 6.2.0
+
+=== TEST: Set JSON value at root
+RUN:
+JSON.SET doc $ '{"name":"Alice"}'
+EXPECT:
+OK
+
+=== TEST: Set nested value
+RUN:
+JSON.SET doc $.age 30
+EXPECT:
+OK
+
+=== TEST: Set with NX flag (create if not exists)
+RUN:
+JSON.SET doc $.newfield "value" NX
+EXPECT:
+OK
+
+=== TEST: Set with NX flag on existing path fails
+SETUP:
+JSON.SET doc $ '{"field":"value"}'
+RUN:
+JSON.SET doc $.field "newvalue" NX
+EXPECT:
+(nil)
+
+=== TEST: Set with XX flag (only if exists)
+SETUP:
+JSON.SET doc $ '{"field":"value"}'
+RUN:
+JSON.SET doc $.field "updated" XX
+EXPECT:
+OK
+
+=== TEST: Set with XX flag on non-existing path fails
+SETUP:
+JSON.SET doc $ '{"field":"value"}'
+RUN:
+JSON.SET doc $.nonexistent "value" XX
+EXPECT:
+(nil)
+
+=== TEST: Set array element
+SETUP:
+JSON.SET arr $ '[1,2,3]'
+RUN:
+JSON.SET arr $[1] 20
+EXPECT:
+OK
+
+=== TEST: Set with EXAT option
+RUN:
+JSON.SET doc $ '{"name":"Bob"}' EXAT 9999999999
+EXPECT:
+OK
+
+=== TEST: Set with PXAT option
+RUN:
+JSON.SET doc $ '{"age":25}' PXAT 9999999999999
+EXPECT:
+OK
+
+=== TEST: Set replaces entire document
+SETUP:
+JSON.SET doc $ '{"a":1,"b":2}'
+RUN:
+JSON.SET doc $ '{"c":3}'
+EXPECT:
+OK

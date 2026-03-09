@@ -1,0 +1,197 @@
+@name HEXPIRE
+@group hashes
+@since 7.4.0
+
+=== TEST: Set field expiration
+SETUP:
+HSET expkey field1 "value1" field2 "value2"
+RUN:
+HEXPIRE expkey 60 FIELDS 1 field1
+EXPECT:
+(match) (integer) [0-1]
+
+---
+
+@name HEXPIREAT
+@group hashes
+@since 7.4.0
+
+=== TEST: Set field expiration at timestamp
+SETUP:
+HSET expatskey field "value"
+RUN:
+HEXPIREAT expatskey 9999999999 FIELDS 1 field
+EXPECT:
+(match) (integer) [0-1]
+
+---
+
+@name HPEXPIRE
+@group hashes
+@since 7.4.0
+
+=== TEST: Set field expiration milliseconds
+SETUP:
+HSET hpexpire field "data"
+RUN:
+HPEXPIRE hpexpire 60000 FIELDS 1 field
+EXPECT:
+(match) (integer) [0-1]
+
+---
+
+@name HPEXPIREAT
+@group hashes
+@since 7.4.0
+
+=== TEST: Set field expiration at ms timestamp
+SETUP:
+HSET hpat field "value"
+RUN:
+HPEXPIREAT hpat 9999999999999 FIELDS 1 field
+EXPECT:
+(match) (integer) [0-1]
+
+---
+
+@name HPERSIST
+@group hashes
+@since 7.4.0
+
+=== TEST: Remove field expiration
+SETUP:
+HSET hpers field "value"
+HEXPIRE hpers 60 FIELDS 1 field
+RUN:
+HPERSIST hpers FIELDS 1 field
+EXPECT:
+(match) (integer) [0-1]
+
+---
+
+@name HTTL
+@group hashes
+@since 7.4.0
+
+=== TEST: Get field TTL
+SETUP:
+HSET httl field "value"
+HEXPIRE httl 60 FIELDS 1 field
+RUN:
+HTTL httl FIELDS 1 field
+EXPECT:
+(match) .*
+
+---
+
+@name HPTTL
+@group hashes
+@since 7.4.0
+
+=== TEST: Get field TTL milliseconds
+SETUP:
+HSET hpttl field "value"
+HPEXPIRE hpttl 60000 FIELDS 1 field
+RUN:
+HPTTL hpttl FIELDS 1 field
+EXPECT:
+(match) .*
+
+---
+
+@name HEXPIRETIME
+@group hashes
+@since 7.4.0
+
+=== TEST: Get field expiration time
+SETUP:
+HSET hexptime field "value"
+HEXPIREAT hexptime 9999999999 FIELDS 1 field
+RUN:
+HEXPIRETIME hexptime FIELDS 1 field
+EXPECT:
+(match) (integer) [0-9]+
+
+---
+
+@name HPEXPIRETIME
+@group hashes
+@since 7.4.0
+
+=== TEST: Get field expiration time ms
+SETUP:
+HSET hpexptime field "value"
+HPEXPIREAT hpexptime 9999999999999 FIELDS 1 field
+RUN:
+HPEXPIRETIME hpexptime FIELDS 1 field
+EXPECT:
+(match) (integer) [0-9]+
+
+---
+
+@name HGETDEL
+@group hashes
+@since 7.4.0
+
+=== TEST: Get and delete field
+SETUP:
+HSET hgetdel field "value"
+RUN:
+HGETDEL hgetdel field
+EXPECT:
+"value"
+
+=== TEST: Field is deleted
+SETUP:
+HSET hgd field "data"
+HGETDEL hgd field
+RUN:
+HEXISTS hgd field
+EXPECT:
+(integer) 0
+
+---
+
+@name HGETEX
+@group hashes
+@since 7.4.0
+
+=== TEST: Get with field expiration
+SETUP:
+HSET hgetex field "value"
+RUN:
+HGETEX hgetex field EX 60
+EXPECT:
+"value"
+
+=== TEST: Get with PX option
+SETUP:
+HSET hpxgetex field "data"
+RUN:
+HGETEX hpxgetex field PX 60000
+EXPECT:
+"data"
+
+---
+
+@name HSETEX
+@group hashes
+@since 7.4.0
+
+=== TEST: Set with expiration
+RUN:
+HSETEX hsetnew field "value" EX 60
+EXPECT:
+(integer) 1
+
+---
+
+@name MSETEX
+@group strings
+@since 7.4.0
+
+=== TEST: Set multiple with expiration
+RUN:
+MSETEX key1 "val1" key2 "val2" EX 60
+EXPECT:
+OK

@@ -1,0 +1,50 @@
+@name SINTERCARD
+@group sets
+@since 6.2.0
+
+=== TEST: Get intersection cardinality
+SETUP:
+SADD set1 "a" "b" "c"
+SADD set2 "b" "c" "d"
+RUN:
+SINTERCARD 2 set1 set2
+EXPECT:
+(integer) 2
+
+=== TEST: Multiple sets intersection
+SETUP:
+SADD s1 1 2 3 4
+SADD s2 2 3 4 5
+SADD s3 3 4 5 6
+RUN:
+SINTERCARD 3 s1 s2 s3
+EXPECT:
+(integer) 2
+
+=== TEST: SINTERCARD with LIMIT
+SETUP:
+SADD lim1 "a" "b" "c"
+SADD lim2 "a" "b" "c"
+SADD lim3 "a" "b" "c"
+RUN:
+SINTERCARD 3 lim1 lim2 lim3 LIMIT 2
+EXPECT:
+(integer) 2
+
+=== TEST: No common elements
+SETUP:
+SADD nocmn1 "x" "y"
+SADD nocmn2 "a" "b"
+RUN:
+SINTERCARD 2 nocmn1 nocmn2
+EXPECT:
+(integer) 0
+
+=== TEST: One set is superset
+SETUP:
+SADD super "a" "b" "c" "d"
+SADD sub "a" "b"
+RUN:
+SINTERCARD 2 super sub
+EXPECT:
+(integer) 2

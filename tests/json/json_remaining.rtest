@@ -1,0 +1,168 @@
+@name JSON.DEL
+@group json
+@since 6.2.0
+
+=== TEST: Delete value at path
+SETUP:
+JSON.SET doc $ '{"a":1,"b":2,"c":3}'
+RUN:
+JSON.DEL doc $.b
+EXPECT:
+(integer) 1
+
+=== TEST: Delete multiple paths
+SETUP:
+JSON.SET doc $ '{"a":1,"b":2,"c":3}'
+RUN:
+JSON.DEL doc $.a $.c
+EXPECT:
+(integer) 2
+
+=== TEST: Delete non-existing path returns 0
+SETUP:
+JSON.SET doc $ '{"a":1}'
+RUN:
+JSON.DEL doc $.nonexistent
+EXPECT:
+(integer) 0
+
+---
+
+@name JSON.CLEAR
+@group json
+@since 6.2.0
+
+=== TEST: Clear array values
+SETUP:
+JSON.SET arr $ '[1,2,3,4,5]'
+RUN:
+JSON.CLEAR arr $
+EXPECT:
+(integer) 1
+
+=== TEST: Clear object values
+SETUP:
+JSON.SET doc $ '{"a":1,"b":2,"c":3}'
+RUN:
+JSON.CLEAR doc $
+EXPECT:
+(integer) 1
+
+---
+
+@name JSON.MGET
+@group json
+@since 6.2.0
+
+=== TEST: Get values from multiple keys
+SETUP:
+JSON.SET key1 $ '{"value":1}'
+JSON.SET key2 $ '{"value":2}'
+JSON.SET key3 $ '{"value":3}'
+RUN:
+JSON.MGET key1 key2 key3 $.value
+EXPECT:
+1) "1"
+2) "2"
+3) "3"
+
+=== TEST: MGET with non-existing keys
+SETUP:
+JSON.SET key1 $ '{"a":1}'
+RUN:
+JSON.MGET key1 nonexistent $.a
+EXPECT:
+1) "1"
+2) (nil)
+
+---
+
+@name JSON.MSET
+@group json
+@since 6.2.0
+
+=== TEST: Set values in multiple keys
+RUN:
+JSON.MSET key1 $ '{"x":1}' key2 $ '{"y":2}' key3 $ '{"z":3}'
+EXPECT:
+OK
+
+=== TEST: MSET updates existing keys
+SETUP:
+JSON.SET key1 $ '{"old":1}'
+RUN:
+JSON.MSET key1 $.new 5
+EXPECT:
+OK
+
+---
+
+@name JSON.ARRINSERT
+@group json
+@since 6.2.0
+
+=== TEST: Insert at beginning
+SETUP:
+JSON.SET arr $ '[2,3]'
+RUN:
+JSON.ARRINSERT arr $ 0 1
+EXPECT:
+(integer) 3
+
+=== TEST: Insert in middle
+SETUP:
+JSON.SET arr $ '[1,3]'
+RUN:
+JSON.ARRINSERT arr $ 1 2
+EXPECT:
+(integer) 3
+
+---
+
+@name JSON.MERGE
+@group json
+@since 6.2.0
+
+=== TEST: Merge objects
+SETUP:
+JSON.SET doc $ '{"a":1,"b":2}'
+RUN:
+JSON.MERGE doc $ '{"c":3,"d":4}'
+EXPECT:
+OK
+
+=== TEST: Merge overwrites values
+SETUP:
+JSON.SET doc $ '{"a":1,"b":2}'
+RUN:
+JSON.MERGE doc $ '{"b":20,"c":3}'
+EXPECT:
+OK
+
+---
+
+@name JSON.RESP
+@group json
+@since 6.2.0
+
+=== TEST: Get RESP format output
+SETUP:
+JSON.SET doc $ '{"a":1,"b":"text"}'
+RUN:
+JSON.RESP doc $.a
+EXPECT:
+(any)
+
+---
+
+@name JSON.DEBUG
+@group json
+@since 6.2.0
+
+=== TEST: Get JSON debug memory info
+SETUP:
+JSON.SET doc $ '{"key":"value"}'
+RUN:
+JSON.DEBUG MEMORY doc
+EXPECT:
+(any)

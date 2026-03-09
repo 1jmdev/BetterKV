@@ -1,0 +1,135 @@
+@name SLOWLOG GET
+@group server
+@since 6.2.0
+
+=== TEST: Get slowlog entries
+RUN:
+SLOWLOG GET
+EXPECT:
+(match) .*
+
+=== TEST: Get limited slowlog entries
+RUN:
+SLOWLOG GET 5
+EXPECT:
+(match) .*
+
+---
+
+@name SLOWLOG LEN
+@group server
+@since 6.2.0
+
+=== TEST: Get slowlog length
+RUN:
+SLOWLOG LEN
+EXPECT:
+(match) (integer) [0-9]+
+
+---
+
+@name SLOWLOG RESET
+@group server
+@since 6.2.0
+
+=== TEST: Clear slowlog
+RUN:
+SLOWLOG RESET
+EXPECT:
+OK
+
+---
+
+@name MODULE LIST
+@group server
+@since 6.2.0
+
+=== TEST: List loaded modules
+RUN:
+MODULE LIST
+EXPECT:
+(match) .*
+
+---
+
+@name MODULE LOAD
+@group server
+@since 6.2.0
+
+=== TEST: Load module returns OK or error
+RUN:
+MODULE LOAD "/path/to/module.so"
+EXPECT:
+(any)
+
+---
+
+@name MODULE UNLOAD
+@group server
+@since 6.2.0
+
+=== TEST: Unload module returns OK or error
+RUN:
+MODULE UNLOAD modulename
+EXPECT:
+(any)
+
+---
+
+@name LATENCY LATEST
+@group server
+@since 6.2.0
+
+=== TEST: Get latest latency samples
+RUN:
+LATENCY LATEST
+EXPECT:
+(match) .*
+
+---
+
+@name LATENCY HISTORY
+@group server
+@since 6.2.0
+
+=== TEST: Get latency history for event
+RUN:
+LATENCY HISTORY command
+EXPECT:
+(match) .*
+
+---
+
+@name LATENCY RESET
+@group server
+@since 6.2.0
+
+=== TEST: Reset latency data
+RUN:
+LATENCY RESET
+EXPECT:
+(match) (integer) [0-9]+
+
+---
+
+@name LATENCY DOCTOR
+@group server
+@since 6.2.0
+
+=== TEST: Get latency analysis report
+RUN:
+LATENCY DOCTOR
+EXPECT:
+(match) .*
+
+---
+
+@name LATENCY GRAPH
+@group server
+@since 6.2.0
+
+=== TEST: Get latency graph
+RUN:
+LATENCY GRAPH command
+EXPECT:
+(match) .*

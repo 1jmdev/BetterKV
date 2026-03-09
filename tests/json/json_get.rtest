@@ -1,0 +1,73 @@
+@name JSON.GET
+@group json
+@since 6.2.0
+
+=== TEST: Get JSON value at root path
+SETUP:
+JSON.SET doc $ '{"name":"Alice","age":30}'
+RUN:
+JSON.GET doc $
+EXPECT:
+"{"name":"Alice","age":30}"
+
+=== TEST: Get JSON value at specific path
+SETUP:
+JSON.SET mykey $ '{"a":{"b":2},"c":3}'
+RUN:
+JSON.GET mykey $.a.b
+EXPECT:
+"2"
+
+=== TEST: Get multiple paths
+SETUP:
+JSON.SET mykey $ '{"a":1,"b":2,"c":3}'
+RUN:
+JSON.GET mykey $.a $.b
+EXPECT:
+"[1,2]"
+
+=== TEST: Get non-existing key returns nil
+RUN:
+JSON.GET nonexistent $
+EXPECT:
+(nil)
+
+=== TEST: Get non-existing path returns nil
+SETUP:
+JSON.SET mykey $ '{"a":1}'
+RUN:
+JSON.GET mykey $.nonexistent
+EXPECT:
+(nil)
+
+=== TEST: Get array elements
+SETUP:
+JSON.SET arr $ '[1,2,3,4,5]'
+RUN:
+JSON.GET arr $[0]
+EXPECT:
+"1"
+
+=== TEST: Get multiple array elements
+SETUP:
+JSON.SET arr $ '[1,2,3,4,5]'
+RUN:
+JSON.GET arr $[0] $[2] $[4]
+EXPECT:
+"[1,3,5]"
+
+=== TEST: Get nested object
+SETUP:
+JSON.SET nested $ '{"user":{"name":"Bob","profile":{"age":25,"city":"NYC"}}}'
+RUN:
+JSON.GET nested $.user.profile
+EXPECT:
+"{"age":25,"city":"NYC"}"
+
+=== TEST: Get with wildcard path
+SETUP:
+JSON.SET obj $ '{"a":1,"b":2,"c":3}'
+RUN:
+JSON.GET obj $.*
+EXPECT:
+"[1,2,3]"

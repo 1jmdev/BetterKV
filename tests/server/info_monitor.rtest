@@ -1,0 +1,153 @@
+@name INFO
+@group server
+@since 6.2.0
+
+=== TEST: Get all server info
+RUN:
+INFO
+EXPECT:
+(match) .*
+
+=== TEST: Get server section
+RUN:
+INFO server
+EXPECT:
+(match) .*
+
+=== TEST: Get stats section
+RUN:
+INFO stats
+EXPECT:
+(match) .*
+
+=== TEST: Get clients section
+RUN:
+INFO clients
+EXPECT:
+(match) .*
+
+=== TEST: Get memory section
+RUN:
+INFO memory
+EXPECT:
+(match) .*
+
+=== TEST: Get multiple sections
+RUN:
+INFO server clients
+EXPECT:
+(match) .*
+
+---
+
+@name MONITOR
+@group server
+@since 6.2.0
+
+=== TEST: Monitor command stream
+RUN:
+MONITOR
+EXPECT:
+(any)
+
+---
+
+@name ROLE
+@group server
+@since 6.2.0
+
+=== TEST: Get replication role
+RUN:
+ROLE
+EXPECT:
+(match) .*
+
+---
+
+@name BGSAVE
+@group server
+@since 6.2.0
+
+=== TEST: Background save
+RUN:
+BGSAVE
+EXPECT:
+(any)
+
+---
+
+@name BGREWRITEAOF
+@group server
+@since 6.2.0
+
+=== TEST: Background AOF rewrite
+RUN:
+BGREWRITEAOF
+EXPECT:
+(any)
+
+---
+
+@name SAVE
+@group server
+@since 6.2.0
+
+=== TEST: Synchronous save
+RUN:
+SAVE
+EXPECT:
+OK
+
+---
+
+@name SHUTDOWN
+@group server
+@since 6.2.0
+
+=== TEST: Shutdown server (not executed)
+RUN:
+SHUTDOWN NOSAVE
+EXPECT:
+(any)
+
+---
+
+@name LOLWUT
+@group server
+@since 6.2.0
+
+=== TEST: ASCII art
+RUN:
+LOLWUT
+EXPECT:
+(match) .*
+
+---
+
+@name REPLICAOF
+@group server
+@since 6.2.0
+
+=== TEST: Set replica of master
+RUN:
+REPLICAOF 127.0.0.1 6379
+EXPECT:
+OK
+
+=== TEST: Promote to master
+RUN:
+REPLICAOF NO ONE
+EXPECT:
+OK
+
+---
+
+@name SLAVEOF
+@group server
+@since 6.2.0
+
+=== TEST: Set slaveof master (deprecated)
+RUN:
+SLAVEOF 127.0.0.1 6379
+EXPECT:
+OK
