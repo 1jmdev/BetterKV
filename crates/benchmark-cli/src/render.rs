@@ -1,6 +1,6 @@
 use crate::args::Args;
 use crate::bench::BenchResult;
-use comfy_table::{presets::UTF8_FULL, Cell, ContentArrangement, Table};
+use comfy_table::{Cell, ContentArrangement, Table, presets::UTF8_FULL};
 use hdrhistogram::Histogram;
 
 pub fn render_result(args: &Args, result: &BenchResult) {

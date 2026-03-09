@@ -12,7 +12,11 @@ fn write_int(buf: &mut BytesMut, val: i64) {
     }
 
     let neg = val < 0;
-    let mut v: u64 = if neg { (!(val as u64)).wrapping_add(1) } else { val as u64 };
+    let mut v: u64 = if neg {
+        (!(val as u64)).wrapping_add(1)
+    } else {
+        val as u64
+    };
 
     while v > 0 {
         pos -= 1;

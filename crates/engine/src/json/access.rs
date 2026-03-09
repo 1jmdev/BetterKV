@@ -2,7 +2,7 @@ use serde_json::{Map, Number, Value as JsonValue};
 
 use types::value::Entry;
 
-use super::{normalize_index, JsonError, JsonPath, JsonPathToken};
+use super::{JsonError, JsonPath, JsonPathToken, normalize_index};
 
 pub(crate) fn json_entry(entry: &Entry) -> Result<&JsonValue, JsonError> {
     entry.as_json().ok_or(JsonError::WrongType)
@@ -187,7 +187,7 @@ pub(crate) fn delete_exact(
                 return Ok(true);
             }
             JsonPathToken::RecursiveField(_) | JsonPathToken::Wildcard => {
-                return Err(JsonError::Path)
+                return Err(JsonError::Path);
             }
         }
     }

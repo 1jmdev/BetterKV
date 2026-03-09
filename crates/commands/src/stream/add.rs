@@ -1,5 +1,5 @@
 use crate::stream::parse::{parse_stream_id, parse_xadd_id, parse_xtrim_args, stream_id_to_bulk};
-use crate::util::{wrong_args, wrong_type, Args};
+use crate::util::{Args, wrong_args, wrong_type};
 use engine::store::{Store, StreamWriteError, XTrimMode};
 use protocol::types::RespFrame;
 use types::value::StreamId;

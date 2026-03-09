@@ -1,7 +1,7 @@
 use engine::store::Store;
 use protocol::types::{BulkData, RespFrame};
 
-use crate::util::{wrong_args, Args};
+use crate::util::{Args, wrong_args};
 
 use super::{json_error, optional_path};
 

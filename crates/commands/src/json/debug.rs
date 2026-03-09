@@ -1,7 +1,7 @@
 use engine::store::Store;
 use protocol::types::RespFrame;
 
-use crate::util::{eq_ascii, syntax_error, wrong_args, Args};
+use crate::util::{Args, eq_ascii, syntax_error, wrong_args};
 
 use super::{json_error, optional_path};
 

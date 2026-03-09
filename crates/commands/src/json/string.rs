@@ -2,7 +2,7 @@ use engine::store::Store;
 use protocol::types::RespFrame;
 use serde_json::Value as JsonValue;
 
-use crate::util::{wrong_args, Args};
+use crate::util::{Args, wrong_args};
 
 use super::{json_error, optional_path, parse_json, parse_path};
 

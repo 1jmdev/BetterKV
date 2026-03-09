@@ -34,7 +34,9 @@ pub async fn run(args: Args) -> Result<RunSummary, String> {
                 .iter()
                 .map(|path| parse_test_file(path))
                 .collect::<Result<Vec<_>, _>>()?,
-            vec![format!("failed to probe server capabilities; running without prefiltering: {error}")],
+            vec![format!(
+                "failed to probe server capabilities; running without prefiltering: {error}"
+            )],
             Vec::new(),
         ),
     };
@@ -118,7 +120,12 @@ async fn filter_cases_by_capability(
     let mut commands = std::collections::BTreeSet::new();
     for file in &files {
         for case in &file.cases {
-            for command in case.setup.iter().chain(case.run.iter()).chain(case.cleanup.iter()) {
+            for command in case
+                .setup
+                .iter()
+                .chain(case.run.iter())
+                .chain(case.cleanup.iter())
+            {
                 if let Some(name) = command_name(command) {
                     commands.insert(name);
                 }
@@ -191,13 +198,21 @@ async fn filter_cases_by_capability(
     .await;
 
     let object_freq_supported = match client
-        .execute(vec![b"SET".to_vec(), b"__betterkv_tester_probe__".to_vec(), b"1".to_vec()])
+        .execute(vec![
+            b"SET".to_vec(),
+            b"__betterkv_tester_probe__".to_vec(),
+            b"1".to_vec(),
+        ])
         .await
     {
         Ok(_) => {
             probe_bool(
                 &mut client,
-                vec![b"OBJECT".to_vec(), b"FREQ".to_vec(), b"__betterkv_tester_probe__".to_vec()],
+                vec![
+                    b"OBJECT".to_vec(),
+                    b"FREQ".to_vec(),
+                    b"__betterkv_tester_probe__".to_vec(),
+                ],
                 "ERR An LFU maxmemory policy is not selected, access frequency not tracked.",
                 "OBJECT FREQ support",
                 &mut warnings,
@@ -211,7 +226,9 @@ async fn filter_cases_by_capability(
             None
         }
     };
-    let _ = client.execute(vec![b"DEL".to_vec(), b"__betterkv_tester_probe__".to_vec()]).await;
+    let _ = client
+        .execute(vec![b"DEL".to_vec(), b"__betterkv_tester_probe__".to_vec()])
+        .await;
 
     let mut filtered = Vec::with_capacity(files.len());
     let mut skipped = Vec::new();
@@ -250,11 +267,17 @@ async fn filter_cases_by_capability(
 
 async fn command_supported(client: &mut Client, command: &str) -> Result<bool, String> {
     let frame = client
-        .execute(vec![b"COMMAND".to_vec(), b"INFO".to_vec(), command.as_bytes().to_vec()])
+        .execute(vec![
+            b"COMMAND".to_vec(),
+            b"INFO".to_vec(),
+            command.as_bytes().to_vec(),
+        ])
         .await?;
     Ok(match frame {
         RespFrame::Array(Some(items)) if items.is_empty() => false,
-        RespFrame::Array(Some(items)) if items.len() == 1 => !matches!(&items[0], RespFrame::Bulk(None) | RespFrame::Array(None)),
+        RespFrame::Array(Some(items)) if items.len() == 1 => {
+            !matches!(&items[0], RespFrame::Bulk(None) | RespFrame::Array(None))
+        }
         RespFrame::BulkOptions(items) if items.len() == 1 => items[0].is_some(),
         _ => true,
     })
@@ -268,9 +291,17 @@ fn case_skip_reason_preflight(
     config_rewrite_supported: Option<bool>,
     object_freq_supported: Option<bool>,
 ) -> Option<String> {
-    for command in case.setup.iter().chain(case.run.iter()).chain(case.cleanup.iter()) {
+    for command in case
+        .setup
+        .iter()
+        .chain(case.run.iter())
+        .chain(case.cleanup.iter())
+    {
         if let Some(name) = command_name(command) {
-            if matches!(name.as_str(), "SHUTDOWN" | "REPLICAOF" | "SLAVEOF" | "MIGRATE") {
+            if matches!(
+                name.as_str(),
+                "SHUTDOWN" | "REPLICAOF" | "SLAVEOF" | "MIGRATE"
+            ) {
                 return Some(format!("skipped unsafe command `{name}`"));
             }
             if matches!(supported.get(&name), Some(Some(false))) {
@@ -280,23 +311,33 @@ fn case_skip_reason_preflight(
 
         let upper = command.trim().to_ascii_uppercase();
         if upper.starts_with("CLUSTER ") && matches!(cluster_enabled, Some(false)) {
-            return Some("skipped unsupported server capability: cluster support disabled".to_string());
+            return Some(
+                "skipped unsupported server capability: cluster support disabled".to_string(),
+            );
         }
         if matches!(upper.as_str(), "ASKING" | "READONLY" | "READWRITE")
             && matches!(cluster_enabled, Some(false))
         {
-            return Some("skipped unsupported server capability: cluster support disabled".to_string());
+            return Some(
+                "skipped unsupported server capability: cluster support disabled".to_string(),
+            );
         }
         if matches!(upper.as_str(), "ACL SAVE" | "ACL LOAD")
             && matches!(acl_file_configured, Some(false))
         {
-            return Some("skipped unsupported server capability: ACL file support unavailable".to_string());
+            return Some(
+                "skipped unsupported server capability: ACL file support unavailable".to_string(),
+            );
         }
         if upper == "CONFIG REWRITE" && matches!(config_rewrite_supported, Some(false)) {
-            return Some("skipped unsupported server capability: CONFIG REWRITE unavailable".to_string());
+            return Some(
+                "skipped unsupported server capability: CONFIG REWRITE unavailable".to_string(),
+            );
         }
         if upper.starts_with("OBJECT FREQ ") && matches!(object_freq_supported, Some(false)) {
-            return Some("skipped unsupported server capability: OBJECT FREQ unavailable".to_string());
+            return Some(
+                "skipped unsupported server capability: OBJECT FREQ unavailable".to_string(),
+            );
         }
     }
 
@@ -382,7 +423,9 @@ async fn run_case(args: &Args, case: &crate::model::TestCase) -> CaseOutcome {
     if matches!(outcome, CaseOutcome::Passed) {
         let no_reply = matches!(case.expect, ExpectedValue::NoReply);
         let sequence_expectations = match &case.expect {
-            ExpectedValue::Sequence(items) if items.len() == case.run.len() => Some(items.as_slice()),
+            ExpectedValue::Sequence(items) if items.len() == case.run.len() => {
+                Some(items.as_slice())
+            }
             _ => None,
         };
         let mut responses = Vec::with_capacity(case.run.len());
@@ -397,14 +440,16 @@ async fn run_case(args: &Args, case: &crate::model::TestCase) -> CaseOutcome {
             };
             if no_reply && index == last_index {
                 if let Err(error) = client.execute_raw_no_reply(&command).await {
-                    outcome = CaseOutcome::Failed(format!("run command `{command}` failed: {error}"));
+                    outcome =
+                        CaseOutcome::Failed(format!("run command `{command}` failed: {error}"));
                     break;
                 }
             } else {
                 let frame = match client.execute_raw(&command).await {
                     Ok(frame) => frame,
                     Err(error) => {
-                        outcome = CaseOutcome::Failed(format!("run command `{command}` failed: {error}"));
+                        outcome =
+                            CaseOutcome::Failed(format!("run command `{command}` failed: {error}"));
                         break;
                     }
                 };
@@ -413,7 +458,9 @@ async fn run_case(args: &Args, case: &crate::model::TestCase) -> CaseOutcome {
                     break;
                 }
                 responses.push(frame);
-                if let Some(ExpectedValue::Capture(_)) = sequence_expectations.and_then(|items| items.get(index)) {
+                if let Some(ExpectedValue::Capture(_)) =
+                    sequence_expectations.and_then(|items| items.get(index))
+                {
                     if let Err(error) = validate_expected(
                         sequence_expectations.unwrap().get(index).unwrap(),
                         responses.last().unwrap(),
@@ -447,7 +494,8 @@ async fn run_case(args: &Args, case: &crate::model::TestCase) -> CaseOutcome {
             Ok(frame) => frame,
             Err(error) => {
                 if matches!(outcome, CaseOutcome::Passed) {
-                    outcome = CaseOutcome::Failed(format!("cleanup command `{command}` failed: {error}"));
+                    outcome =
+                        CaseOutcome::Failed(format!("cleanup command `{command}` failed: {error}"));
                 }
                 break;
             }
@@ -464,13 +512,21 @@ async fn run_case(args: &Args, case: &crate::model::TestCase) -> CaseOutcome {
 }
 
 fn case_skip_reason(case: &crate::model::TestCase) -> Option<String> {
-    for command in case.setup.iter().chain(case.run.iter()).chain(case.cleanup.iter()) {
+    for command in case
+        .setup
+        .iter()
+        .chain(case.run.iter())
+        .chain(case.cleanup.iter())
+    {
         let name = command
             .split_ascii_whitespace()
             .next()
             .unwrap_or_default()
             .to_ascii_uppercase();
-        if matches!(name.as_str(), "SHUTDOWN" | "REPLICAOF" | "SLAVEOF" | "MIGRATE") {
+        if matches!(
+            name.as_str(),
+            "SHUTDOWN" | "REPLICAOF" | "SLAVEOF" | "MIGRATE"
+        ) {
             return Some(format!("skipped unsafe command `{name}`"));
         }
     }

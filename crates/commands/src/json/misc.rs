@@ -1,7 +1,7 @@
 use engine::store::Store;
 use protocol::types::RespFrame;
 
-use crate::util::{wrong_args, Args};
+use crate::util::{Args, wrong_args};
 
 use super::{bulk_json, json_error, parse_number, parse_path};
 

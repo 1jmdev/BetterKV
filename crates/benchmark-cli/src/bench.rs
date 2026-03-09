@@ -311,7 +311,9 @@ pub async fn run_single_benchmark(
         let state = Arc::clone(&progress);
         let name = shared.spec.name.clone();
         let total = shared.spec.requests;
-        Some(thread::spawn(move || progress_loop(&name, total, state, start)))
+        Some(thread::spawn(move || {
+            progress_loop(&name, total, state, start)
+        }))
     } else {
         None
     };
@@ -402,7 +404,13 @@ fn run_thread_shard(cfg: Arc<Shared>, shard: Vec<ClientPlan>) -> Result<Vec<Work
         for plan in shard {
             let worker_cfg = Arc::clone(&cfg);
             handles.push(tokio::spawn(async move {
-                run_worker(plan.client_id, plan.warmup_quota, plan.tracked_quota, worker_cfg).await
+                run_worker(
+                    plan.client_id,
+                    plan.warmup_quota,
+                    plan.tracked_quota,
+                    worker_cfg,
+                )
+                .await
             }));
         }
 
@@ -524,7 +532,8 @@ async fn run_worker(
             if cfg.strict {
                 read_n_strict_responses(&mut stream, &mut parse_buf, &expected, &encoded, || {
                     if track {
-                        let latency_ns = started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64;
+                        let latency_ns =
+                            started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64;
                         total_latency_ns_add(&cfg.progress, &mut stats, latency_ns)?;
                     }
                     Ok(())
@@ -533,7 +542,8 @@ async fn run_worker(
             } else {
                 read_n_unchecked_responses(&mut stream, &mut parse_buf, &encoded, || {
                     if track {
-                        let latency_ns = started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64;
+                        let latency_ns =
+                            started.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64;
                         total_latency_ns_add(&cfg.progress, &mut stats, latency_ns)?;
                     }
                     Ok(())
@@ -656,7 +666,11 @@ fn progress_loop(name: &str, total_requests: u64, state: Arc<ProgressState>, sta
         progress.set_message(format!(
             "{} | {} | live {} | overall {} | lat {} / {} | elapsed {}",
             name,
-            if snapshot.warming_up { "warmup" } else { "measured" },
+            if snapshot.warming_up {
+                "warmup"
+            } else {
+                "measured"
+            },
             format_rps(snapshot.current_rps),
             format_rps(snapshot.overall_rps),
             format_latency_brief(snapshot.current_avg_ms),
@@ -693,7 +707,11 @@ fn progress_snapshot(
             / 1_000_000_000.0
     }
     .max(0.000_001);
-    let active_completed = if warming_up { warmup_completed } else { completed };
+    let active_completed = if warming_up {
+        warmup_completed
+    } else {
+        completed
+    };
     let delta = active_completed.saturating_sub(last_count);
     let delta_latency = total_latency.saturating_sub(last_latency);
 

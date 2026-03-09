@@ -4,7 +4,7 @@ use engine::store::{JsonError, JsonPath, JsonSetMode, Store};
 use protocol::types::{BulkData, RespFrame};
 use serde_json::Value as JsonValue;
 
-use crate::util::{eq_ascii, parse_u64_bytes, syntax_error, wrong_args, wrong_type, Args};
+use crate::util::{Args, eq_ascii, parse_u64_bytes, syntax_error, wrong_args, wrong_type};
 
 pub(crate) fn parse_path(raw: &[u8]) -> Result<JsonPath, RespFrame> {
     JsonPath::parse(raw).map_err(|_| RespFrame::error_static("ERR invalid JSONPath"))

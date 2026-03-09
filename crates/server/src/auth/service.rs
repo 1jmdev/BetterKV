@@ -1,7 +1,7 @@
 use commands::command::CommandId;
 use std::sync::{
-    atomic::{AtomicU64, Ordering},
     Arc,
+    atomic::{AtomicU64, Ordering},
 };
 
 use parking_lot::RwLock;
@@ -212,9 +212,10 @@ mod tests {
         };
         let auth = AuthService::from_config(&config).expect("auth service");
 
-        assert!(auth
-            .dry_run(b"alice", CommandId::Get, &[arg("GET"), arg("cache:1")])
-            .is_ok());
+        assert!(
+            auth.dry_run(b"alice", CommandId::Get, &[arg("GET"), arg("cache:1")])
+                .is_ok()
+        );
         assert!(matches!(
             auth.dry_run(
                 b"alice",

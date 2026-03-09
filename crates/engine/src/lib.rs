@@ -1,7 +1,7 @@
 mod geo;
 mod hash;
-mod json;
 pub mod helpers;
+mod json;
 mod keyspace;
 mod list;
 mod pattern;
@@ -15,12 +15,14 @@ mod zset;
 // Re-export as `store` so that `engine::store::Store` etc. still works
 pub mod store {
     pub use super::geo::GeoSearchMatch;
+    pub use super::json::{
+        JsonError, JsonPath, JsonPathToken, JsonSetMode, JsonSetResult, JsonType,
+    };
     pub use super::keyspace::{
         PreDecodedRestoreEntry, RestoreError, SortError, SortOptions, SortOrder, SortResult,
     };
-    pub use super::json::{JsonError, JsonPath, JsonPathToken, JsonSetMode, JsonSetResult, JsonType};
-    pub use super::strings::{HyperLogLogError, StringIntOpError};
     pub use super::stream::{StreamRangeItem, StreamWriteError, XPendingSummary};
+    pub use super::strings::{HyperLogLogError, StringIntOpError};
     pub use super::zset::LexBound;
     pub use super::{
         BitFieldEncoding, BitFieldOp, BitFieldOverflow, BitOp, GetExMode, HashFloatOpError,
