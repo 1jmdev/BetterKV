@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use bytes::BytesMut;
 use commands::dispatch::identify;
+use commands::transaction::TransactionState;
 use engine::pubsub::{ConnectionPubSub, PubSubHub, PubSubMessage, PubSubSink, SharedPubSubSink};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -10,7 +11,6 @@ use tokio::sync::mpsc::unbounded_channel;
 
 use crate::auth::AuthService;
 use crate::profile::ProfileHub;
-use crate::transaction::TransactionState;
 use engine::store::Store;
 use protocol::encoder::Encoder;
 use protocol::parser::parse_command_into;

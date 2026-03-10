@@ -4,7 +4,7 @@ use super::registry::with_command_registry;
 use crate::pubsub::DispatchContext;
 use crate::{
     command, connection, geo, hash, json, keyspace, list, object, scripting, set, stream, string,
-    ttl, zset,
+    transaction, ttl, zset,
 };
 use engine::store::Store;
 use protocol::types::{BulkData, RespFrame};

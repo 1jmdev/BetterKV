@@ -12,6 +12,7 @@ mod script;
 mod set;
 mod stream;
 mod strings;
+pub mod transaction;
 pub mod ttl;
 mod zset;
 
@@ -319,6 +320,7 @@ pub struct Store {
     pub(crate) shard_mask: usize,
     pub(crate) hash_builder: RandomState,
     pub(crate) scripts: Arc<RwLock<ScriptMap>>,
+    pub(crate) transaction_gate: Arc<RwLock<()>>,
 }
 
 impl Store {
@@ -336,7 +338,22 @@ impl Store {
             shard_mask: shard_count - 1,
             hash_builder: RandomState::new(),
             scripts: Arc::new(RwLock::new(HashMap::with_hasher(RandomState::new()))),
+            transaction_gate: Arc::new(RwLock::new(())),
         }
+    }
+
+    #[inline]
+    pub fn with_command_gate<T>(&self, operation: impl FnOnce() -> T) -> T {
+        let _trace = profiler::scope("engine::lib::with_command_gate");
+        let _guard = self.transaction_gate.read();
+        operation()
+    }
+
+    #[inline]
+    pub fn with_transaction_gate<T>(&self, operation: impl FnOnce() -> T) -> T {
+        let _trace = profiler::scope("engine::lib::with_transaction_gate");
+        let _guard = self.transaction_gate.write();
+        operation()
     }
 
     pub fn sweep_expired(&self) -> usize {

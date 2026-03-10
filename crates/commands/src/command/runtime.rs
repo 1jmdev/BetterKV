@@ -215,6 +215,7 @@ fn acl_category_name(category: AclCategory) -> Option<&'static str> {
         AclCategory::SortedSet => Some("@sortedset"),
         AclCategory::Stream => Some("@stream"),
         AclCategory::String => Some("@string"),
+        AclCategory::Transaction => Some("@transaction"),
         AclCategory::Write => Some("@write"),
     }
 }
@@ -226,6 +227,15 @@ fn group_of(id: CommandId) -> &'static str {
 fn summary_of(id: CommandId) -> &'static str {
     match id {
         CommandId::Command => "Returns metadata about server commands.",
+        CommandId::Discard => {
+            "Flushes queued transaction commands and restores normal connection state."
+        }
+        CommandId::Exec => {
+            "Executes queued transaction commands and restores normal connection state."
+        }
+        CommandId::Multi => "Starts a transaction block and queues subsequent commands.",
+        CommandId::Unwatch => "Forgets all watched keys for the current connection.",
+        CommandId::Watch => "Monitors keys to conditionally execute a transaction.",
         _ => "Supported BetterKV command.",
     }
 }
@@ -233,6 +243,11 @@ fn summary_of(id: CommandId) -> &'static str {
 fn complexity_of(id: CommandId) -> &'static str {
     match id {
         CommandId::Command => "O(N) where N is the number of supported commands",
+        CommandId::Discard => "O(N) where N is the number of queued commands",
+        CommandId::Exec => "Depends on commands in the transaction",
+        CommandId::Multi => "O(1)",
+        CommandId::Unwatch => "O(1)",
+        CommandId::Watch => "O(1) for every key",
         _ => "O(1)",
     }
 }

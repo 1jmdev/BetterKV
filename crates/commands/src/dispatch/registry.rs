@@ -233,13 +233,17 @@ macro_rules! with_command_registry {
                     {
                         variant: Exec,
                         bytes: b"EXEC",
-                        dispatch: [unsupported],
-                        supported: false,
-                        group: "",
-                        shape: (0, 0, 0, 0),
+                        dispatch: [transaction::exec_command; args],
+                        supported: true,
+                        group: "transaction",
+                        shape: (1, 0, 0, 0),
                         readonly: false,
                         write: false,
-                        auth: none,
+                        auth: some {
+                            categories: &[AclCategory::Slow, AclCategory::Transaction],
+                            keys: KeyExtraction::None,
+                            channels: ChannelExtraction::None,
+                        },
                         notify: none,
                     }
                 }
@@ -1082,13 +1086,17 @@ macro_rules! with_command_registry {
                     {
                         variant: Multi,
                         bytes: b"MULTI",
-                        dispatch: [unsupported],
-                        supported: false,
-                        group: "",
-                        shape: (0, 0, 0, 0),
+                        dispatch: [transaction::multi_command; args],
+                        supported: true,
+                        group: "transaction",
+                        shape: (1, 0, 0, 0),
                         readonly: false,
                         write: false,
-                        auth: none,
+                        auth: some {
+                            categories: &[AclCategory::Fast, AclCategory::Transaction],
+                            keys: KeyExtraction::None,
+                            channels: ChannelExtraction::None,
+                        },
                         notify: none,
                     }
                 }
@@ -1263,13 +1271,17 @@ macro_rules! with_command_registry {
                     {
                         variant: Watch,
                         bytes: b"WATCH",
-                        dispatch: [unsupported],
-                        supported: false,
-                        group: "",
-                        shape: (0, 0, 0, 0),
+                        dispatch: [transaction::watch_command; args],
+                        supported: true,
+                        group: "transaction",
+                        shape: (-2, 1, -1, 1),
                         readonly: false,
                         write: false,
-                        auth: none,
+                        auth: some {
+                            categories: &[AclCategory::Fast, AclCategory::Transaction],
+                            keys: KeyExtraction::AllFrom(1),
+                            channels: ChannelExtraction::None,
+                        },
                         notify: none,
                     }
                 }
@@ -2228,13 +2240,17 @@ macro_rules! with_command_registry {
                     {
                         variant: Discard,
                         bytes: b"DISCARD",
-                        dispatch: [unsupported],
-                        supported: false,
-                        group: "",
-                        shape: (0, 0, 0, 0),
+                        dispatch: [transaction::discard_command; args],
+                        supported: true,
+                        group: "transaction",
+                        shape: (1, 0, 0, 0),
                         readonly: false,
                         write: false,
-                        auth: none,
+                        auth: some {
+                            categories: &[AclCategory::Fast, AclCategory::Transaction],
+                            keys: KeyExtraction::None,
+                            channels: ChannelExtraction::None,
+                        },
                         notify: none,
                     }
                 }
@@ -2532,13 +2548,17 @@ macro_rules! with_command_registry {
                     {
                         variant: Unwatch,
                         bytes: b"UNWATCH",
-                        dispatch: [unsupported],
-                        supported: false,
-                        group: "",
-                        shape: (0, 0, 0, 0),
+                        dispatch: [transaction::unwatch_command; args],
+                        supported: true,
+                        group: "transaction",
+                        shape: (1, 0, 0, 0),
                         readonly: false,
                         write: false,
-                        auth: none,
+                        auth: some {
+                            categories: &[AclCategory::Fast, AclCategory::Transaction],
+                            keys: KeyExtraction::None,
+                            channels: ChannelExtraction::None,
+                        },
                         notify: none,
                     }
                 }

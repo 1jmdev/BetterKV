@@ -14,6 +14,7 @@ pub mod scripting;
 pub mod set;
 pub mod stream;
 pub mod string;
+pub mod transaction;
 pub mod ttl;
 pub mod util;
 pub mod zset;

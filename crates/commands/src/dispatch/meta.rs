@@ -23,6 +23,7 @@ pub enum AclCategory {
     SortedSet,
     Stream,
     String,
+    Transaction,
     Write,
 }
 
@@ -47,6 +48,7 @@ impl AclCategory {
         Self::SortedSet,
         Self::Stream,
         Self::String,
+        Self::Transaction,
         Self::Write,
     ];
 
@@ -72,6 +74,7 @@ impl AclCategory {
             Self::SortedSet => "sortedset",
             Self::Stream => "stream",
             Self::String => "string",
+            Self::Transaction => "transaction",
             Self::Write => "write",
         }
     }
@@ -99,6 +102,7 @@ impl AclCategory {
             "sortedset" => Ok(Self::SortedSet),
             "stream" => Ok(Self::Stream),
             "string" => Ok(Self::String),
+            "transaction" => Ok(Self::Transaction),
             "write" => Ok(Self::Write),
             _ => Err(format!("ERR Unknown ACL category '{value}'")),
         }

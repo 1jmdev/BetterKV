@@ -7,7 +7,6 @@ pub mod connection;
 pub mod listener;
 pub mod logging;
 pub mod profile;
-pub mod transaction;
 
 #[global_allocator]
 static GLOBAL_ALLOCATOR: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
