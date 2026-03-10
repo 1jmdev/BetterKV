@@ -1,7 +1,7 @@
 use std::fs::OpenOptions;
 use std::io::{Seek, SeekFrom, Write};
 use std::path::PathBuf;
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
+use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -9,6 +9,7 @@ use bytes::BytesMut;
 use commands::dispatch::{CommandId, dispatch_args, identify, is_write_command_id};
 use commands::transaction::TransactionState;
 use engine::store::Store;
+use parking_lot::{Condvar, Mutex};
 use protocol::parser::parse_command_into;
 use protocol::types::RespFrame;
 use types::value::CompactArg;
@@ -16,9 +17,12 @@ use types::value::CompactArg;
 use crate::backup::{self, RestoreStats};
 use crate::config::{AppendFsync, Config, SaveRule};
 
+const AOF_NOTIFY_BYTES: usize = 64 * 1024;
+const PERSISTENCE_TICK: Duration = Duration::from_millis(200);
+
 #[derive(Clone)]
 pub struct PersistenceHandle {
-    sender: Option<Sender<Request>>,
+    state: Option<Arc<SharedState>>,
 }
 
 pub struct RestoreOutcome {
@@ -27,15 +31,22 @@ pub struct RestoreOutcome {
     pub aof_tail_truncated: bool,
 }
 
-enum Request {
-    Append { payload: Vec<u8>, dirty: u64 },
-    Shutdown { reply: mpsc::Sender<Result<(), String>> },
+struct SharedState {
+    mutex: Mutex<ProducerState>,
+    condvar: Condvar,
+}
+
+struct ProducerState {
+    pending_bytes: Vec<u8>,
+    pending_dirty: u64,
+    shutdown_requested: bool,
+    shutdown_complete: bool,
+    shutdown_error: Option<String>,
 }
 
 struct PersistenceThread {
     config: Config,
     store: Store,
-    receiver: Receiver<Request>,
     snapshot_path: PathBuf,
     aof_path: PathBuf,
     aof_file: Option<std::fs::File>,
@@ -43,119 +54,173 @@ struct PersistenceThread {
     dirty_changes: u64,
     dirty_since: Option<Instant>,
     last_fsync: Instant,
+    shared: Arc<SharedState>,
+    drained_bytes: Vec<u8>,
 }
 
 impl PersistenceHandle {
     pub fn spawn(store: Store, config: Config) -> Self {
         if !persistence_enabled(&config) {
-            return Self { sender: None };
+            return Self { state: None };
         }
 
-        let (sender, receiver) = mpsc::channel();
-        let handle = Self {
-            sender: Some(sender),
-        };
-        let thread_handle = handle.clone();
+        let shared = Arc::new(SharedState {
+            mutex: Mutex::new(ProducerState {
+                pending_bytes: Vec::with_capacity(AOF_NOTIFY_BYTES),
+                pending_dirty: 0,
+                shutdown_requested: false,
+                shutdown_complete: false,
+                shutdown_error: None,
+            }),
+            condvar: Condvar::new(),
+        });
+
+        let thread_shared = Arc::clone(&shared);
         let snapshot_path = config.snapshot_path();
         let aof_path = config.appendonly_path();
         thread::Builder::new()
             .name("betterkv-persistence".to_string())
             .spawn(move || {
-                let thread = PersistenceThread::new(config, store, receiver, snapshot_path, aof_path);
+                let thread = PersistenceThread::new(
+                    config,
+                    store,
+                    snapshot_path,
+                    aof_path,
+                    thread_shared,
+                );
                 if let Err(err) = thread.run() {
                     tracing::error!(error = %err, "persistence thread exited with error");
                 }
             })
             .map_err(|err| tracing::error!(error = %err, "failed to spawn persistence thread"))
             .ok();
-        thread_handle
+
+        Self { state: Some(shared) }
     }
 
     pub fn record_command(&self, command: CommandId, args: &[CompactArg], response: &RespFrame) {
-        if self.sender.is_none() {
+        let mut local_bytes = Vec::with_capacity(512);
+        let mut local_dirty = 0;
+        self.record_command_to_buffer(command, args, response, &mut local_bytes, &mut local_dirty);
+        self.flush_buffer(&mut local_bytes, &mut local_dirty);
+    }
+
+    pub fn record_command_to_buffer(
+        &self,
+        command: CommandId,
+        args: &[CompactArg],
+        response: &RespFrame,
+        local_bytes: &mut Vec<u8>,
+        local_dirty: &mut u64,
+    ) {
+        if self.state.is_none() {
             return;
         }
         if !should_log_command(command, response) {
             return;
         }
-        self.record_encoded_command(args, 1);
+        encode_resp_command_into(local_bytes, args);
+        *local_dirty = local_dirty.saturating_add(1);
     }
 
     pub fn record_transaction(&self, commands: &[(CommandId, Vec<CompactArg>)]) {
-        if self.sender.is_none() {
-            return;
-        }
-        if commands.is_empty() {
+        let mut local_bytes = Vec::with_capacity(512);
+        let mut local_dirty = 0;
+        self.record_transaction_to_buffer(commands, &mut local_bytes, &mut local_dirty);
+        self.flush_buffer(&mut local_bytes, &mut local_dirty);
+    }
+
+    pub fn record_transaction_to_buffer(
+        &self,
+        commands: &[(CommandId, Vec<CompactArg>)],
+        local_bytes: &mut Vec<u8>,
+        local_dirty: &mut u64,
+    ) {
+        if self.state.is_none() || commands.is_empty() {
             return;
         }
 
-        let mut loggable = Vec::new();
+        let start_len = local_bytes.len();
+        let start_dirty = *local_dirty;
+        let mut has_logged_command = false;
+        encode_resp_command_into(local_bytes, &[CompactArg::from_slice(b"MULTI")]);
         for (command, args) in commands {
-            if is_aof_command(*command) {
-                loggable.push((*command, args));
+            if !is_aof_command(*command) {
+                continue;
             }
+            has_logged_command = true;
+            encode_resp_command_into(local_bytes, args);
+            *local_dirty = local_dirty.saturating_add(1);
         }
-        if loggable.is_empty() {
+        if !has_logged_command {
+            local_bytes.truncate(start_len);
+            *local_dirty = start_dirty;
             return;
         }
-
-        let mut payload = encode_resp_command(&[CompactArg::from_slice(b"MULTI")]);
-        for (_, args) in &loggable {
-            payload.extend_from_slice(&encode_resp_command(args));
-        }
-        payload.extend_from_slice(&encode_resp_command(&[CompactArg::from_slice(b"EXEC")]));
-        self.send_request(Request::Append {
-            payload,
-            dirty: loggable.len() as u64,
-        });
+        encode_resp_command_into(local_bytes, &[CompactArg::from_slice(b"EXEC")]);
     }
 
     pub fn shutdown(&self) -> Result<(), String> {
-        let Some(sender) = &self.sender else {
+        let Some(shared) = &self.state else {
             return Ok(());
         };
-        let (reply_tx, reply_rx) = mpsc::channel();
-        sender
-            .send(Request::Shutdown { reply: reply_tx })
-            .map_err(|err| format!("failed to send shutdown request: {err}"))?;
-        reply_rx
-            .recv()
-            .map_err(|err| format!("failed to receive shutdown reply: {err}"))?
-    }
 
-    fn record_encoded_command(&self, args: &[CompactArg], dirty: u64) {
-        self.send_request(Request::Append {
-            payload: encode_resp_command(args),
-            dirty,
-        });
-    }
-
-    fn send_request(&self, request: Request) {
-        let Some(sender) = &self.sender else {
-            return;
-        };
-        if let Err(err) = sender.send(request) {
-            tracing::error!(error = %err, "failed to send persistence request");
+        let mut guard = shared.mutex.lock();
+        guard.shutdown_requested = true;
+        shared.condvar.notify_one();
+        while !guard.shutdown_complete {
+            shared.condvar.wait(&mut guard);
+        }
+        match &guard.shutdown_error {
+            Some(err) => Err(err.clone()),
+            None => Ok(()),
         }
     }
-}
 
-fn persistence_enabled(config: &Config) -> bool {
-    config.appendonly || config.snapshot_on_shutdown || !config.save_rules.is_empty()
+    pub fn flush_buffer(&self, local_bytes: &mut Vec<u8>, local_dirty: &mut u64) {
+        if self.state.is_none() {
+            return;
+        }
+        if local_bytes.is_empty() {
+            return;
+        }
+
+        self.append_bytes(local_bytes.as_slice(), *local_dirty);
+        local_bytes.clear();
+        *local_dirty = 0;
+    }
+
+    fn append_bytes(&self, bytes: &[u8], dirty: u64) {
+        let Some(shared) = &self.state else {
+            return;
+        };
+        if bytes.is_empty() {
+            return;
+        }
+
+        let mut guard = shared.mutex.lock();
+        let was_empty = guard.pending_bytes.is_empty();
+        guard.pending_bytes.extend_from_slice(bytes);
+        guard.pending_dirty = guard.pending_dirty.saturating_add(dirty);
+        let should_notify = was_empty || guard.pending_bytes.len() >= AOF_NOTIFY_BYTES;
+        drop(guard);
+        if should_notify {
+            shared.condvar.notify_one();
+        }
+    }
 }
 
 impl PersistenceThread {
     fn new(
         config: Config,
         store: Store,
-        receiver: Receiver<Request>,
         snapshot_path: PathBuf,
         aof_path: PathBuf,
+        shared: Arc<SharedState>,
     ) -> Self {
         Self {
             config,
             store,
-            receiver,
             snapshot_path,
             aof_path,
             aof_file: None,
@@ -163,58 +228,57 @@ impl PersistenceThread {
             dirty_changes: 0,
             dirty_since: None,
             last_fsync: Instant::now(),
+            shared,
+            drained_bytes: Vec::with_capacity(AOF_NOTIFY_BYTES),
         }
     }
 
     fn run(mut self) -> Result<(), String> {
         self.open_aof_if_enabled()?;
+
         loop {
-            match self.receiver.recv_timeout(Duration::from_secs(1)) {
-                Ok(Request::Append { payload, dirty }) => {
-                    self.append_payload(&payload, dirty)?;
-                    self.drain_append_queue()?;
-                    self.maybe_fsync()?;
-                    self.maybe_snapshot_or_rewrite()?;
-                }
-                Ok(Request::Shutdown { reply }) => {
-                    let result = self.handle_shutdown();
-                    let _ = reply.send(result.clone());
-                    return result;
-                }
-                Err(RecvTimeoutError::Timeout) => {
-                    self.maybe_fsync()?;
-                    self.maybe_snapshot_or_rewrite()?;
-                }
-                Err(RecvTimeoutError::Disconnected) => return Ok(()),
+            let (shutdown_requested, drained_dirty) = self.wait_for_work();
+
+            if !self.drained_bytes.is_empty() {
+                let drained_bytes = std::mem::take(&mut self.drained_bytes);
+                self.append_payload(drained_bytes.as_slice(), drained_dirty)?;
+                self.drained_bytes = drained_bytes;
+                self.drained_bytes.clear();
+            }
+
+            self.maybe_fsync()?;
+            self.maybe_snapshot_or_rewrite()?;
+
+            if shutdown_requested {
+                let result = self.handle_shutdown();
+                self.finish_shutdown(result.clone());
+                return result;
             }
         }
     }
 
-    fn drain_append_queue(&mut self) -> Result<(), String> {
-        let mut buffered = Vec::new();
-        let mut dirty = 0u64;
-        loop {
-            match self.receiver.try_recv() {
-                Ok(Request::Append {
-                    payload,
-                    dirty: more_dirty,
-                }) => {
-                    buffered.extend_from_slice(&payload);
-                    dirty = dirty.saturating_add(more_dirty);
-                }
-                Ok(Request::Shutdown { reply }) => {
-                    let result = self.handle_shutdown();
-                    let _ = reply.send(result.clone());
-                    return result;
-                }
-                Err(_) => break,
-            }
+    fn wait_for_work(&mut self) -> (bool, u64) {
+        let mut guard = self.shared.mutex.lock();
+        if guard.pending_bytes.is_empty() && !guard.shutdown_requested {
+            self.shared.condvar.wait_for(&mut guard, PERSISTENCE_TICK);
         }
 
-        if !buffered.is_empty() {
-            self.append_payload(&buffered, dirty)?;
+        let shutdown_requested = guard.shutdown_requested;
+        let drained_dirty = guard.pending_dirty;
+        if self.drained_bytes.capacity() < guard.pending_bytes.len() {
+            self.drained_bytes
+                .reserve(guard.pending_bytes.len() - self.drained_bytes.capacity());
         }
-        Ok(())
+        std::mem::swap(&mut self.drained_bytes, &mut guard.pending_bytes);
+        guard.pending_dirty = 0;
+        (shutdown_requested, drained_dirty)
+    }
+
+    fn finish_shutdown(&self, result: Result<(), String>) {
+        let mut guard = self.shared.mutex.lock();
+        guard.shutdown_complete = true;
+        guard.shutdown_error = result.err();
+        self.shared.condvar.notify_all();
     }
 
     fn append_payload(&mut self, payload: &[u8], dirty: u64) -> Result<(), String> {
@@ -223,9 +287,8 @@ impl PersistenceThread {
             let next_size = self.aof_size.saturating_add(payload.len() as u64);
             let appendfsync = self.config.appendfsync;
             let file = self.ensure_aof_file()?;
-            file.write_all(payload).map_err(|err| {
-                format!("failed to append to appendonly file {aof_path}: {err}")
-            })?;
+            file.write_all(payload)
+                .map_err(|err| format!("failed to append to appendonly file {aof_path}: {err}"))?;
             if appendfsync == AppendFsync::Always {
                 file.sync_data().map_err(|err| {
                     format!("failed to fsync appendonly file {aof_path}: {err}")
@@ -371,15 +434,12 @@ impl PersistenceThread {
     fn reset_aof(&mut self) -> Result<(), String> {
         let aof_path = self.aof_path.display().to_string();
         let file = self.ensure_aof_file()?;
-        file.set_len(0).map_err(|err| {
-            format!("failed to truncate appendonly file {aof_path}: {err}")
-        })?;
-        file.seek(SeekFrom::Start(0)).map_err(|err| {
-            format!("failed to seek appendonly file {aof_path}: {err}")
-        })?;
-        file.sync_all().map_err(|err| {
-            format!("failed to sync appendonly file {aof_path}: {err}")
-        })?;
+        file.set_len(0)
+            .map_err(|err| format!("failed to truncate appendonly file {aof_path}: {err}"))?;
+        file.seek(SeekFrom::Start(0))
+            .map_err(|err| format!("failed to seek appendonly file {aof_path}: {err}"))?;
+        file.sync_all()
+            .map_err(|err| format!("failed to sync appendonly file {aof_path}: {err}"))?;
         self.aof_size = 0;
         self.last_fsync = Instant::now();
         Ok(())
@@ -398,9 +458,9 @@ pub async fn restore(store: &Store, config: &Config) -> Result<RestoreOutcome, S
     let mut aof_commands_replayed = 0u64;
     let mut aof_tail_truncated = false;
     if config.appendonly && aof_path.exists() {
-        let bytes = tokio::fs::read(&aof_path)
-            .await
-            .map_err(|err| format!("failed to read appendonly file {}: {err}", aof_path.display()))?;
+        let bytes = tokio::fs::read(&aof_path).await.map_err(|err| {
+            format!("failed to read appendonly file {}: {err}", aof_path.display())
+        })?;
         let (replayed, truncated) = replay_aof(store, &bytes)?;
         aof_commands_replayed = replayed;
         aof_tail_truncated = truncated;
@@ -425,9 +485,12 @@ fn replay_aof(store: &Store, bytes: &[u8]) -> Result<(u64, bool), String> {
         .is_some()
     {
         let command = identify(args[0].as_slice());
-        let outcome = transaction_state.handle_args_with(store, &mut args, command, |inner_store, _, cmd_args| {
-            dispatch_args(inner_store, cmd_args)
-        });
+        let outcome = transaction_state.handle_args_with(
+            store,
+            &mut args,
+            command,
+            |inner_store, _, cmd_args| dispatch_args(inner_store, cmd_args),
+        );
         if response_is_error(&outcome.response) {
             return Err("appendonly replay failed due to command error".to_string());
         }
@@ -435,6 +498,10 @@ fn replay_aof(store: &Store, bytes: &[u8]) -> Result<(u64, bool), String> {
     }
 
     Ok((replayed, !buffer.is_empty()))
+}
+
+fn persistence_enabled(config: &Config) -> bool {
+    config.appendonly || config.snapshot_on_shutdown || !config.save_rules.is_empty()
 }
 
 pub fn should_log_command(command: CommandId, response: &RespFrame) -> bool {
@@ -454,19 +521,22 @@ fn response_is_queued(response: &RespFrame) -> bool {
         || matches!(response, RespFrame::Simple(value) if value == "QUEUED")
 }
 
-fn encode_resp_command(args: &[CompactArg]) -> Vec<u8> {
-    let mut capacity = 16;
+fn encode_resp_command_into(out: &mut Vec<u8>, args: &[CompactArg]) {
+    reserve_encoded_command(out, args);
+    push_decimal_prefixed(out, b'*', args.len() as u64);
     for arg in args {
-        capacity += 16 + arg.len();
-    }
-    let mut out = Vec::with_capacity(capacity);
-    push_decimal_prefixed(&mut out, b'*', args.len() as u64);
-    for arg in args {
-        push_decimal_prefixed(&mut out, b'$', arg.len() as u64);
+        push_decimal_prefixed(out, b'$', arg.len() as u64);
         out.extend_from_slice(arg.as_slice());
         out.extend_from_slice(b"\r\n");
     }
-    out
+}
+
+fn reserve_encoded_command(out: &mut Vec<u8>, args: &[CompactArg]) {
+    let mut additional = 16;
+    for arg in args {
+        additional += 16 + arg.len();
+    }
+    out.reserve(additional);
 }
 
 fn push_decimal_prefixed(out: &mut Vec<u8>, prefix: u8, value: u64) {
@@ -514,18 +584,17 @@ mod tests {
     #[test]
     fn replay_aof_restores_transaction() {
         let store = Store::new(1);
-        let multi = encode_resp_command(&[CompactArg::from_slice(b"MULTI")]);
-        let set = encode_resp_command(&[
-            CompactArg::from_slice(b"SET"),
-            CompactArg::from_slice(b"tx:key"),
-            CompactArg::from_slice(b"value"),
-        ]);
-        let exec = encode_resp_command(&[CompactArg::from_slice(b"EXEC")]);
-
         let mut bytes = Vec::new();
-        bytes.extend_from_slice(&multi);
-        bytes.extend_from_slice(&set);
-        bytes.extend_from_slice(&exec);
+        encode_resp_command_into(&mut bytes, &[CompactArg::from_slice(b"MULTI")]);
+        encode_resp_command_into(
+            &mut bytes,
+            &[
+                CompactArg::from_slice(b"SET"),
+                CompactArg::from_slice(b"tx:key"),
+                CompactArg::from_slice(b"value"),
+            ],
+        );
+        encode_resp_command_into(&mut bytes, &[CompactArg::from_slice(b"EXEC")]);
 
         let (replayed, truncated) = replay_aof(&store, &bytes).expect("aof replay should succeed");
         assert_eq!(replayed, 3);

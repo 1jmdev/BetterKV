@@ -78,6 +78,8 @@ pub async fn handle_connection(
     let mut write_buf = BytesMut::with_capacity(WRITE_BUFFER_INITIAL);
 
     let mut encoder = Encoder::default();
+    let mut persistence_buf = Vec::with_capacity(1024);
+    let mut persistence_dirty = 0u64;
 
     let mut command_args_buf = Vec::with_capacity(16);
     let mut tx_state = TransactionState::default();
@@ -157,9 +159,19 @@ pub async fn handle_connection(
                     let response = outcome.response;
 
                     if !outcome.committed_commands.is_empty() {
-                        persistence.record_transaction(&outcome.committed_commands);
+                        persistence.record_transaction_to_buffer(
+                            &outcome.committed_commands,
+                            &mut persistence_buf,
+                            &mut persistence_dirty,
+                        );
                     } else {
-                        persistence.record_command(command, &command_args_buf, &response);
+                        persistence.record_command_to_buffer(
+                            command,
+                            &command_args_buf,
+                            &response,
+                            &mut persistence_buf,
+                            &mut persistence_dirty,
+                        );
                     }
 
                     if !client_state.take_suppress_current_reply() {
@@ -167,6 +179,7 @@ pub async fn handle_connection(
                     }
                 }
 
+                persistence.flush_buffer(&mut persistence_buf, &mut persistence_dirty);
                 if let Err(err) = flush_write_buf(&mut stream, &mut write_buf).await {
                     break Err(err.into());
                 }
@@ -174,6 +187,7 @@ pub async fn handle_connection(
         }
     };
 
+    persistence.flush_buffer(&mut persistence_buf, &mut persistence_dirty);
     pubsub_hub.cleanup_connection(pubsub_state.id());
     result
 }
