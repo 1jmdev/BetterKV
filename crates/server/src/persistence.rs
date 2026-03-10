@@ -1,17 +1,19 @@
 use std::fs::OpenOptions;
-use std::io::{Seek, SeekFrom, Write};
+use std::io::{IoSlice, Seek, SeekFrom, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
 use bytes::BytesMut;
+use itoa::Buffer as ItoaBuffer;
 use commands::dispatch::{CommandId, dispatch_args, identify, is_write_command_id};
 use commands::transaction::TransactionState;
 use engine::store::Store;
 use parking_lot::{Condvar, Mutex};
 use protocol::parser::parse_command_into;
 use protocol::types::RespFrame;
+use smallvec::SmallVec;
 use types::value::CompactArg;
 
 use crate::backup::{self, RestoreStats};
@@ -19,6 +21,9 @@ use crate::config::{AppendFsync, Config, SaveRule};
 
 const AOF_NOTIFY_BYTES: usize = 64 * 1024;
 const PERSISTENCE_TICK: Duration = Duration::from_millis(200);
+const VECTORED_WRITE_BATCH: usize = 32;
+const SPARE_BUFFER_POOL_LIMIT: usize = 128;
+const MAX_RECYCLED_BUFFER_CAPACITY: usize = 256 * 1024;
 
 #[derive(Clone)]
 pub struct PersistenceHandle {
@@ -37,8 +42,10 @@ struct SharedState {
 }
 
 struct ProducerState {
-    pending_bytes: Vec<u8>,
+    pending_chunks: Vec<Vec<u8>>,
+    pending_bytes_len: usize,
     pending_dirty: u64,
+    spare_chunks: Vec<Vec<u8>>,
     shutdown_requested: bool,
     shutdown_complete: bool,
     shutdown_error: Option<String>,
@@ -55,7 +62,7 @@ struct PersistenceThread {
     dirty_since: Option<Instant>,
     last_fsync: Instant,
     shared: Arc<SharedState>,
-    drained_bytes: Vec<u8>,
+    drained_chunks: Vec<Vec<u8>>,
 }
 
 impl PersistenceHandle {
@@ -66,8 +73,10 @@ impl PersistenceHandle {
 
         let shared = Arc::new(SharedState {
             mutex: Mutex::new(ProducerState {
-                pending_bytes: Vec::with_capacity(AOF_NOTIFY_BYTES),
+                pending_chunks: Vec::new(),
+                pending_bytes_len: 0,
                 pending_dirty: 0,
+                spare_chunks: Vec::new(),
                 shutdown_requested: false,
                 shutdown_complete: false,
                 shutdown_error: None,
@@ -191,19 +200,35 @@ impl PersistenceHandle {
     }
 
     fn append_bytes(&self, bytes: &[u8], dirty: u64) {
+        let mut local_copy = Vec::with_capacity(bytes.len());
+        local_copy.extend_from_slice(bytes);
+        self.append_chunk(&mut local_copy, dirty);
+    }
+
+    fn append_chunk(&self, local_bytes: &mut Vec<u8>, dirty: u64) {
         let Some(shared) = &self.state else {
             return;
         };
-        if bytes.is_empty() {
+        if local_bytes.is_empty() {
             return;
         }
 
+        let target_capacity = local_bytes.capacity().max(1024);
+        let chunk = std::mem::take(local_bytes);
         let mut guard = shared.mutex.lock();
-        let was_empty = guard.pending_bytes.is_empty();
-        guard.pending_bytes.extend_from_slice(bytes);
+        let was_empty = guard.pending_bytes_len == 0;
+        guard.pending_bytes_len = guard.pending_bytes_len.saturating_add(chunk.len());
+        guard.pending_chunks.push(chunk);
         guard.pending_dirty = guard.pending_dirty.saturating_add(dirty);
-        let should_notify = was_empty || guard.pending_bytes.len() >= AOF_NOTIFY_BYTES;
+        if let Some(mut spare_chunk) = guard.spare_chunks.pop() {
+            spare_chunk.clear();
+            *local_bytes = spare_chunk;
+        }
+        let should_notify = was_empty || guard.pending_bytes_len >= AOF_NOTIFY_BYTES;
         drop(guard);
+        if local_bytes.capacity() == 0 {
+            *local_bytes = Vec::with_capacity(target_capacity);
+        }
         if should_notify {
             shared.condvar.notify_one();
         }
@@ -229,7 +254,7 @@ impl PersistenceThread {
             dirty_since: None,
             last_fsync: Instant::now(),
             shared,
-            drained_bytes: Vec::with_capacity(AOF_NOTIFY_BYTES),
+            drained_chunks: Vec::new(),
         }
     }
 
@@ -239,11 +264,11 @@ impl PersistenceThread {
         loop {
             let (shutdown_requested, drained_dirty) = self.wait_for_work();
 
-            if !self.drained_bytes.is_empty() {
-                let drained_bytes = std::mem::take(&mut self.drained_bytes);
-                self.append_payload(drained_bytes.as_slice(), drained_dirty)?;
-                self.drained_bytes = drained_bytes;
-                self.drained_bytes.clear();
+            if !self.drained_chunks.is_empty() {
+                let mut drained_chunks = Vec::new();
+                std::mem::swap(&mut drained_chunks, &mut self.drained_chunks);
+                self.append_payload(drained_chunks.as_slice(), drained_dirty)?;
+                self.recycle_drained_chunks(drained_chunks);
             }
 
             self.maybe_fsync()?;
@@ -259,17 +284,14 @@ impl PersistenceThread {
 
     fn wait_for_work(&mut self) -> (bool, u64) {
         let mut guard = self.shared.mutex.lock();
-        if guard.pending_bytes.is_empty() && !guard.shutdown_requested {
+        if guard.pending_chunks.is_empty() && !guard.shutdown_requested {
             self.shared.condvar.wait_for(&mut guard, PERSISTENCE_TICK);
         }
 
         let shutdown_requested = guard.shutdown_requested;
         let drained_dirty = guard.pending_dirty;
-        if self.drained_bytes.capacity() < guard.pending_bytes.len() {
-            self.drained_bytes
-                .reserve(guard.pending_bytes.len() - self.drained_bytes.capacity());
-        }
-        std::mem::swap(&mut self.drained_bytes, &mut guard.pending_bytes);
+        std::mem::swap(&mut self.drained_chunks, &mut guard.pending_chunks);
+        guard.pending_bytes_len = 0;
         guard.pending_dirty = 0;
         (shutdown_requested, drained_dirty)
     }
@@ -281,13 +303,14 @@ impl PersistenceThread {
         self.shared.condvar.notify_all();
     }
 
-    fn append_payload(&mut self, payload: &[u8], dirty: u64) -> Result<(), String> {
+    fn append_payload(&mut self, payload: &[Vec<u8>], dirty: u64) -> Result<(), String> {
         if self.config.appendonly {
             let aof_path = self.aof_path.display().to_string();
-            let next_size = self.aof_size.saturating_add(payload.len() as u64);
+            let payload_len: usize = payload.iter().map(Vec::len).sum();
+            let next_size = self.aof_size.saturating_add(payload_len as u64);
             let appendfsync = self.config.appendfsync;
             let file = self.ensure_aof_file()?;
-            file.write_all(payload)
+            write_chunks_vectored(file, payload)
                 .map_err(|err| format!("failed to append to appendonly file {aof_path}: {err}"))?;
             if appendfsync == AppendFsync::Always {
                 file.sync_data().map_err(|err| {
@@ -305,6 +328,20 @@ impl PersistenceThread {
             }
         }
         Ok(())
+    }
+
+    fn recycle_drained_chunks(&mut self, drained_chunks: Vec<Vec<u8>>) {
+        let mut guard = self.shared.mutex.lock();
+        for mut chunk in drained_chunks {
+            if guard.spare_chunks.len() >= SPARE_BUFFER_POOL_LIMIT {
+                continue;
+            }
+            if chunk.capacity() > MAX_RECYCLED_BUFFER_CAPACITY {
+                continue;
+            }
+            chunk.clear();
+            guard.spare_chunks.push(chunk);
+        }
     }
 
     fn maybe_fsync(&mut self) -> Result<(), String> {
@@ -523,10 +560,11 @@ fn response_is_queued(response: &RespFrame) -> bool {
 
 fn encode_resp_command_into(out: &mut Vec<u8>, args: &[CompactArg]) {
     reserve_encoded_command(out, args);
-    push_decimal_prefixed(out, b'*', args.len() as u64);
+    push_decimal_prefixed(out, b'*', args.len());
     for arg in args {
-        push_decimal_prefixed(out, b'$', arg.len() as u64);
-        out.extend_from_slice(arg.as_slice());
+        let arg_slice = arg.as_slice();
+        push_decimal_prefixed(out, b'$', arg_slice.len());
+        out.extend_from_slice(arg_slice);
         out.extend_from_slice(b"\r\n");
     }
 }
@@ -539,10 +577,55 @@ fn reserve_encoded_command(out: &mut Vec<u8>, args: &[CompactArg]) {
     out.reserve(additional);
 }
 
-fn push_decimal_prefixed(out: &mut Vec<u8>, prefix: u8, value: u64) {
+fn push_decimal_prefixed(out: &mut Vec<u8>, prefix: u8, value: usize) {
     out.push(prefix);
-    out.extend_from_slice(value.to_string().as_bytes());
+    let mut buffer = ItoaBuffer::new();
+    out.extend_from_slice(buffer.format(value).as_bytes());
     out.extend_from_slice(b"\r\n");
+}
+
+fn write_chunks_vectored(file: &mut std::fs::File, chunks: &[Vec<u8>]) -> std::io::Result<()> {
+    let mut chunk_index = 0usize;
+    let mut chunk_offset = 0usize;
+    let mut io_slices = SmallVec::<[IoSlice<'_>; VECTORED_WRITE_BATCH]>::new();
+
+    while chunk_index < chunks.len() {
+        io_slices.clear();
+        let mut scan_index = chunk_index;
+        let mut scan_offset = chunk_offset;
+        while scan_index < chunks.len() && io_slices.len() < VECTORED_WRITE_BATCH {
+            let chunk = &chunks[scan_index];
+            if scan_offset < chunk.len() {
+                io_slices.push(IoSlice::new(&chunk[scan_offset..]));
+            }
+            scan_index += 1;
+            scan_offset = 0;
+        }
+
+        let written = file.write_vectored(&io_slices)?;
+        if written == 0 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::WriteZero,
+                "write_vectored wrote zero bytes",
+            ));
+        }
+
+        let mut remaining = written;
+        while remaining > 0 && chunk_index < chunks.len() {
+            let chunk = &chunks[chunk_index];
+            let available = chunk.len().saturating_sub(chunk_offset);
+            if remaining < available {
+                chunk_offset += remaining;
+                remaining = 0;
+            } else {
+                remaining -= available;
+                chunk_index += 1;
+                chunk_offset = 0;
+            }
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
