@@ -1530,13 +1530,17 @@ macro_rules! with_command_registry {
                     {
                         variant: Digest,
                         bytes: b"DIGEST",
-                        dispatch: [unsupported],
-                        supported: false,
-                        group: "",
-                        shape: (0, 0, 0, 0),
-                        readonly: false,
+                        dispatch: [string::digest; store],
+                        supported: true,
+                        group: "string",
+                        shape: (-2, 1, 1, 1),
+                        readonly: true,
                         write: false,
-                        auth: none,
+                        auth: some {
+                            categories: &[AclCategory::Read, AclCategory::Fast, AclCategory::String],
+                            keys: KeyExtraction::Single,
+                            channels: ChannelExtraction::None,
+                        },
                         notify: none,
                     }
                     {
