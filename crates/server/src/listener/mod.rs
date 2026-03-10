@@ -76,7 +76,7 @@ pub async fn run_listener_with_profile(
         let shared_pubsub = pubsub.clone();
         let shared_auth = auth.clone();
         let shared_persistence = persistence.clone();
-        let shared_profiler = profiler;
+        let shared_profiler = profiler.clone();
         accept_tasks.spawn(async move {
             run_accept_loop(
                 listener,
