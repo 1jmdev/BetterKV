@@ -1,8 +1,8 @@
 #![allow(clippy::result_unit_err)]
 
 pub mod command;
-pub mod dispatch;
 pub mod connection;
+pub mod dispatch;
 pub mod geo;
 pub mod hash;
 pub mod json;

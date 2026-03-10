@@ -133,7 +133,7 @@ fn dispatch_authorized(
     profiler.run_command(key, || {
         let response = dispatch_with_id(store, command, args);
         if hub.keyspace_notifications_enabled() {
-            emit_command_notifications(hub, args[0].as_slice(), args, &response);
+            emit_command_notifications(hub, command, args, &response);
         }
         response
     })

@@ -1,5 +1,8 @@
-use crate::dispatch::{identify, CommandId};
-use crate::util::{eq_ascii, Args};
+use crate::dispatch::{
+    AclCategory, CommandId, command_auth_spec, command_flags, command_runtime_spec, identify,
+    is_supported_command_id,
+};
+use crate::util::{Args, eq_ascii};
 use protocol::types::{BulkData, RespFrame};
 use types::value::CompactArg;
 
@@ -106,22 +109,22 @@ fn command_list(args: &Args) -> RespFrame {
 
 fn info_frame(id: CommandId) -> RespFrame {
     let lower_name = name_of(id).to_ascii_lowercase();
-    let (arity, first_key, last_key, step) = command_shape(id);
+    let runtime = command_runtime_spec(id);
     RespFrame::Array(Some(vec![
         bulk(lower_name.as_bytes()),
-        RespFrame::Integer(arity),
+        RespFrame::Integer(runtime.arity),
         RespFrame::Array(Some(
             command_flags(id)
                 .iter()
                 .map(|flag| bulk(flag.as_bytes()))
                 .collect(),
         )),
-        RespFrame::Integer(first_key),
-        RespFrame::Integer(last_key),
-        RespFrame::Integer(step),
+        RespFrame::Integer(runtime.first_key),
+        RespFrame::Integer(runtime.last_key),
+        RespFrame::Integer(runtime.step),
         RespFrame::Array(Some(
             acl_categories(id)
-                .iter()
+                .into_iter()
                 .map(|flag| bulk(flag.as_bytes()))
                 .collect(),
         )),
@@ -148,12 +151,12 @@ fn supported_ids() -> impl Iterator<Item = CommandId> {
     CommandId::ALL
         .iter()
         .copied()
-        .filter(|id| id.is_supported())
+        .filter(|id| is_supported_command_id(*id))
 }
 
 fn supported_command(name: &[u8]) -> Option<CommandId> {
     let id = identify(name);
-    id.is_supported().then_some(id)
+    is_supported_command_id(id).then_some(id)
 }
 
 fn bulk_static(value: &'static str) -> RespFrame {
@@ -179,367 +182,45 @@ fn name_of(id: CommandId) -> &'static str {
     id.name().unwrap_or("UNKNOWN")
 }
 
-impl CommandId {
-    fn is_supported(self) -> bool {
-        !matches!(
-            self,
-            Self::Unknown
-                | Self::Delex
-                | Self::Digest
-                | Self::SubStr
-                | Self::Lcs
-                | Self::MSetEx
-                | Self::Acl
-                | Self::Config
-                | Self::Publish
-                | Self::Subscribe
-                | Self::Unsubscribe
-                | Self::PSubscribe
-                | Self::PUnsubscribe
-                | Self::PubSub
-                | Self::Multi
-                | Self::Exec
-                | Self::Discard
-                | Self::Watch
-                | Self::Unwatch
-        )
-    }
+fn acl_categories(id: CommandId) -> Vec<&'static str> {
+    command_auth_spec(id)
+        .map(|spec| {
+            spec.categories
+                .iter()
+                .filter_map(|category| acl_category_name(*category))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
-fn command_shape(id: CommandId) -> (i64, i64, i64, i64) {
-    match id {
-        CommandId::Command => (-1, 0, 0, 0),
-        CommandId::Ping
-        | CommandId::Echo
-        | CommandId::Auth
-        | CommandId::Hello
-        | CommandId::Client
-        | CommandId::Script
-        | CommandId::Select => (-1, 0, 0, 0),
-        CommandId::Del
-        | CommandId::Exists
-        | CommandId::Touch
-        | CommandId::Unlink
-        | CommandId::MGet
-        | CommandId::SInter
-        | CommandId::SUnion
-        | CommandId::SDiff => (-2, 1, -1, 1),
-        CommandId::MSet | CommandId::MSetNx => (-3, 1, -1, 2),
-        CommandId::Rename
-        | CommandId::RenameNx
-        | CommandId::Copy
-        | CommandId::SMove
-        | CommandId::LMove
-        | CommandId::RPopLPush
-        | CommandId::BRPopLPush => (3, 1, 2, 1),
-        CommandId::BLPop | CommandId::BRPop | CommandId::BZPopMin | CommandId::BZPopMax => {
-            (-3, 1, -2, 1)
-        }
-        CommandId::Eval | CommandId::EvalRo | CommandId::EvalSha | CommandId::EvalShaRo => {
-            (-3, 3, 3, 1)
-        }
-        CommandId::ZInter
-        | CommandId::ZUnion
-        | CommandId::ZDiff
-        | CommandId::SInterCard
-        | CommandId::LMPop
-        | CommandId::ZMPop => (-3, 2, -1, 1),
-        CommandId::ZInterStore
-        | CommandId::ZUnionStore
-        | CommandId::ZDiffStore
-        | CommandId::SDiffStore
-        | CommandId::SInterStore
-        | CommandId::SUnionStore => (-4, 1, -1, 1),
-        CommandId::JsonMSet => (-4, 1, -1, 3),
-        CommandId::JsonMGet => (-3, 1, -2, 1),
-        CommandId::XRead | CommandId::XReadGroup => (-4, 0, 0, 0),
-        CommandId::Sort => (-2, 1, 1, 1),
-        CommandId::Keys
-        | CommandId::Scan
-        | CommandId::DbSize
-        | CommandId::FlushDb
-        | CommandId::FlushAll
-        | CommandId::Quit => (-1, 0, 0, 0),
-        _ if id.is_supported() => (-2, 1, 1, 1),
-        _ => (0, 0, 0, 0),
-    }
-}
-
-fn command_flags(id: CommandId) -> &'static [&'static str] {
-    match id {
-        CommandId::Get
-        | CommandId::MGet
-        | CommandId::Exists
-        | CommandId::Type
-        | CommandId::Ttl
-        | CommandId::PTtl
-        | CommandId::Keys
-        | CommandId::Scan
-        | CommandId::Dump
-        | CommandId::HGet
-        | CommandId::HMGet
-        | CommandId::HGetAll
-        | CommandId::HExists
-        | CommandId::HKeys
-        | CommandId::HVals
-        | CommandId::HLen
-        | CommandId::HStrLen
-        | CommandId::HScan
-        | CommandId::HRandField
-        | CommandId::LLen
-        | CommandId::LIndex
-        | CommandId::LRange
-        | CommandId::LPos
-        | CommandId::SMembers
-        | CommandId::SCard
-        | CommandId::SInter
-        | CommandId::SUnion
-        | CommandId::SDiff
-        | CommandId::SScan
-        | CommandId::SIsMember
-        | CommandId::SMIsMember
-        | CommandId::SRandMember
-        | CommandId::ZCard
-        | CommandId::ZCount
-        | CommandId::ZScore
-        | CommandId::ZRank
-        | CommandId::ZRevRank
-        | CommandId::ZMScore
-        | CommandId::ZRange
-        | CommandId::ZRevRange
-        | CommandId::ZInter
-        | CommandId::ZUnion
-        | CommandId::ZDiff
-        | CommandId::ZScan
-        | CommandId::ZRandMember
-        | CommandId::ZRangeByScore
-        | CommandId::ZRangeByLex
-        | CommandId::ZRevRangeByScore
-        | CommandId::ZRevRangeByLex
-        | CommandId::ZLexCount
-        | CommandId::GeoPos
-        | CommandId::GeoDist
-        | CommandId::GeoHash
-        | CommandId::GeoRadiusRo
-        | CommandId::GeoSearch
-        | CommandId::GeoRadiusByMemberRo
-        | CommandId::XLen
-        | CommandId::XRange
-        | CommandId::XRevRange
-        | CommandId::XPending
-        | CommandId::JsonGet
-        | CommandId::JsonMGet
-        | CommandId::JsonObjKeys
-        | CommandId::JsonObjLen
-        | CommandId::JsonResp
-        | CommandId::JsonStrLen
-        | CommandId::JsonType
-        | CommandId::Command => &["readonly"],
-        _ if id.is_supported() => &["write"],
-        _ => &[],
-    }
-}
-
-fn acl_categories(id: CommandId) -> &'static [&'static str] {
-    match group_of(id) {
-        "string" => &["@read", "@string"],
-        "hash" => &["@hash"],
-        "list" => &["@list"],
-        "set" => &["@set"],
-        "sorted-set" => &["@sortedset"],
-        "stream" => &["@stream"],
-        "geo" => &["@geo"],
-        "connection" => &["@connection"],
-        "server" => &["@slow", "@connection"],
-        _ => &["@keyspace"],
+fn acl_category_name(category: AclCategory) -> Option<&'static str> {
+    match category {
+        AclCategory::All => None,
+        AclCategory::Admin => Some("@admin"),
+        AclCategory::Bitmap => Some("@bitmap"),
+        AclCategory::Blocking => Some("@blocking"),
+        AclCategory::Connection => Some("@connection"),
+        AclCategory::Dangerous => Some("@dangerous"),
+        AclCategory::Fast => Some("@fast"),
+        AclCategory::Geo => Some("@geo"),
+        AclCategory::Hash => Some("@hash"),
+        AclCategory::HyperLogLog => Some("@hyperloglog"),
+        AclCategory::Keyspace => Some("@keyspace"),
+        AclCategory::List => Some("@list"),
+        AclCategory::PubSub => Some("@pubsub"),
+        AclCategory::Read => Some("@read"),
+        AclCategory::Scripting => Some("@scripting"),
+        AclCategory::Set => Some("@set"),
+        AclCategory::Slow => Some("@slow"),
+        AclCategory::SortedSet => Some("@sortedset"),
+        AclCategory::Stream => Some("@stream"),
+        AclCategory::String => Some("@string"),
+        AclCategory::Write => Some("@write"),
     }
 }
 
 fn group_of(id: CommandId) -> &'static str {
-    match id {
-        CommandId::Auth
-        | CommandId::Hello
-        | CommandId::Client
-        | CommandId::Select
-        | CommandId::Quit
-        | CommandId::Ping
-        | CommandId::Echo => "connection",
-        CommandId::Command | CommandId::DbSize | CommandId::FlushDb | CommandId::FlushAll => {
-            "server"
-        }
-        CommandId::Eval
-        | CommandId::EvalRo
-        | CommandId::EvalSha
-        | CommandId::EvalShaRo
-        | CommandId::Script => "scripting",
-        CommandId::Get
-        | CommandId::Set
-        | CommandId::SetNx
-        | CommandId::GetSet
-        | CommandId::GetDel
-        | CommandId::SetEx
-        | CommandId::PSetEx
-        | CommandId::GetEx
-        | CommandId::Append
-        | CommandId::StrLen
-        | CommandId::SetRange
-        | CommandId::GetRange
-        | CommandId::MGet
-        | CommandId::MSet
-        | CommandId::MSetNx
-        | CommandId::Incr
-        | CommandId::IncrBy
-        | CommandId::IncrByFloat
-        | CommandId::Decr
-        | CommandId::DecrBy
-        | CommandId::SetBit
-        | CommandId::GetBit
-        | CommandId::BitCount
-        | CommandId::BitPos
-        | CommandId::BitOp
-        | CommandId::BitField
-        | CommandId::BitFieldRo
-        | CommandId::PfAdd
-        | CommandId::PfCount
-        | CommandId::PfMerge => "string",
-        CommandId::HSet
-        | CommandId::HMSet
-        | CommandId::HSetNx
-        | CommandId::HGet
-        | CommandId::HMGet
-        | CommandId::HGetAll
-        | CommandId::HDel
-        | CommandId::HExists
-        | CommandId::HKeys
-        | CommandId::HVals
-        | CommandId::HLen
-        | CommandId::HStrLen
-        | CommandId::HIncrBy
-        | CommandId::HIncrByFloat
-        | CommandId::HScan
-        | CommandId::HRandField => "hash",
-        CommandId::LPush
-        | CommandId::LPushX
-        | CommandId::RPush
-        | CommandId::RPushX
-        | CommandId::LPop
-        | CommandId::RPop
-        | CommandId::LRem
-        | CommandId::LLen
-        | CommandId::LIndex
-        | CommandId::LRange
-        | CommandId::LSet
-        | CommandId::LTrim
-        | CommandId::LInsert
-        | CommandId::LPos
-        | CommandId::LMove
-        | CommandId::LMPop
-        | CommandId::BLPop
-        | CommandId::BRPop
-        | CommandId::BLMPop
-        | CommandId::BRPopLPush
-        | CommandId::RPopLPush => "list",
-        CommandId::SAdd
-        | CommandId::SRem
-        | CommandId::SMembers
-        | CommandId::SCard
-        | CommandId::SMove
-        | CommandId::SPop
-        | CommandId::SInter
-        | CommandId::SUnion
-        | CommandId::SDiff
-        | CommandId::SScan
-        | CommandId::SIsMember
-        | CommandId::SMIsMember
-        | CommandId::SDiffStore
-        | CommandId::SInterCard
-        | CommandId::SInterStore
-        | CommandId::SUnionStore
-        | CommandId::SRandMember => "set",
-        CommandId::ZAdd
-        | CommandId::ZRem
-        | CommandId::ZCard
-        | CommandId::ZCount
-        | CommandId::ZScore
-        | CommandId::ZRank
-        | CommandId::ZRevRank
-        | CommandId::ZIncrBy
-        | CommandId::ZMScore
-        | CommandId::ZRange
-        | CommandId::ZRevRange
-        | CommandId::ZPopMin
-        | CommandId::ZPopMax
-        | CommandId::BZPopMin
-        | CommandId::BZPopMax
-        | CommandId::ZMPop
-        | CommandId::BZMPop
-        | CommandId::ZInter
-        | CommandId::ZInterStore
-        | CommandId::ZUnion
-        | CommandId::ZUnionStore
-        | CommandId::ZDiff
-        | CommandId::ZDiffStore
-        | CommandId::ZScan
-        | CommandId::ZRandMember
-        | CommandId::ZRangeStore
-        | CommandId::ZRangeByScore
-        | CommandId::ZRangeByLex
-        | CommandId::ZRevRangeByScore
-        | CommandId::ZRevRangeByLex
-        | CommandId::ZLexCount
-        | CommandId::ZRemRangeByLex
-        | CommandId::ZRemRangeByRank
-        | CommandId::ZRemRangeByScore => "sorted-set",
-        CommandId::GeoAdd
-        | CommandId::GeoPos
-        | CommandId::GeoDist
-        | CommandId::GeoHash
-        | CommandId::GeoRadius
-        | CommandId::GeoRadiusRo
-        | CommandId::GeoSearch
-        | CommandId::GeoSearchStore
-        | CommandId::GeoRadiusByMember
-        | CommandId::GeoRadiusByMemberRo => "geo",
-        CommandId::XAdd
-        | CommandId::XLen
-        | CommandId::XDel
-        | CommandId::XRange
-        | CommandId::XRevRange
-        | CommandId::XTrim
-        | CommandId::XRead
-        | CommandId::XGroup
-        | CommandId::XAck
-        | CommandId::XClaim
-        | CommandId::XPending
-        | CommandId::XReadGroup
-        | CommandId::XAutoClaim => "stream",
-        CommandId::JsonArrAppend
-        | CommandId::JsonArrIndex
-        | CommandId::JsonArrInsert
-        | CommandId::JsonArrLen
-        | CommandId::JsonArrPop
-        | CommandId::JsonArrTrim
-        | CommandId::JsonClear
-        | CommandId::JsonDebug
-        | CommandId::JsonDel
-        | CommandId::JsonForget
-        | CommandId::JsonGet
-        | CommandId::JsonMerge
-        | CommandId::JsonMGet
-        | CommandId::JsonMSet
-        | CommandId::JsonNumIncrBy
-        | CommandId::JsonNumMultBy
-        | CommandId::JsonObjKeys
-        | CommandId::JsonObjLen
-        | CommandId::JsonResp
-        | CommandId::JsonSet
-        | CommandId::JsonStrAppend
-        | CommandId::JsonStrLen
-        | CommandId::JsonToggle
-        | CommandId::JsonType => "generic",
-        _ if id.is_supported() => "generic",
-        _ => "",
-    }
+    command_runtime_spec(id).group
 }
 
 fn summary_of(id: CommandId) -> &'static str {
