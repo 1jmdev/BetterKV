@@ -5,7 +5,7 @@ use protocol::{
     parser,
     types::{BulkData, RespFrame},
 };
-use std::hint::black_box;
+use std::{hint::black_box, time::Duration};
 use types::value::{CompactArg, CompactValue};
 
 fn inline_command() -> BytesMut {
@@ -77,6 +77,8 @@ fn bulk_values_frame(items: usize, item_len: usize) -> RespFrame {
 
 fn bench_parse_command(c: &mut Criterion) {
     let mut group = c.benchmark_group("parse_command_into");
+    group.measurement_time(Duration::from_secs(1));
+    group.warm_up_time(Duration::from_millis(500));
 
     let inline = inline_command();
     group.throughput(Throughput::Bytes(inline.len() as u64));
@@ -116,6 +118,8 @@ fn bench_parse_command(c: &mut Criterion) {
 
 fn bench_parse_frame(c: &mut Criterion) {
     let mut group = c.benchmark_group("parse_frame");
+    group.measurement_time(Duration::from_secs(1));
+    group.warm_up_time(Duration::from_millis(500));
 
     for (name, frame) in [
         ("simple", BytesMut::from(&b"+PONG\r\n"[..])),
@@ -140,6 +144,8 @@ fn bench_parse_frame(c: &mut Criterion) {
 
 fn bench_encode(c: &mut Criterion) {
     let mut group = c.benchmark_group("encode");
+    group.measurement_time(Duration::from_secs(1));
+    group.warm_up_time(Duration::from_millis(500));
 
     let cases = [
         ("simple", RespFrame::SimpleStatic("PONG")),

@@ -166,6 +166,7 @@ dependencies = [
  "bytes",
  "clap",
  "commands",
+ "criterion",
  "engine",
  "hashbrown 0.16.1",
  "indexmap",
