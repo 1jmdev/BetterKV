@@ -53,6 +53,11 @@ fn write_uint(buf: &mut BytesMut, val: usize) {
 pub struct Encoder {}
 
 static CRLF: &[u8; 2] = b"\r\n";
+static SIMPLE_OK: &[u8] = b"+OK\r\n";
+static SIMPLE_PONG: &[u8] = b"+PONG\r\n";
+static SIMPLE_QUEUED: &[u8] = b"+QUEUED\r\n";
+static INTEGER_ZERO: &[u8] = b":0\r\n";
+static INTEGER_ONE: &[u8] = b":1\r\n";
 
 #[inline]
 fn write_bulk_slice(buf: &mut BytesMut, slice: &[u8]) {
@@ -72,6 +77,9 @@ impl Encoder {
                 buf.extend_from_slice(s.as_bytes());
                 buf.extend_from_slice(CRLF);
             }
+            RespFrame::SimpleStatic("OK") => buf.extend_from_slice(SIMPLE_OK),
+            RespFrame::SimpleStatic("PONG") => buf.extend_from_slice(SIMPLE_PONG),
+            RespFrame::SimpleStatic("QUEUED") => buf.extend_from_slice(SIMPLE_QUEUED),
             RespFrame::SimpleStatic(s) => {
                 buf.extend_from_slice(b"+");
                 buf.extend_from_slice(s.as_bytes());
@@ -87,6 +95,8 @@ impl Encoder {
                 buf.extend_from_slice(s.as_bytes());
                 buf.extend_from_slice(CRLF);
             }
+            RespFrame::Integer(0) => buf.extend_from_slice(INTEGER_ZERO),
+            RespFrame::Integer(1) => buf.extend_from_slice(INTEGER_ONE),
             RespFrame::Integer(v) => {
                 buf.extend_from_slice(b":");
                 write_int(buf, *v);

@@ -257,6 +257,9 @@ impl Shard {
 
     pub fn clear_ttl(&mut self, key: &[u8]) -> Option<u64> {
         let _trace = profiler::scope("engine::lib::clear_ttl");
+        if self.ttl_count == 0 {
+            return None;
+        }
         let previous = self.expirations.remove(key);
         if previous.is_some() {
             self.ttl_count -= 1;
@@ -273,13 +276,15 @@ impl Shard {
             .entries
             .insert(key.clone(), StoredEntry::new(entry))
             .is_some()
+            && self.ttl_count != 0
             && self.expirations.remove(key.as_slice()).is_some()
         {
             self.ttl_count -= 1;
         }
         if let Some(deadline) = deadline {
-            self.expirations.insert(key, deadline);
-            self.ttl_count += 1;
+            if self.expirations.insert(key, deadline).is_none() {
+                self.ttl_count += 1;
+            }
             self.track_deadline(deadline);
         } else if self.ttl_count == 0 {
             self.ttl_min_deadline = u64::MAX;
@@ -289,7 +294,7 @@ impl Shard {
     pub fn remove_key(&mut self, key: &[u8]) -> Option<Entry> {
         let _trace = profiler::scope("engine::lib::remove_key");
         let entry = self.entries.remove(key)?;
-        if self.expirations.remove(key).is_some() {
+        if self.ttl_count != 0 && self.expirations.remove(key).is_some() {
             self.ttl_count -= 1;
             if self.ttl_count == 0 {
                 self.ttl_min_deadline = u64::MAX;

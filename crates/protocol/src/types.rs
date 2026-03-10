@@ -48,16 +48,19 @@ pub enum RespFrame {
 }
 
 impl RespFrame {
+    #[inline(always)]
     pub fn ok() -> Self {
         let _trace = profiler::scope("protocol::types::ok");
         Self::SimpleStatic("OK")
     }
 
+    #[inline(always)]
     pub fn simple_static(value: &'static str) -> Self {
         let _trace = profiler::scope("protocol::types::simple_static");
         Self::SimpleStatic(value)
     }
 
+    #[inline(always)]
     pub fn error_static(value: &'static str) -> Self {
         let _trace = profiler::scope("protocol::types::error_static");
         Self::ErrorStatic(value)

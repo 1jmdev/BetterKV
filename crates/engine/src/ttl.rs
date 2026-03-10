@@ -16,9 +16,11 @@ impl Store {
         let _trace = profiler::scope("engine::ttl::pexpire");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
-        let now_ms = monotonic_now_ms();
-        if purge_if_expired(&mut shard, key, now_ms) {
-            return 0;
+        if shard.has_ttls() {
+            let now_ms = monotonic_now_ms();
+            if purge_if_expired(&mut shard, key, now_ms) {
+                return 0;
+            }
         }
 
         if shard.entries.contains_key(key) {
@@ -48,9 +50,11 @@ impl Store {
         let _trace = profiler::scope("engine::ttl::persist");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
-        let now_ms = monotonic_now_ms();
-        if purge_if_expired(&mut shard, key, now_ms) {
-            return 0;
+        if shard.has_ttls() {
+            let now_ms = monotonic_now_ms();
+            if purge_if_expired(&mut shard, key, now_ms) {
+                return 0;
+            }
         }
 
         match shard.entries.get(key) {
@@ -75,6 +79,13 @@ impl Store {
         let _trace = profiler::scope("engine::ttl::pttl");
         let idx = self.shard_index(key);
         let shard = self.shards[idx].read();
+        if !shard.has_ttls() {
+            return if shard.entries.contains_key(key) {
+                -1
+            } else {
+                -2
+            };
+        }
         let now_ms = monotonic_now_ms();
         match get_live_entry(&shard, key, now_ms) {
             Some(_) => remaining_ttl_ms(shard.ttl_deadline(key).unwrap_or(0)),

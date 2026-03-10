@@ -61,8 +61,8 @@ fn bulk_static(value: &'static [u8]) -> RespFrame {
     RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(value))))
 }
 
-const READ_BUFFER_INITIAL: usize = 16 * 1024;
-const WRITE_BUFFER_INITIAL: usize = 16 * 1024;
+const READ_BUFFER_INITIAL: usize = 64 * 1024;
+const WRITE_BUFFER_INITIAL: usize = 64 * 1024;
 const PUSH_DRAIN_BATCH: usize = 128;
 
 pub async fn handle_connection(

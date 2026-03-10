@@ -12,9 +12,14 @@ impl Store {
     pub fn get(&self, key: &[u8]) -> Result<Option<CompactValue>, ()> {
         let _trace = profiler::scope("engine::strings::core::get");
         let idx = self.shard_index(key);
-        let now_ms = monotonic_now_ms();
         let shard = self.shards[idx].read();
-        let Some(entry) = get_live_entry(&shard, key, now_ms) else {
+        let entry = if shard.has_ttls() {
+            let now_ms = monotonic_now_ms();
+            get_live_entry(&shard, key, now_ms)
+        } else {
+            shard.entries.get(key)
+        };
+        let Some(entry) = entry else {
             return Ok(None);
         };
         match entry.as_string() {
@@ -39,9 +44,15 @@ impl Store {
         let _trace = profiler::scope("engine::strings::core::setnx");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
-        let now_ms = monotonic_now_ms();
-        if !purge_if_expired(&mut shard, key, now_ms) && shard.entries.contains_key(key) {
-            return false;
+        if !shard.has_ttls() {
+            if shard.entries.contains_key(key) {
+                return false;
+            }
+        } else {
+            let now_ms = monotonic_now_ms();
+            if !purge_if_expired(&mut shard, key, now_ms) && shard.entries.contains_key(key) {
+                return false;
+            }
         }
 
         write_entry(
@@ -57,9 +68,15 @@ impl Store {
         let _trace = profiler::scope("engine::strings::core::setxx");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
-        let now_ms = monotonic_now_ms();
-        if purge_if_expired(&mut shard, key, now_ms) || !shard.entries.contains_key(key) {
-            return false;
+        if !shard.has_ttls() {
+            if !shard.entries.contains_key(key) {
+                return false;
+            }
+        } else {
+            let now_ms = monotonic_now_ms();
+            if purge_if_expired(&mut shard, key, now_ms) || !shard.entries.contains_key(key) {
+                return false;
+            }
         }
 
         write_entry(
@@ -75,10 +92,12 @@ impl Store {
         let _trace = profiler::scope("engine::strings::core::getset");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
-        let now_ms = monotonic_now_ms();
-        if purge_if_expired(&mut shard, key, now_ms) {
-            write_entry(&mut shard, key, Entry::from_slice(value), None);
-            return Ok(None);
+        if shard.has_ttls() {
+            let now_ms = monotonic_now_ms();
+            if purge_if_expired(&mut shard, key, now_ms) {
+                write_entry(&mut shard, key, Entry::from_slice(value), None);
+                return Ok(None);
+            }
         }
 
         if let Some(entry) = shard.entries.get_mut::<[u8]>(key) {
@@ -100,9 +119,11 @@ impl Store {
         let _trace = profiler::scope("engine::strings::core::getdel");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
-        let now_ms = monotonic_now_ms();
-        if purge_if_expired(&mut shard, key, now_ms) {
-            return Ok(None);
+        if shard.has_ttls() {
+            let now_ms = monotonic_now_ms();
+            if purge_if_expired(&mut shard, key, now_ms) {
+                return Ok(None);
+            }
         }
 
         match shard.remove_key(key) {
@@ -118,17 +139,27 @@ impl Store {
         let _trace = profiler::scope("engine::strings::core::append");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
-        let now_ms = monotonic_now_ms();
 
-        let mut base = if purge_if_expired(&mut shard, key, now_ms) {
-            Vec::new()
-        } else {
+        let mut base = if !shard.has_ttls() {
             match shard.entries.get::<[u8]>(key) {
                 Some(entry) => match entry.as_string() {
                     Some(value) => value.to_vec(),
                     None => return Err(()),
                 },
                 None => Vec::new(),
+            }
+        } else {
+            let now_ms = monotonic_now_ms();
+            if purge_if_expired(&mut shard, key, now_ms) {
+                Vec::new()
+            } else {
+                match shard.entries.get::<[u8]>(key) {
+                    Some(entry) => match entry.as_string() {
+                        Some(value) => value.to_vec(),
+                        None => return Err(()),
+                    },
+                    None => Vec::new(),
+                }
             }
         };
         let ttl_deadline = shard.ttl_deadline(key);
@@ -142,9 +173,14 @@ impl Store {
     pub fn strlen(&self, key: &[u8]) -> Result<usize, ()> {
         let _trace = profiler::scope("engine::strings::core::strlen");
         let idx = self.shard_index(key);
-        let now_ms = monotonic_now_ms();
         let shard = self.shards[idx].read();
-        let Some(entry) = get_live_entry(&shard, key, now_ms) else {
+        let entry = if shard.has_ttls() {
+            let now_ms = monotonic_now_ms();
+            get_live_entry(&shard, key, now_ms)
+        } else {
+            shard.entries.get(key)
+        };
+        let Some(entry) = entry else {
             return Ok(0);
         };
         match entry.as_string() {

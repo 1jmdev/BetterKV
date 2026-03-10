@@ -135,13 +135,18 @@ impl Store {
 
     pub fn exists<K: AsRef<[u8]>>(&self, keys: &[K]) -> i64 {
         let _trace = profiler::scope("engine::keyspace::exists");
-        let now_ms = monotonic_now_ms();
         let mut count = 0;
         for key in keys {
             let key = key.as_ref();
             let idx = self.shard_index(key);
             let shard = self.shards[idx].read();
-            if shard.entries.get(key).is_some() && !shard.is_expired(key, now_ms) {
+            let present = if shard.has_ttls() {
+                let now_ms = monotonic_now_ms();
+                shard.entries.get(key).is_some() && !shard.is_expired(key, now_ms)
+            } else {
+                shard.entries.get(key).is_some()
+            };
+            if present {
                 count += 1;
             }
         }

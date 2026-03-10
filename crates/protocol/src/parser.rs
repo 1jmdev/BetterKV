@@ -1,4 +1,4 @@
-use bytes::BytesMut;
+use bytes::{Buf, BytesMut};
 use std::fmt;
 
 use crate::types::{BulkData, RespFrame};
@@ -200,7 +200,7 @@ fn parse_array_command(
 
     if count == 0 {
         let consumed = cur.pos;
-        let _ = src.split_to(consumed);
+        src.advance(consumed);
         return Ok(Some(()));
     }
 
@@ -230,7 +230,7 @@ fn parse_array_command(
     }
 
     let consumed = cur.pos;
-    let _ = src.split_to(consumed);
+    src.advance(consumed);
     Ok(Some(()))
 }
 
@@ -267,7 +267,7 @@ fn parse_inline_command(
     }
 
     let consumed = cur.pos;
-    let _ = src.split_to(consumed);
+    src.advance(consumed);
     Ok(Some(()))
 }
 
@@ -280,7 +280,7 @@ pub fn parse_frame(src: &mut BytesMut) -> Result<Option<RespFrame>, ParseError> 
     match parse_frame_inner(&mut cur) {
         Ok(frame) => {
             let consumed = cur.pos;
-            let _ = src.split_to(consumed);
+            src.advance(consumed);
             Ok(Some(frame))
         }
         Err(ParseError::Incomplete) => Ok(None),
