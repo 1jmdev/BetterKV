@@ -1,4 +1,4 @@
-use commands::dispatcher::{dispatch_args, parse_command_into};
+use commands::dispatch::{dispatch_args, parse_command_into};
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use engine::store::Store;
 use protocol::types::{BulkData, RespFrame};

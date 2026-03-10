@@ -1,5 +1,5 @@
 use bytes::BytesMut;
-use commands::command::identify;
+use commands::dispatch::identify;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc::error::TryRecvError;

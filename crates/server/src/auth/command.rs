@@ -1,4 +1,4 @@
-use commands::command::CommandId;
+use commands::dispatch::CommandId;
 use types::value::CompactArg;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]

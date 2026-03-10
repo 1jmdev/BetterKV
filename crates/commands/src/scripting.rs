@@ -1,4 +1,4 @@
-use crate::dispatcher;
+use crate::dispatch::dispatch_args;
 use crate::util::{Args, int_error, parse_i64_bytes, wrong_args};
 use engine::store::Store;
 use mlua::{HookTriggers, Lua, Table, Value, Variadic, VmState};
@@ -743,7 +743,7 @@ fn execute_redis_call(
         wrote.store(true, Ordering::Relaxed);
     }
 
-    let frame = dispatcher::dispatch_args(store, &args);
+    let frame = dispatch_args(store, &args);
     resp_frame_to_lua(lua, frame, protected)
 }
 

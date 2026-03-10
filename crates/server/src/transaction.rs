@@ -1,5 +1,5 @@
 use ahash::AHashMap;
-use commands::command::CommandId;
+use commands::dispatch::CommandId;
 
 use engine::store::Store;
 use protocol::types::RespFrame;

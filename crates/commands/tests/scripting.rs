@@ -2,7 +2,7 @@ use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use commands::dispatcher;
+use commands::dispatch::dispatch_args;
 use engine::store::Store;
 use protocol::types::{BulkData, RespFrame};
 use types::value::CompactArg;
@@ -17,7 +17,7 @@ fn run(store: &Store, args: &[&str]) -> RespFrame {
         .iter()
         .map(|value| CompactArg::from_slice(value.as_bytes()))
         .collect();
-    dispatcher::dispatch_args(store, &parsed)
+    dispatch_args(store, &parsed)
 }
 
 fn bulk_bytes(frame: RespFrame) -> Option<Vec<u8>> {

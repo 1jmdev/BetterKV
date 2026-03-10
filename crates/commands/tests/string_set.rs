@@ -1,4 +1,4 @@
-use commands::dispatcher::dispatch_args;
+use commands::dispatch::dispatch_args;
 use engine::store::Store;
 use protocol::types::{BulkData, RespFrame};
 use types::value::CompactArg;

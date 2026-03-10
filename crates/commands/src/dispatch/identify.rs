@@ -1,4 +1,4 @@
-use crate::command::CommandId;
+use super::list::CommandId;
 
 #[inline(always)]
 fn eq(a: &[u8], b: &[u8]) -> bool {

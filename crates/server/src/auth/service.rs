@@ -1,4 +1,4 @@
-use commands::command::CommandId;
+use commands::dispatch::CommandId;
 use std::sync::{
     Arc,
     atomic::{AtomicU64, Ordering},

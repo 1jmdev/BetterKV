@@ -1,7 +1,7 @@
-use crate::command::CommandId;
-use crate::dispatch::identify;
+use super::list::CommandId;
+use super::identify::identify;
 use crate::{
-    connection, geo, hash, json, keyspace, list, scripting, set, stream, string, ttl, zset,
+    command, connection, geo, hash, json, keyspace, list, scripting, set, stream, string, ttl, zset,
 };
 use engine::store::Store;
 use protocol::types::{BulkData, RespFrame};
@@ -45,34 +45,7 @@ pub fn dispatch_with_id(store: &Store, command: CommandId, args: &[CompactArg]) 
         CommandId::Auth => connection::auth(args),
         CommandId::Hello => connection::hello(args),
         CommandId::Client => connection::client(args),
-        CommandId::Command => {
-            if args.len() == 1 {
-                RespFrame::Array(Some(vec![]))
-            } else if args.len() == 2 && args[1].eq_ignore_ascii_case(b"COUNT") {
-                RespFrame::Integer(0)
-            } else if args[1].eq_ignore_ascii_case(b"INFO") {
-                let infos = if args.len() <= 2 {
-                    vec![]
-                } else {
-                    args[2..]
-                        .iter()
-                        .map(|command| {
-                            RespFrame::Array(Some(vec![RespFrame::Bulk(Some(BulkData::Arg(
-                                command.clone(),
-                            )))]))
-                        })
-                        .collect()
-                };
-                RespFrame::Array(Some(infos))
-            } else if args[1].eq_ignore_ascii_case(b"GETKEYS") {
-                RespFrame::Array(Some(vec![]))
-            } else {
-                RespFrame::Error(format!(
-                    "ERR unknown subcommand '{}'.",
-                    String::from_utf8_lossy(args[1].as_slice())
-                ))
-            }
-        }
+        CommandId::Command => command::command(args),
         CommandId::Select => connection::select_db(args),
         CommandId::Quit => connection::quit(args),
         CommandId::Echo => connection::echo(args),
@@ -287,7 +260,7 @@ pub fn parse_command_into(
     let mut items = items.into_iter();
     if let Some(first_item) = items.next() {
         let mut first = parse_arg(first_item)?;
-        uppercase_compact_arg_in_place(&mut first);
+        first.make_ascii_uppercase();
         args.push(first);
 
         for item in items {
@@ -307,9 +280,4 @@ fn parse_arg(item: RespFrame) -> Result<CompactArg, &'static str> {
         RespFrame::SimpleStatic(value) => Ok(CompactArg::from_slice(value.as_bytes())),
         _ => Err("ERR invalid argument type"),
     }
-}
-
-#[inline]
-fn uppercase_compact_arg_in_place(arg: &mut CompactArg) {
-    arg.make_ascii_uppercase();
 }

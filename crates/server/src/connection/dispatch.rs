@@ -1,7 +1,7 @@
 use tokio::sync::mpsc::UnboundedSender;
 
-use commands::command::CommandId;
-use commands::dispatcher::dispatch_with_id;
+use commands::dispatch::CommandId;
+use commands::dispatch::dispatch_with_id;
 use engine::store::Store;
 use protocol::types::{BulkData, RespFrame};
 use types::value::CompactArg;

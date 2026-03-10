@@ -1,4 +1,4 @@
-use commands::command::CommandId;
+use commands::dispatch::CommandId;
 use std::collections::BTreeSet;
 
 use types::value::CompactArg;

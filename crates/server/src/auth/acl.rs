@@ -1,4 +1,4 @@
-use commands::command::identify;
+use commands::dispatch::identify;
 use parking_lot::RwLock;
 use protocol::types::{BulkData, RespFrame};
 use std::sync::atomic::{AtomicU64, Ordering};
