@@ -89,7 +89,7 @@ fn small_growth_is_immediate() {
 fn large_growth_uses_incremental_rehashing() {
     let mut map = RehashingMap::new();
 
-    for i in 0..1025u32 {
+    for i in 0..2049u32 {
         map.insert(i.to_le_bytes().to_vec(), i);
     }
 
@@ -98,7 +98,7 @@ fn large_growth_uses_incremental_rehashing() {
         "large growth should use incremental rehashing"
     );
 
-    for i in 0..1025u32 {
+    for i in 0..2049u32 {
         assert_eq!(map.get(&i.to_le_bytes()), Some(&i));
     }
 
@@ -109,7 +109,7 @@ fn large_growth_uses_incremental_rehashing() {
         );
     }
 
-    for i in 0..1025u32 {
+    for i in 0..2049u32 {
         assert_eq!(map.get(&i.to_le_bytes()), Some(&i));
     }
 }

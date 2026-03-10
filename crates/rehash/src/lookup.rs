@@ -75,18 +75,15 @@ where
 
         unsafe {
             let mut idx = *table.heads.as_ptr().add(bucket);
-            let metas_ptr = self.metas.as_ptr();
             let keys_ptr = self.keys.as_ptr();
 
             while idx != NIL {
-                let meta = &*metas_ptr.add(idx as usize);
+                let meta = &*self.metas.as_ptr().add(idx as usize);
                 let next = meta.next;
 
-                if meta.hash == hash {
-                    let k = &*keys_ptr.add(idx as usize);
-                    if k.as_ref() == key_bytes {
-                        return Some(idx);
-                    }
+                let k = &*keys_ptr.add(idx as usize);
+                if k.as_ref() == key_bytes {
+                    return Some(idx);
                 }
 
                 idx = next;
