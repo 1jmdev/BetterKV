@@ -1,10 +1,9 @@
 use commands::dispatch::{
     CommandId, NotificationKeyArguments, NotificationResponsePolicy, command_notification_spec,
 };
+use engine::pubsub::PubSubHub;
 use protocol::types::RespFrame;
 use types::value::CompactArg;
-
-use super::super::pubsub::PubSubHub;
 
 pub(super) fn emit_command_notifications(
     hub: &PubSubHub,

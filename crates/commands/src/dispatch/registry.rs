@@ -1497,9 +1497,9 @@ macro_rules! with_command_registry {
                         variant: Config,
                         bytes: b"CONFIG",
                         dispatch: [unsupported],
-                        supported: false,
-                        group: "",
-                        shape: (0, 0, 0, 0),
+                        supported: true,
+                        group: "server",
+                        shape: (-2, 0, 0, 0),
                         readonly: false,
                         write: false,
                         auth: some {
@@ -1869,9 +1869,9 @@ macro_rules! with_command_registry {
                         variant: PubSub,
                         bytes: b"PUBSUB",
                         dispatch: [unsupported],
-                        supported: false,
-                        group: "",
-                        shape: (0, 0, 0, 0),
+                        supported: true,
+                        group: "pubsub",
+                        shape: (-2, 0, 0, 0),
                         readonly: false,
                         write: false,
                         auth: some {
@@ -2497,9 +2497,9 @@ macro_rules! with_command_registry {
                         variant: Publish,
                         bytes: b"PUBLISH",
                         dispatch: [unsupported],
-                        supported: false,
-                        group: "",
-                        shape: (0, 0, 0, 0),
+                        supported: true,
+                        group: "pubsub",
+                        shape: (3, 0, 0, 0),
                         readonly: false,
                         write: false,
                         auth: some {
@@ -2813,6 +2813,22 @@ macro_rules! with_command_registry {
                 }
                 b's' => {
                     {
+                        variant: SPublish,
+                        bytes: b"SPUBLISH",
+                        dispatch: [unsupported],
+                        supported: true,
+                        group: "pubsub",
+                        shape: (3, 0, 0, 0),
+                        readonly: false,
+                        write: false,
+                        auth: some {
+                            categories: &[AclCategory::PubSub, AclCategory::Write, AclCategory::Fast],
+                            keys: KeyExtraction::None,
+                            channels: ChannelExtraction::First,
+                        },
+                        notify: none,
+                    }
+                    {
                         variant: SetRange,
                         bytes: b"SETRANGE",
                         dispatch: [string::setrange; store],
@@ -3035,9 +3051,9 @@ macro_rules! with_command_registry {
                         variant: Subscribe,
                         bytes: b"SUBSCRIBE",
                         dispatch: [unsupported],
-                        supported: false,
-                        group: "",
-                        shape: (0, 0, 0, 0),
+                        supported: true,
+                        group: "pubsub",
+                        shape: (-2, 0, 0, 0),
                         readonly: false,
                         write: false,
                         auth: some {
@@ -3191,9 +3207,9 @@ macro_rules! with_command_registry {
                         variant: PSubscribe,
                         bytes: b"PSUBSCRIBE",
                         dispatch: [unsupported],
-                        supported: false,
-                        group: "",
-                        shape: (0, 0, 0, 0),
+                        supported: true,
+                        group: "pubsub",
+                        shape: (-2, 0, 0, 0),
                         readonly: false,
                         write: false,
                         auth: some {
@@ -3205,6 +3221,22 @@ macro_rules! with_command_registry {
                     }
                 }
                 b's' => {
+                    {
+                        variant: SSubscribe,
+                        bytes: b"SSUBSCRIBE",
+                        dispatch: [unsupported],
+                        supported: true,
+                        group: "pubsub",
+                        shape: (-2, 0, 0, 0),
+                        readonly: false,
+                        write: false,
+                        auth: some {
+                            categories: &[AclCategory::PubSub, AclCategory::Read, AclCategory::Fast],
+                            keys: KeyExtraction::None,
+                            channels: ChannelExtraction::AllFrom(1),
+                        },
+                        notify: none,
+                    }
                     {
                         variant: SMIsMember,
                         bytes: b"SMISMEMBER",
@@ -3464,9 +3496,9 @@ macro_rules! with_command_registry {
                         variant: Unsubscribe,
                         bytes: b"UNSUBSCRIBE",
                         dispatch: [unsupported],
-                        supported: false,
-                        group: "",
-                        shape: (0, 0, 0, 0),
+                        supported: true,
+                        group: "pubsub",
+                        shape: (-1, 0, 0, 0),
                         readonly: false,
                         write: false,
                         auth: some {
@@ -3617,9 +3649,27 @@ macro_rules! with_command_registry {
                         variant: PUnsubscribe,
                         bytes: b"PUNSUBSCRIBE",
                         dispatch: [unsupported],
-                        supported: false,
-                        group: "",
-                        shape: (0, 0, 0, 0),
+                        supported: true,
+                        group: "pubsub",
+                        shape: (-1, 0, 0, 0),
+                        readonly: false,
+                        write: false,
+                        auth: some {
+                            categories: &[AclCategory::PubSub, AclCategory::Read, AclCategory::Fast],
+                            keys: KeyExtraction::None,
+                            channels: ChannelExtraction::AllFrom(1),
+                        },
+                        notify: none,
+                    }
+                }
+                b's' => {
+                    {
+                        variant: SUnsubscribe,
+                        bytes: b"SUNSUBSCRIBE",
+                        dispatch: [unsupported],
+                        supported: true,
+                        group: "pubsub",
+                        shape: (-1, 0, 0, 0),
                         readonly: false,
                         write: false,
                         auth: some {

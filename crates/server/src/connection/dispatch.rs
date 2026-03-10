@@ -1,14 +1,13 @@
-use tokio::sync::mpsc::UnboundedSender;
-
 use commands::dispatch::CommandId;
-use commands::dispatch::dispatch_with_id;
+use commands::dispatch::dispatch_with_context;
+use commands::pubsub::DispatchContext;
+use engine::pubsub::{ConnectionPubSub, PubSubHub, SharedPubSubSink};
 use engine::store::Store;
 use protocol::types::{BulkData, RespFrame};
 use types::value::CompactArg;
 
-use super::super::pubsub::{ConnectionPubSub, PubSubHub};
 use super::notifications::emit_command_notifications;
-use super::util::{collapse_pubsub_responses, wrong_args};
+use super::util::wrong_args;
 use crate::auth::{self, AuthError, AuthService, SessionAuth, no_perm};
 use crate::profile::ProfileHub;
 
@@ -24,16 +23,11 @@ impl ClientState {
     }
 }
 
-#[inline]
-fn bulk_static(value: &'static [u8]) -> RespFrame {
-    RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(value))))
-}
-
 #[allow(clippy::too_many_arguments)]
 pub(super) fn execute_regular_command(
     store: &Store,
     hub: &PubSubHub,
-    push_tx: &UnboundedSender<RespFrame>,
+    pubsub_sink: &SharedPubSubSink,
     pubsub_state: &mut ConnectionPubSub,
     client_state: &mut ClientState,
     auth: &AuthService,
@@ -82,7 +76,7 @@ pub(super) fn execute_regular_command(
         return dispatch_authorized(
             store,
             hub,
-            push_tx,
+            pubsub_sink,
             pubsub_state,
             client_state,
             profiler,
@@ -98,7 +92,7 @@ pub(super) fn execute_regular_command(
     dispatch_authorized(
         store,
         hub,
-        push_tx,
+        pubsub_sink,
         pubsub_state,
         client_state,
         profiler,
@@ -112,7 +106,7 @@ pub(super) fn execute_regular_command(
 fn dispatch_authorized(
     store: &Store,
     hub: &PubSubHub,
-    push_tx: &UnboundedSender<RespFrame>,
+    pubsub_sink: &SharedPubSubSink,
     pubsub_state: &mut ConnectionPubSub,
     client_state: &mut ClientState,
     profiler: &ProfileHub,
@@ -123,15 +117,14 @@ fn dispatch_authorized(
         return client_command(client_state, args);
     }
 
-    if let Some(response) =
-        handle_pubsub_or_config_command(hub, push_tx, pubsub_state, command, args)
-    {
-        return response;
-    }
-
     let key = args.get(1).map(CompactArg::as_slice);
     profiler.run_command(key, || {
-        let response = dispatch_with_id(store, command, args);
+        let mut context = ServerDispatchContext {
+            hub,
+            sink: pubsub_sink,
+            pubsub_state,
+        };
+        let response = dispatch_with_context(store, &mut context, command, args);
         if hub.keyspace_notifications_enabled() {
             emit_command_notifications(hub, command, args, &response);
         }
@@ -303,273 +296,6 @@ fn response_is_ok(response: &RespFrame) -> bool {
     }
 }
 
-fn handle_pubsub_or_config_command(
-    hub: &PubSubHub,
-    push_tx: &UnboundedSender<RespFrame>,
-    pubsub_state: &mut ConnectionPubSub,
-    command: CommandId,
-    args: &[CompactArg],
-) -> Option<RespFrame> {
-    let _trace = profiler::scope("server::connection::dispatch::handle_pubsub_or_config_command");
-
-    match command {
-        CommandId::Publish => Some(publish_command(hub, args)),
-        CommandId::PSubscribe => Some(psubscribe_command(hub, push_tx, pubsub_state, args)),
-        CommandId::PUnsubscribe => Some(punsubscribe_command(hub, pubsub_state, args)),
-        CommandId::PubSub => Some(pubsub_command(hub, args)),
-        CommandId::Subscribe => Some(subscribe_command(hub, push_tx, pubsub_state, args)),
-        CommandId::Unsubscribe => Some(unsubscribe_command(hub, pubsub_state, args)),
-        CommandId::Config => Some(config_command(hub, args)),
-        _ => None,
-    }
-}
-
-fn publish_command(hub: &PubSubHub, args: &[CompactArg]) -> RespFrame {
-    let _trace = profiler::scope("server::connection::dispatch::publish_command");
-    if args.len() != 3 {
-        return wrong_args("PUBLISH");
-    }
-    RespFrame::Integer(hub.publish(&args[1], &args[2]))
-}
-
-fn subscribe_command(
-    hub: &PubSubHub,
-    push_tx: &UnboundedSender<RespFrame>,
-    pubsub_state: &mut ConnectionPubSub,
-    args: &[CompactArg],
-) -> RespFrame {
-    let _trace = profiler::scope("server::connection::dispatch::subscribe_command");
-    if args.len() < 2 {
-        return wrong_args("SUBSCRIBE");
-    }
-
-    let mut responses = Vec::with_capacity(args.len() - 1);
-    for channel in &args[1..] {
-        pubsub_state.subscribe(hub, channel, push_tx);
-        responses.push(RespFrame::Array(Some(vec![
-            bulk_static(b"subscribe"),
-            RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(
-                channel.as_slice(),
-            )))),
-            RespFrame::Integer(pubsub_state.subscription_count()),
-        ])));
-    }
-    collapse_pubsub_responses(responses)
-}
-
-fn unsubscribe_command(
-    hub: &PubSubHub,
-    pubsub_state: &mut ConnectionPubSub,
-    args: &[CompactArg],
-) -> RespFrame {
-    let _trace = profiler::scope("server::connection::dispatch::unsubscribe_command");
-    let channels = if args.len() == 1 {
-        let existing = pubsub_state.unsubscribe_all(hub);
-        if existing.is_empty() {
-            vec![CompactArg::from_vec(Vec::new())]
-        } else {
-            existing.into_iter().map(CompactArg::from_vec).collect()
-        }
-    } else {
-        let mut responses = Vec::with_capacity(args.len() - 1);
-        for channel in &args[1..] {
-            pubsub_state.unsubscribe(hub, channel);
-            responses.push(RespFrame::Array(Some(vec![
-                bulk_static(b"unsubscribe"),
-                RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(
-                    channel.as_slice(),
-                )))),
-                RespFrame::Integer(pubsub_state.subscription_count()),
-            ])));
-        }
-        return collapse_pubsub_responses(responses);
-    };
-
-    let mut responses = Vec::with_capacity(channels.len());
-    for channel in channels {
-        responses.push(RespFrame::Array(Some(vec![
-            bulk_static(b"unsubscribe"),
-            if channel.is_empty() {
-                RespFrame::Bulk(None)
-            } else {
-                RespFrame::Bulk(Some(BulkData::Arg(channel)))
-            },
-            RespFrame::Integer(pubsub_state.subscription_count()),
-        ])));
-    }
-    collapse_pubsub_responses(responses)
-}
-
-fn psubscribe_command(
-    hub: &PubSubHub,
-    push_tx: &UnboundedSender<RespFrame>,
-    pubsub_state: &mut ConnectionPubSub,
-    args: &[CompactArg],
-) -> RespFrame {
-    let _trace = profiler::scope("server::connection::dispatch::psubscribe_command");
-    if args.len() < 2 {
-        return wrong_args("PSUBSCRIBE");
-    }
-
-    let mut responses = Vec::with_capacity(args.len() - 1);
-    for pattern in &args[1..] {
-        pubsub_state.psubscribe(hub, pattern, push_tx);
-        responses.push(RespFrame::Array(Some(vec![
-            bulk_static(b"psubscribe"),
-            RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(
-                pattern.as_slice(),
-            )))),
-            RespFrame::Integer(pubsub_state.subscription_count()),
-        ])));
-    }
-    collapse_pubsub_responses(responses)
-}
-
-fn punsubscribe_command(
-    hub: &PubSubHub,
-    pubsub_state: &mut ConnectionPubSub,
-    args: &[CompactArg],
-) -> RespFrame {
-    let _trace = profiler::scope("server::connection::dispatch::punsubscribe_command");
-    let patterns = if args.len() == 1 {
-        let existing = pubsub_state.punsubscribe_all(hub);
-        if existing.is_empty() {
-            vec![CompactArg::from_vec(Vec::new())]
-        } else {
-            existing.into_iter().map(CompactArg::from_vec).collect()
-        }
-    } else {
-        let mut responses = Vec::with_capacity(args.len() - 1);
-        for pattern in &args[1..] {
-            pubsub_state.punsubscribe(hub, pattern);
-            responses.push(RespFrame::Array(Some(vec![
-                bulk_static(b"punsubscribe"),
-                RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(
-                    pattern.as_slice(),
-                )))),
-                RespFrame::Integer(pubsub_state.subscription_count()),
-            ])));
-        }
-        return collapse_pubsub_responses(responses);
-    };
-
-    let mut responses = Vec::with_capacity(patterns.len());
-    for pattern in patterns {
-        responses.push(RespFrame::Array(Some(vec![
-            bulk_static(b"punsubscribe"),
-            if pattern.is_empty() {
-                RespFrame::Bulk(None)
-            } else {
-                RespFrame::Bulk(Some(BulkData::Arg(pattern)))
-            },
-            RespFrame::Integer(pubsub_state.subscription_count()),
-        ])));
-    }
-    collapse_pubsub_responses(responses)
-}
-
-fn pubsub_command(hub: &PubSubHub, args: &[CompactArg]) -> RespFrame {
-    let _trace = profiler::scope("server::connection::dispatch::pubsub_command");
-    if args.len() < 2 {
-        return wrong_args("PUBSUB");
-    }
-
-    let subcommand = args[1].as_slice();
-    if subcommand.eq_ignore_ascii_case(b"CHANNELS") {
-        let pattern = if args.len() == 3 {
-            Some(args[2].as_slice())
-        } else if args.len() == 2 {
-            None
-        } else {
-            return wrong_args("PUBSUB");
-        };
-        let channels = hub.pubsub_channels(pattern);
-        return RespFrame::Array(Some(
-            channels
-                .into_iter()
-                .map(|channel| RespFrame::Bulk(Some(BulkData::from_vec(channel))))
-                .collect(),
-        ));
-    }
-
-    if subcommand.eq_ignore_ascii_case(b"NUMSUB") {
-        let channels = args[2..]
-            .iter()
-            .map(|channel| channel.to_vec())
-            .collect::<Vec<_>>();
-        let counts = hub.pubsub_numsub(&channels);
-        let mut response = Vec::with_capacity(counts.len() * 2);
-        for (channel, count) in counts {
-            response.push(RespFrame::Bulk(Some(BulkData::from_vec(channel))));
-            response.push(RespFrame::Integer(count));
-        }
-        return RespFrame::Array(Some(response));
-    }
-
-    if subcommand.eq_ignore_ascii_case(b"NUMPAT") {
-        if args.len() != 2 {
-            return wrong_args("PUBSUB");
-        }
-        return RespFrame::Integer(hub.pubsub_numpat());
-    }
-
-    unknown_subcommand_error(subcommand)
-}
-
-fn config_command(hub: &PubSubHub, args: &[CompactArg]) -> RespFrame {
-    let _trace = profiler::scope("server::connection::dispatch::config_command");
-    if args.len() < 2 {
-        return wrong_args("CONFIG");
-    }
-
-    let subcommand = args[1].as_slice();
-    if subcommand.eq_ignore_ascii_case(b"GET") {
-        if args.len() < 3 {
-            return wrong_args("CONFIG");
-        }
-
-        let mut response = Vec::new();
-        for pattern in &args[2..] {
-            append_config_matches(hub, pattern.as_slice(), &mut response);
-        }
-        return RespFrame::Array(Some(response));
-    }
-
-    if subcommand.eq_ignore_ascii_case(b"SET") {
-        if args.len() != 4 {
-            return wrong_args("CONFIG");
-        }
-        if args[2]
-            .as_slice()
-            .eq_ignore_ascii_case(b"notify-keyspace-events")
-        {
-            return match hub.set_notify_flags(&args[3]) {
-                Ok(()) => RespFrame::ok(),
-                Err(()) => {
-                    RespFrame::error_static("ERR CONFIG SET failed (possibly related to argument)")
-                }
-            };
-        }
-        return RespFrame::ok();
-    }
-
-    if subcommand.eq_ignore_ascii_case(b"RESETSTAT") {
-        if args.len() != 2 {
-            return wrong_args("CONFIG");
-        }
-        return RespFrame::ok();
-    }
-
-    if subcommand.eq_ignore_ascii_case(b"REWRITE") {
-        if args.len() != 2 {
-            return wrong_args("CONFIG");
-        }
-        return RespFrame::ok();
-    }
-
-    unknown_subcommand_error(subcommand)
-}
-
 fn unknown_subcommand_error(subcommand: &[u8]) -> RespFrame {
     RespFrame::Error(format!(
         "ERR unknown subcommand '{}'.",
@@ -577,30 +303,92 @@ fn unknown_subcommand_error(subcommand: &[u8]) -> RespFrame {
     ))
 }
 
-fn append_config_matches(hub: &PubSubHub, pattern: &[u8], out: &mut Vec<RespFrame>) {
-    let _trace = profiler::scope("server::connection::dispatch::append_config_matches");
-    if config_match(pattern, b"notify-keyspace-events") {
-        out.push(bulk_static(b"notify-keyspace-events"));
-        out.push(RespFrame::Bulk(Some(BulkData::from_vec(
-            hub.get_notify_flags(),
-        ))));
-    }
-    if config_match(pattern, b"maxmemory") {
-        out.push(bulk_static(b"maxmemory"));
-        out.push(bulk_static(b"0"));
-    }
-    if config_match(pattern, b"timeout") {
-        out.push(bulk_static(b"timeout"));
-        out.push(bulk_static(b"0"));
-    }
+struct ServerDispatchContext<'a> {
+    hub: &'a PubSubHub,
+    sink: &'a SharedPubSubSink,
+    pubsub_state: &'a mut ConnectionPubSub,
 }
 
-fn config_match(pattern: &[u8], name: &[u8]) -> bool {
-    if pattern == b"*" {
-        return true;
+impl DispatchContext for ServerDispatchContext<'_> {
+    fn publish(&mut self, channel: &[u8], payload: &[u8]) -> i64 {
+        self.hub.publish(channel, payload)
     }
-    if let Some(prefix) = pattern.strip_suffix(b"*") {
-        return name.len() >= prefix.len() && name[..prefix.len()].eq_ignore_ascii_case(prefix);
+
+    fn spublish(&mut self, channel: &[u8], payload: &[u8]) -> i64 {
+        self.hub.spublish(channel, payload)
     }
-    pattern.eq_ignore_ascii_case(name)
+
+    fn subscribe(&mut self, channel: &[u8]) -> i64 {
+        self.pubsub_state.subscribe(self.hub, channel, self.sink);
+        self.pubsub_state.subscription_count()
+    }
+
+    fn unsubscribe(&mut self, channel: &[u8]) -> i64 {
+        self.pubsub_state.unsubscribe(self.hub, channel);
+        self.pubsub_state.subscription_count()
+    }
+
+    fn unsubscribe_all(&mut self) -> Vec<Vec<u8>> {
+        self.pubsub_state.unsubscribe_all(self.hub)
+    }
+
+    fn psubscribe(&mut self, pattern: &[u8]) -> i64 {
+        self.pubsub_state.psubscribe(self.hub, pattern, self.sink);
+        self.pubsub_state.subscription_count()
+    }
+
+    fn punsubscribe(&mut self, pattern: &[u8]) -> i64 {
+        self.pubsub_state.punsubscribe(self.hub, pattern);
+        self.pubsub_state.subscription_count()
+    }
+
+    fn punsubscribe_all(&mut self) -> Vec<Vec<u8>> {
+        self.pubsub_state.punsubscribe_all(self.hub)
+    }
+
+    fn ssubscribe(&mut self, channel: &[u8]) -> i64 {
+        self.pubsub_state.ssubscribe(self.hub, channel, self.sink);
+        self.pubsub_state.subscription_count()
+    }
+
+    fn sunsubscribe(&mut self, channel: &[u8]) -> i64 {
+        self.pubsub_state.sunsubscribe(self.hub, channel);
+        self.pubsub_state.subscription_count()
+    }
+
+    fn sunsubscribe_all(&mut self) -> Vec<Vec<u8>> {
+        self.pubsub_state.sunsubscribe_all(self.hub)
+    }
+
+    fn subscription_count(&self) -> i64 {
+        self.pubsub_state.subscription_count()
+    }
+
+    fn pubsub_channels(&self, pattern: Option<&[u8]>) -> Vec<Vec<u8>> {
+        self.hub.pubsub_channels(pattern)
+    }
+
+    fn pubsub_numsub(&self, channels: &[Vec<u8>]) -> Vec<(Vec<u8>, i64)> {
+        self.hub.pubsub_numsub(channels)
+    }
+
+    fn pubsub_numpat(&self) -> i64 {
+        self.hub.pubsub_numpat()
+    }
+
+    fn pubsub_shardchannels(&self, pattern: Option<&[u8]>) -> Vec<Vec<u8>> {
+        self.hub.pubsub_shardchannels(pattern)
+    }
+
+    fn pubsub_shardnumsub(&self, channels: &[Vec<u8>]) -> Vec<(Vec<u8>, i64)> {
+        self.hub.pubsub_shardnumsub(channels)
+    }
+
+    fn set_notify_flags(&mut self, flags: &[u8]) -> Result<(), ()> {
+        self.hub.set_notify_flags(flags)
+    }
+
+    fn get_notify_flags(&self) -> Vec<u8> {
+        self.hub.get_notify_flags()
+    }
 }

@@ -9,6 +9,7 @@ pub mod json;
 pub mod keyspace;
 pub mod list;
 pub mod object;
+pub mod pubsub;
 pub mod scripting;
 pub mod set;
 pub mod stream;

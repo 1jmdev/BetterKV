@@ -9,13 +9,13 @@ use tokio::time::Duration;
 use crate::auth::AuthService;
 use crate::config::Config;
 use crate::profile::ProfileHub;
-use crate::pubsub::PubSubHub;
 use crate::{backup, backup::SnapshotStats};
 use accept::{bind_reuse_port_listeners, run_accept_loop};
 use background::{
     spawn_cached_clock_updater, spawn_expiry_sweeper, spawn_periodic_snapshot,
     write_snapshot_with_log,
 };
+use engine::pubsub::PubSubHub;
 use engine::store::Store;
 use shutdown::shutdown_signal;
 

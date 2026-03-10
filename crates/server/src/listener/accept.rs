@@ -8,7 +8,7 @@ use crate::auth::AuthService;
 use crate::connection::handle_connection;
 use crate::listener::ListenerResult;
 use crate::profile::ProfileHub;
-use crate::pubsub::PubSubHub;
+use engine::pubsub::PubSubHub;
 use engine::store::Store;
 
 pub(crate) async fn run_accept_loop(

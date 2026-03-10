@@ -1,5 +1,8 @@
+use std::sync::Arc;
+
 use bytes::BytesMut;
 use commands::dispatch::identify;
+use engine::pubsub::{ConnectionPubSub, PubSubHub, PubSubMessage, PubSubSink, SharedPubSubSink};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc::error::TryRecvError;
@@ -7,16 +10,55 @@ use tokio::sync::mpsc::unbounded_channel;
 
 use crate::auth::AuthService;
 use crate::profile::ProfileHub;
-use crate::pubsub::{ConnectionPubSub, PubSubHub};
 use crate::transaction::TransactionState;
 use engine::store::Store;
 use protocol::encoder::Encoder;
 use protocol::parser::parse_command_into;
-use protocol::types::RespFrame;
+use protocol::types::{BulkData, RespFrame};
+use types::value::CompactArg;
 
 mod dispatch;
 mod notifications;
 mod util;
+
+struct ConnectionPushSink {
+    push_tx: tokio::sync::mpsc::UnboundedSender<RespFrame>,
+}
+
+impl PubSubSink for ConnectionPushSink {
+    fn push(&self, message: PubSubMessage) -> bool {
+        self.push_tx.send(message_to_frame(message)).is_ok()
+    }
+}
+
+fn message_to_frame(message: PubSubMessage) -> RespFrame {
+    match message {
+        PubSubMessage::Message { channel, payload } => RespFrame::Array(Some(vec![
+            bulk_static(b"message"),
+            RespFrame::Bulk(Some(BulkData::Arg(channel))),
+            RespFrame::Bulk(Some(BulkData::Arg(payload))),
+        ])),
+        PubSubMessage::PatternMessage {
+            pattern,
+            channel,
+            payload,
+        } => RespFrame::Array(Some(vec![
+            bulk_static(b"pmessage"),
+            RespFrame::Bulk(Some(BulkData::Arg(pattern))),
+            RespFrame::Bulk(Some(BulkData::Arg(channel))),
+            RespFrame::Bulk(Some(BulkData::Arg(payload))),
+        ])),
+        PubSubMessage::ShardMessage { channel, payload } => RespFrame::Array(Some(vec![
+            bulk_static(b"smessage"),
+            RespFrame::Bulk(Some(BulkData::Arg(channel))),
+            RespFrame::Bulk(Some(BulkData::Arg(payload))),
+        ])),
+    }
+}
+
+fn bulk_static(value: &'static [u8]) -> RespFrame {
+    RespFrame::Bulk(Some(BulkData::Arg(CompactArg::from_slice(value))))
+}
 
 const READ_BUFFER_INITIAL: usize = 16 * 1024;
 const WRITE_BUFFER_INITIAL: usize = 16 * 1024;
@@ -39,6 +81,9 @@ pub async fn handle_connection(
     let mut tx_state = TransactionState::default();
 
     let (push_tx, mut push_rx) = unbounded_channel::<RespFrame>();
+    let pubsub_sink: SharedPubSubSink = Arc::new(ConnectionPushSink {
+        push_tx: push_tx.clone(),
+    });
     let mut pubsub_state = ConnectionPubSub::new(pubsub_hub.next_connection_id());
     let mut client_state = dispatch::ClientState::default();
     let mut auth_state = auth.new_session();
@@ -97,7 +142,7 @@ pub async fn handle_connection(
                         dispatch::execute_regular_command(
                             store,
                             &pubsub_hub,
-                            &push_tx,
+                            &pubsub_sink,
                             &mut pubsub_state,
                             &mut client_state,
                             &auth,
@@ -120,8 +165,7 @@ pub async fn handle_connection(
         }
     };
 
-    pubsub_state.unsubscribe_all(&pubsub_hub);
-    pubsub_state.punsubscribe_all(&pubsub_hub);
+    pubsub_hub.cleanup_connection(pubsub_state.id());
     result
 }
 

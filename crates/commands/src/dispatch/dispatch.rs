@@ -1,6 +1,7 @@
 use super::identify::identify;
 use super::list::CommandId;
 use super::registry::with_command_registry;
+use crate::pubsub::DispatchContext;
 use crate::{
     command, connection, geo, hash, json, keyspace, list, object, scripting, set, stream, string,
     ttl, zset,
@@ -27,6 +28,28 @@ pub fn dispatch_args(store: &Store, args: &[CompactArg]) -> RespFrame {
     }
 
     dispatch_with_id(store, identify(args[0].as_slice()), args)
+}
+
+#[inline]
+pub fn dispatch_with_context(
+    store: &Store,
+    context: &mut dyn DispatchContext,
+    command: CommandId,
+    args: &[CompactArg],
+) -> RespFrame {
+    match command {
+        CommandId::Config
+        | CommandId::Publish
+        | CommandId::SPublish
+        | CommandId::PSubscribe
+        | CommandId::PUnsubscribe
+        | CommandId::PubSub
+        | CommandId::SSubscribe
+        | CommandId::SUnsubscribe
+        | CommandId::Subscribe
+        | CommandId::Unsubscribe => crate::pubsub::dispatch(context, command, args),
+        _ => dispatch_with_id(store, command, args),
+    }
 }
 
 macro_rules! dispatch_call {

@@ -7,7 +7,6 @@ pub mod connection;
 pub mod listener;
 pub mod logging;
 pub mod profile;
-pub mod pubsub;
 pub mod transaction;
 
 #[global_allocator]

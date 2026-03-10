@@ -7,6 +7,7 @@ mod json;
 mod keyspace;
 mod list;
 mod pattern;
+pub mod pubsub;
 mod script;
 mod set;
 mod stream;
@@ -23,6 +24,7 @@ pub mod store {
     pub use super::keyspace::{
         PreDecodedRestoreEntry, RestoreError, SortError, SortOptions, SortOrder, SortResult,
     };
+    pub use super::pattern::wildcard_match;
     pub use super::stream::XDelexPolicy;
     pub use super::stream::{StreamRangeItem, StreamWriteError, XPendingSummary};
     pub use super::strings::{
