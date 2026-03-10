@@ -1787,13 +1787,20 @@ macro_rules! with_command_registry {
                     {
                         variant: MSetEx,
                         bytes: b"MSETEX",
-                        dispatch: [unsupported],
-                        supported: false,
-                        group: "",
-                        shape: (0, 0, 0, 0),
+                        dispatch: [string::msetex; store],
+                        supported: true,
+                        group: "string",
+                        shape: (-4, 2, -1, 2),
                         readonly: false,
-                        write: false,
-                        auth: none,
+                        write: true,
+                        auth: some {
+                            categories: &[AclCategory::Write, AclCategory::Slow, AclCategory::String],
+                            keys: KeyExtraction::Counted {
+                                count_index: 1,
+                                first_key: 2,
+                            },
+                            channels: ChannelExtraction::None,
+                        },
                         notify: none,
                     }
                     {

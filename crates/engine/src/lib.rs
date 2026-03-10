@@ -25,7 +25,9 @@ pub mod store {
     };
     pub use super::stream::XDelexPolicy;
     pub use super::stream::{StreamRangeItem, StreamWriteError, XPendingSummary};
-    pub use super::strings::{HyperLogLogError, StringDigestCondition, StringIntOpError};
+    pub use super::strings::{
+        HyperLogLogError, MSetExExistCondition, SharedTtl, StringDigestCondition, StringIntOpError,
+    };
     pub use super::zset::LexBound;
     pub use super::{
         BitFieldEncoding, BitFieldOp, BitFieldOverflow, BitOp, GetExMode, HashFloatOpError,

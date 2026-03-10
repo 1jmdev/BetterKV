@@ -18,4 +18,4 @@ pub(crate) use get_set::{get, getdel, getset, set, setnx};
 pub(crate) use hyperlog::{pfadd, pfcount, pfmerge};
 pub(crate) use lcs::lcs;
 pub(crate) use length::{append, getrange, setrange, strlen};
-pub(crate) use multi::{mget, mset, msetnx};
+pub(crate) use multi::{mget, mset, msetex, msetnx};
