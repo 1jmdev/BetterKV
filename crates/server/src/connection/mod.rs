@@ -1,13 +1,14 @@
 use std::sync::Arc;
 
 use bytes::BytesMut;
+use commands::dispatch::CommandId;
 use commands::dispatch::identify;
 use commands::transaction::TransactionState;
 use engine::pubsub::{ConnectionPubSub, PubSubHub, PubSubMessage, PubSubSink, SharedPubSubSink};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::AsyncReadExt;
 use tokio::net::TcpStream;
 use tokio::sync::mpsc::error::TryRecvError;
-use tokio::sync::mpsc::unbounded_channel;
+use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 
 use crate::auth::AuthService;
 use crate::persistence::PersistenceHandle;
@@ -24,6 +25,104 @@ mod util;
 
 struct ConnectionPushSink {
     push_tx: tokio::sync::mpsc::UnboundedSender<RespFrame>,
+}
+
+#[derive(Default)]
+struct PubSubSession {
+    state: Option<ConnectionPubSub>,
+    push_rx: Option<UnboundedReceiver<RespFrame>>,
+    sink: Option<SharedPubSubSink>,
+}
+
+impl PubSubSession {
+    fn subscription_count(&self) -> i64 {
+        self.state
+            .as_ref()
+            .map_or(0, ConnectionPubSub::subscription_count)
+    }
+
+    fn ensure_active(&mut self, hub: &PubSubHub) -> (&mut ConnectionPubSub, &SharedPubSubSink) {
+        if self.state.is_none() {
+            let (push_tx, push_rx) = unbounded_channel::<RespFrame>();
+            self.push_rx = Some(push_rx);
+            self.sink = Some(Arc::new(ConnectionPushSink { push_tx }));
+            self.state = Some(ConnectionPubSub::new(hub.next_connection_id()));
+        }
+
+        (
+            self.state.as_mut().expect("pubsub state initialized"),
+            self.sink.as_ref().expect("pubsub sink initialized"),
+        )
+    }
+
+    fn subscribe(&mut self, hub: &PubSubHub, channel: &[u8]) -> i64 {
+        let (state, sink) = self.ensure_active(hub);
+        state.subscribe(hub, channel, sink);
+        state.subscription_count()
+    }
+
+    fn unsubscribe(&mut self, hub: &PubSubHub, channel: &[u8]) -> i64 {
+        let Some(state) = self.state.as_mut() else {
+            return 0;
+        };
+        state.unsubscribe(hub, channel);
+        state.subscription_count()
+    }
+
+    fn unsubscribe_all(&mut self, hub: &PubSubHub) -> Vec<Vec<u8>> {
+        let Some(state) = self.state.as_mut() else {
+            return Vec::new();
+        };
+        state.unsubscribe_all(hub)
+    }
+
+    fn psubscribe(&mut self, hub: &PubSubHub, pattern: &[u8]) -> i64 {
+        let (state, sink) = self.ensure_active(hub);
+        state.psubscribe(hub, pattern, sink);
+        state.subscription_count()
+    }
+
+    fn punsubscribe(&mut self, hub: &PubSubHub, pattern: &[u8]) -> i64 {
+        let Some(state) = self.state.as_mut() else {
+            return 0;
+        };
+        state.punsubscribe(hub, pattern);
+        state.subscription_count()
+    }
+
+    fn punsubscribe_all(&mut self, hub: &PubSubHub) -> Vec<Vec<u8>> {
+        let Some(state) = self.state.as_mut() else {
+            return Vec::new();
+        };
+        state.punsubscribe_all(hub)
+    }
+
+    fn ssubscribe(&mut self, hub: &PubSubHub, channel: &[u8]) -> i64 {
+        let (state, sink) = self.ensure_active(hub);
+        state.ssubscribe(hub, channel, sink);
+        state.subscription_count()
+    }
+
+    fn sunsubscribe(&mut self, hub: &PubSubHub, channel: &[u8]) -> i64 {
+        let Some(state) = self.state.as_mut() else {
+            return 0;
+        };
+        state.sunsubscribe(hub, channel);
+        state.subscription_count()
+    }
+
+    fn sunsubscribe_all(&mut self, hub: &PubSubHub) -> Vec<Vec<u8>> {
+        let Some(state) = self.state.as_mut() else {
+            return Vec::new();
+        };
+        state.sunsubscribe_all(hub)
+    }
+
+    fn cleanup(&self, hub: &PubSubHub) {
+        if let Some(state) = self.state.as_ref() {
+            hub.cleanup_connection(state.id());
+        }
+    }
 }
 
 impl PubSubSink for ConnectionPushSink {
@@ -78,119 +177,267 @@ pub async fn handle_connection(
     let mut write_buf = BytesMut::with_capacity(WRITE_BUFFER_INITIAL);
 
     let mut encoder = Encoder::default();
-    let mut persistence_buf = Vec::with_capacity(1024);
+    let persistence_enabled = persistence.is_enabled();
+    let mut persistence_buf = if persistence_enabled {
+        Vec::with_capacity(1024)
+    } else {
+        Vec::new()
+    };
     let mut persistence_dirty = 0u64;
 
     let mut command_args_buf = Vec::with_capacity(16);
     let mut tx_state = TransactionState::default();
 
-    let (push_tx, mut push_rx) = unbounded_channel::<RespFrame>();
-    let pubsub_sink: SharedPubSubSink = Arc::new(ConnectionPushSink {
-        push_tx: push_tx.clone(),
-    });
-    let mut pubsub_state = ConnectionPubSub::new(pubsub_hub.next_connection_id());
+    let mut pubsub = PubSubSession::default();
     let mut client_state = dispatch::ClientState::default();
     let mut auth_state = auth.new_session();
 
     let result = loop {
-        tokio::select! {
-            push = push_rx.recv() => {
-                let Some(frame) = push else {
-                    break Ok(());
-                };
-                encoder.encode(&frame, &mut write_buf);
+        if pubsub.push_rx.is_some() {
+            tokio::select! {
+                push = pubsub.push_rx.as_mut().expect("push receiver active").recv() => {
+                    let Some(frame) = push else {
+                        break Ok(());
+                    };
+                    encoder.encode(&frame, &mut write_buf);
 
-                let mut drained = 0;
-                while drained < PUSH_DRAIN_BATCH {
-                    match push_rx.try_recv() {
-                        Ok(frame) => {
-                            encoder.encode(&frame, &mut write_buf);
-                            drained += 1;
+                    let push_rx = pubsub.push_rx.as_mut().expect("push receiver active");
+                    let mut drained = 0;
+                    while drained < PUSH_DRAIN_BATCH {
+                        match push_rx.try_recv() {
+                            Ok(frame) => {
+                                encoder.encode(&frame, &mut write_buf);
+                                drained += 1;
+                            }
+                            Err(TryRecvError::Empty) => break,
+                            Err(TryRecvError::Disconnected) => break,
                         }
-                        Err(TryRecvError::Empty) => break,
-                        Err(TryRecvError::Disconnected) => break,
+                    }
+
+                    if let Err(err) = flush_write_buf(&mut stream, &mut write_buf).await {
+                        break Err(err.into());
                     }
                 }
+                read_result = read_into_buffer(&mut stream, &mut read_buf) => {
+                    let bytes_read = match read_result {
+                        Ok(value) => value,
+                        Err(err) => break Err(err.into()),
+                    };
+                    if bytes_read == 0 {
+                        break Ok(());
+                    }
 
-                if let Err(err) = flush_write_buf(&mut stream, &mut write_buf).await {
-                    break Err(err.into());
+                    if let Err(err) = process_read_buf(
+                        &mut read_buf,
+                        &store,
+                        &pubsub_hub,
+                        &auth,
+                        &persistence,
+                        persistence_enabled,
+                        &profiler,
+                        &mut encoder,
+                        &mut write_buf,
+                        &mut persistence_buf,
+                        &mut persistence_dirty,
+                        &mut command_args_buf,
+                        &mut tx_state,
+                        &mut pubsub,
+                        &mut client_state,
+                        &mut auth_state,
+                    ) {
+                        break Err(err.into());
+                    }
+
+                    if let Err(err) = flush_write_buf(&mut stream, &mut write_buf).await {
+                        break Err(err.into());
+                    }
                 }
             }
-            read_result = stream.read_buf(&mut read_buf) => {
-                let bytes_read = match read_result {
-                    Ok(value) => value,
-                    Err(err) => break Err(err.into()),
-                };
-                if bytes_read == 0 {
-                    break Ok(());
-                }
+        } else {
+            let bytes_read = match read_into_buffer(&mut stream, &mut read_buf).await {
+                Ok(value) => value,
+                Err(err) => break Err(err.into()),
+            };
+            if bytes_read == 0 {
+                break Ok(());
+            }
 
-                while parse_command_into(&mut read_buf, &mut command_args_buf)?.is_some() {
-                    #[cfg(feature = "profiling")]
-                    let _trace = if profiler.is_enabled() {
-                        command_args_buf
-                            .first()
-                            .map(|command| profiler::begin_request_unconditional(command.as_slice()))
-                    } else {
-                        command_args_buf
-                            .first()
-                            .and_then(|command| profiler::begin_request(command.as_slice()))
-                    };
-                    #[cfg(not(feature = "profiling"))]
-                    let _trace = command_args_buf
-                        .first()
-                        .and_then(|command| profiler::begin_request(command.as_slice()));
+            if let Err(err) = process_read_buf(
+                &mut read_buf,
+                &store,
+                &pubsub_hub,
+                &auth,
+                &persistence,
+                persistence_enabled,
+                &profiler,
+                &mut encoder,
+                &mut write_buf,
+                &mut persistence_buf,
+                &mut persistence_dirty,
+                &mut command_args_buf,
+                &mut tx_state,
+                &mut pubsub,
+                &mut client_state,
+                &mut auth_state,
+            ) {
+                break Err(err.into());
+            }
 
-                    let command = identify(command_args_buf[0].as_slice());
-                    let outcome = tx_state.handle_args_with(&store, &mut command_args_buf, command, |store, command, args| {
-                        dispatch::execute_regular_command(
-                            store,
-                            &pubsub_hub,
-                            &pubsub_sink,
-                            &mut pubsub_state,
-                            &mut client_state,
-                            &auth,
-                            &mut auth_state,
-                            &profiler,
-                            command,
-                            args,
-                        )
-                    });
-                    let response = outcome.response;
-
-                    if !outcome.committed_commands.is_empty() {
-                        persistence.record_transaction_to_buffer(
-                            &outcome.committed_commands,
-                            &mut persistence_buf,
-                            &mut persistence_dirty,
-                        );
-                    } else {
-                        persistence.record_command_to_buffer(
-                            command,
-                            &command_args_buf,
-                            &response,
-                            &mut persistence_buf,
-                            &mut persistence_dirty,
-                        );
-                    }
-
-                    if !client_state.take_suppress_current_reply() {
-                        encoder.encode(&response, &mut write_buf);
-                    }
-                }
-
-                persistence.flush_buffer(&mut persistence_buf, &mut persistence_dirty);
-                if let Err(err) = flush_write_buf(&mut stream, &mut write_buf).await {
-                    break Err(err.into());
-                }
+            if let Err(err) = flush_write_buf(&mut stream, &mut write_buf).await {
+                break Err(err.into());
             }
         }
     };
 
-    persistence.flush_buffer(&mut persistence_buf, &mut persistence_dirty);
+    if persistence_enabled {
+        persistence.flush_buffer(&mut persistence_buf, &mut persistence_dirty);
+    }
     tx_state.cleanup(&store);
-    pubsub_hub.cleanup_connection(pubsub_state.id());
+    pubsub.cleanup(&pubsub_hub);
     result
+}
+
+#[allow(clippy::too_many_arguments)]
+fn process_read_buf(
+    read_buf: &mut BytesMut,
+    store: &Store,
+    pubsub_hub: &PubSubHub,
+    auth: &AuthService,
+    persistence: &PersistenceHandle,
+    persistence_enabled: bool,
+    profiler: &ProfileHub,
+    encoder: &mut Encoder,
+    write_buf: &mut BytesMut,
+    persistence_buf: &mut Vec<u8>,
+    persistence_dirty: &mut u64,
+    command_args_buf: &mut Vec<CompactArg>,
+    tx_state: &mut TransactionState,
+    pubsub: &mut PubSubSession,
+    client_state: &mut dispatch::ClientState,
+    auth_state: &mut crate::auth::SessionAuth,
+) -> Result<(), protocol::parser::ParseError> {
+    while parse_command_into(read_buf, command_args_buf)?.is_some() {
+        #[cfg(feature = "profiling")]
+        let _trace = if profiler.is_enabled() {
+            command_args_buf
+                .first()
+                .map(|command| profiler::begin_request_unconditional(command.as_slice()))
+        } else {
+            command_args_buf
+                .first()
+                .and_then(|command| profiler::begin_request(command.as_slice()))
+        };
+        #[cfg(not(feature = "profiling"))]
+        let _trace = command_args_buf
+            .first()
+            .and_then(|command| profiler::begin_request(command.as_slice()));
+
+        let command = identify(command_args_buf[0].as_slice());
+        let response = if tx_state.is_plain_mode() && !is_transaction_command(command) {
+            store.with_command_gate(|| {
+                dispatch::execute_regular_command(
+                    store,
+                    pubsub_hub,
+                    pubsub,
+                    client_state,
+                    auth,
+                    auth_state,
+                    profiler,
+                    command,
+                    command_args_buf,
+                )
+            })
+        } else {
+            let outcome = tx_state.handle_args_with(
+                store,
+                command_args_buf,
+                command,
+                |store, command, args| {
+                    dispatch::execute_regular_command(
+                        store,
+                        pubsub_hub,
+                        pubsub,
+                        client_state,
+                        auth,
+                        auth_state,
+                        profiler,
+                        command,
+                        args,
+                    )
+                },
+            );
+
+            if persistence_enabled {
+                if !outcome.committed_commands.is_empty() {
+                    persistence.record_transaction_to_buffer(
+                        &outcome.committed_commands,
+                        persistence_buf,
+                        persistence_dirty,
+                    );
+                } else {
+                    persistence.record_command_to_buffer(
+                        command,
+                        command_args_buf,
+                        &outcome.response,
+                        persistence_buf,
+                        persistence_dirty,
+                    );
+                }
+            }
+
+            outcome.response
+        };
+
+        if persistence_enabled && tx_state.is_plain_mode() && !is_transaction_command(command) {
+            persistence.record_command_to_buffer(
+                command,
+                command_args_buf,
+                &response,
+                persistence_buf,
+                persistence_dirty,
+            );
+        }
+
+        if !client_state.take_suppress_current_reply() {
+            encoder.encode(&response, write_buf);
+        }
+    }
+
+    if persistence_enabled {
+        persistence.flush_buffer(persistence_buf, persistence_dirty);
+    }
+    Ok(())
+}
+
+#[inline(always)]
+fn is_transaction_command(command: CommandId) -> bool {
+    matches!(
+        command,
+        CommandId::Multi
+            | CommandId::Exec
+            | CommandId::Discard
+            | CommandId::Watch
+            | CommandId::Unwatch
+    )
+}
+
+async fn read_into_buffer(
+    stream: &mut TcpStream,
+    read_buf: &mut BytesMut,
+) -> std::io::Result<usize> {
+    let mut total_read = stream.read_buf(read_buf).await?;
+    if total_read == 0 {
+        return Ok(0);
+    }
+
+    loop {
+        match stream.try_read_buf(read_buf) {
+            Ok(0) => return Ok(total_read),
+            Ok(read) => total_read += read,
+            Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => return Ok(total_read),
+            Err(err) => return Err(err),
+        }
+    }
 }
 
 #[inline]
@@ -198,7 +445,24 @@ async fn flush_write_buf(stream: &mut TcpStream, write_buf: &mut BytesMut) -> st
     if write_buf.is_empty() {
         return Ok(());
     }
-    stream.write_all(write_buf).await?;
+
+    let mut written = 0usize;
+    while written < write_buf.len() {
+        match stream.try_write(&write_buf[written..]) {
+            Ok(0) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::WriteZero,
+                    "socket write returned zero bytes",
+                ));
+            }
+            Ok(count) => written += count,
+            Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                stream.writable().await?;
+            }
+            Err(err) => return Err(err),
+        }
+    }
+
     write_buf.clear();
     Ok(())
 }

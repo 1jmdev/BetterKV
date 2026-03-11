@@ -8,6 +8,11 @@ pub struct WatchState {
 }
 
 impl WatchState {
+    #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        self.watched.is_empty()
+    }
+
     #[inline]
     pub fn clear(&mut self) {
         self.watched.clear();

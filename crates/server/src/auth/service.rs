@@ -26,6 +26,7 @@ pub struct AuthenticatedUser {
 pub struct AuthService {
     pub(super) inner: Arc<RwLock<AuthState>>,
     pub(super) acl_epoch: Arc<AtomicU64>,
+    pub(super) fast_path: bool,
 }
 
 impl AuthService {
@@ -52,7 +53,13 @@ impl AuthService {
         Ok(Self {
             inner: Arc::new(RwLock::new(state)),
             acl_epoch: Arc::new(AtomicU64::new(0)),
+            fast_path: config.requirepass.is_none() && config.user_directives.is_empty(),
         })
+    }
+
+    #[inline(always)]
+    pub fn fast_path(&self) -> bool {
+        self.fast_path
     }
 
     pub fn new_session(&self) -> SessionAuth {

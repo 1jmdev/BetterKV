@@ -1,11 +1,12 @@
 use commands::dispatch::CommandId;
 use commands::dispatch::dispatch_with_context;
 use commands::pubsub::DispatchContext;
-use engine::pubsub::{ConnectionPubSub, PubSubHub, SharedPubSubSink};
+use engine::pubsub::PubSubHub;
 use engine::store::Store;
 use protocol::types::{BulkData, RespFrame};
 use types::value::CompactArg;
 
+use super::PubSubSession;
 use super::notifications::emit_command_notifications;
 use super::util::wrong_args;
 use crate::auth::{self, AuthError, AuthService, SessionAuth, no_perm};
@@ -27,8 +28,7 @@ impl ClientState {
 pub(super) fn execute_regular_command(
     store: &Store,
     hub: &PubSubHub,
-    pubsub_sink: &SharedPubSubSink,
-    pubsub_state: &mut ConnectionPubSub,
+    pubsub: &mut PubSubSession,
     client_state: &mut ClientState,
     auth: &AuthService,
     auth_state: &mut SessionAuth,
@@ -58,6 +58,10 @@ pub(super) fn execute_regular_command(
         return response;
     }
 
+    if auth.fast_path() {
+        return dispatch_authorized(store, hub, pubsub, client_state, profiler, command, args);
+    }
+
     // Hot path: already authorized
     if auth_state.authorized() {
         let acl_epoch = auth.acl_epoch();
@@ -69,32 +73,14 @@ pub(super) fn execute_regular_command(
         {
             return no_perm(error);
         }
-        return dispatch_authorized(
-            store,
-            hub,
-            pubsub_sink,
-            pubsub_state,
-            client_state,
-            profiler,
-            command,
-            args,
-        );
+        return dispatch_authorized(store, hub, pubsub, client_state, profiler, command, args);
     }
 
     if !is_allowed_without_auth(command) {
         return auth::no_auth();
     }
 
-    dispatch_authorized(
-        store,
-        hub,
-        pubsub_sink,
-        pubsub_state,
-        client_state,
-        profiler,
-        command,
-        args,
-    )
+    dispatch_authorized(store, hub, pubsub, client_state, profiler, command, args)
 }
 
 #[inline]
@@ -102,8 +88,7 @@ pub(super) fn execute_regular_command(
 fn dispatch_authorized(
     store: &Store,
     hub: &PubSubHub,
-    pubsub_sink: &SharedPubSubSink,
-    pubsub_state: &mut ConnectionPubSub,
+    pubsub: &mut PubSubSession,
     client_state: &mut ClientState,
     profiler: &ProfileHub,
     command: CommandId,
@@ -115,11 +100,7 @@ fn dispatch_authorized(
 
     let key = args.get(1).map(CompactArg::as_slice);
     profiler.run_command(key, || {
-        let mut context = ServerDispatchContext {
-            hub,
-            sink: pubsub_sink,
-            pubsub_state,
-        };
+        let mut context = ServerDispatchContext { hub, pubsub };
         let response = dispatch_with_context(store, &mut context, command, args);
         if hub.keyspace_notifications_enabled() {
             emit_command_notifications(hub, command, args, &response);
@@ -301,8 +282,7 @@ fn unknown_subcommand_error(subcommand: &[u8]) -> RespFrame {
 
 struct ServerDispatchContext<'a> {
     hub: &'a PubSubHub,
-    sink: &'a SharedPubSubSink,
-    pubsub_state: &'a mut ConnectionPubSub,
+    pubsub: &'a mut PubSubSession,
 }
 
 impl DispatchContext for ServerDispatchContext<'_> {
@@ -315,49 +295,43 @@ impl DispatchContext for ServerDispatchContext<'_> {
     }
 
     fn subscribe(&mut self, channel: &[u8]) -> i64 {
-        self.pubsub_state.subscribe(self.hub, channel, self.sink);
-        self.pubsub_state.subscription_count()
+        self.pubsub.subscribe(self.hub, channel)
     }
 
     fn unsubscribe(&mut self, channel: &[u8]) -> i64 {
-        self.pubsub_state.unsubscribe(self.hub, channel);
-        self.pubsub_state.subscription_count()
+        self.pubsub.unsubscribe(self.hub, channel)
     }
 
     fn unsubscribe_all(&mut self) -> Vec<Vec<u8>> {
-        self.pubsub_state.unsubscribe_all(self.hub)
+        self.pubsub.unsubscribe_all(self.hub)
     }
 
     fn psubscribe(&mut self, pattern: &[u8]) -> i64 {
-        self.pubsub_state.psubscribe(self.hub, pattern, self.sink);
-        self.pubsub_state.subscription_count()
+        self.pubsub.psubscribe(self.hub, pattern)
     }
 
     fn punsubscribe(&mut self, pattern: &[u8]) -> i64 {
-        self.pubsub_state.punsubscribe(self.hub, pattern);
-        self.pubsub_state.subscription_count()
+        self.pubsub.punsubscribe(self.hub, pattern)
     }
 
     fn punsubscribe_all(&mut self) -> Vec<Vec<u8>> {
-        self.pubsub_state.punsubscribe_all(self.hub)
+        self.pubsub.punsubscribe_all(self.hub)
     }
 
     fn ssubscribe(&mut self, channel: &[u8]) -> i64 {
-        self.pubsub_state.ssubscribe(self.hub, channel, self.sink);
-        self.pubsub_state.subscription_count()
+        self.pubsub.ssubscribe(self.hub, channel)
     }
 
     fn sunsubscribe(&mut self, channel: &[u8]) -> i64 {
-        self.pubsub_state.sunsubscribe(self.hub, channel);
-        self.pubsub_state.subscription_count()
+        self.pubsub.sunsubscribe(self.hub, channel)
     }
 
     fn sunsubscribe_all(&mut self) -> Vec<Vec<u8>> {
-        self.pubsub_state.sunsubscribe_all(self.hub)
+        self.pubsub.sunsubscribe_all(self.hub)
     }
 
     fn subscription_count(&self) -> i64 {
-        self.pubsub_state.subscription_count()
+        self.pubsub.subscription_count()
     }
 
     fn pubsub_channels(&self, pattern: Option<&[u8]>) -> Vec<Vec<u8>> {

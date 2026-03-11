@@ -117,6 +117,11 @@ impl PersistenceHandle {
         self.flush_buffer(&mut local_bytes, &mut local_dirty);
     }
 
+    #[inline(always)]
+    pub fn is_enabled(&self) -> bool {
+        self.state.is_some()
+    }
+
     pub fn record_command_to_buffer(
         &self,
         command: CommandId,

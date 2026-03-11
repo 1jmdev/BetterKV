@@ -18,6 +18,11 @@ pub struct TransactionOutcome {
 }
 
 impl TransactionState {
+    #[inline(always)]
+    pub fn is_plain_mode(&self) -> bool {
+        !self.in_multi && self.watched.is_empty()
+    }
+
     pub fn cleanup(&mut self, _store: &Store) {
         self.in_multi = false;
         self.queued.clear();
