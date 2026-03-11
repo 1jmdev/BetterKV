@@ -7,11 +7,11 @@ use crate::system;
 
 static CENTRAL_POOLS: [CentralPool; CLASS_COUNT] = [const { CentralPool::new() }; CLASS_COUNT];
 
-pub fn refill(class: SizeClass, local: &mut FreeList, target_count: u16) {
+pub fn refill(class: SizeClass, local: &mut FreeList, target_count: usize) {
     CENTRAL_POOLS[class.index].refill(class, local, target_count);
 }
 
-pub fn drain(class: SizeClass, local: &mut FreeList, retain: u16) {
+pub fn drain(class: SizeClass, local: &mut FreeList, retain: usize) {
     CENTRAL_POOLS[class.index].drain(local, retain);
 }
 
@@ -32,39 +32,35 @@ impl CentralPool {
         }
     }
 
-    fn refill(&self, class: SizeClass, local: &mut FreeList, target_count: u16) {
+    fn refill(&self, class: SizeClass, local: &mut FreeList, target_count: usize) {
         let mut state = self.state.lock();
-
-        while local.len() < target_count {
-            let slot_ptr = state.free_list.pop();
-            if slot_ptr.is_null() {
-                allocate_run(class, &mut state.free_list);
-                continue;
-            }
-
-            unsafe {
-                local.push(slot_ptr);
-            }
+        let needed = target_count.saturating_sub(local.len());
+        if needed == 0 {
+            return;
         }
+
+        while state.free_list.len() < needed {
+            let mut run = allocate_run(class);
+            state.free_list.append(&mut run);
+        }
+
+        let mut batch = state.free_list.split_off(needed);
+        local.append(&mut batch);
     }
 
-    fn drain(&self, local: &mut FreeList, retain: u16) {
+    fn drain(&self, local: &mut FreeList, retain: usize) {
         let mut state = self.state.lock();
 
-        while local.len() > retain {
-            let slot_ptr = local.pop();
-            if slot_ptr.is_null() {
-                break;
-            }
-
-            unsafe {
-                state.free_list.push(slot_ptr);
-            }
+        if local.len() <= retain {
+            return;
         }
+
+        let mut overflow = local.split_off(local.len() - retain);
+        state.free_list.append(&mut overflow);
     }
 }
 
-fn allocate_run(class: SizeClass, free_list: &mut FreeList) {
+fn allocate_run(class: SizeClass) -> FreeList {
     let slot_size = class.slot_size;
     let slot_count = class.batch_count();
     let total_size = match slot_size.checked_mul(slot_count) {
@@ -73,13 +69,16 @@ fn allocate_run(class: SizeClass, free_list: &mut FreeList) {
     };
     let layout = layout_for_run(total_size, 16);
     let base_ptr = unsafe { system::alloc(layout) };
+    let mut run = FreeList::new();
 
-    for index in 0..slot_count {
+    for index in (0..slot_count).rev() {
         let slot_ptr = unsafe { base_ptr.add(index * slot_size) };
         unsafe {
-            free_list.push(slot_ptr);
+            run.push(slot_ptr);
         }
     }
+
+    run
 }
 
 fn layout_for_run(size: usize, align: usize) -> Layout {

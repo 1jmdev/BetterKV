@@ -1,14 +1,19 @@
 use std::alloc::Layout;
-use std::cmp;
 use std::mem;
 use std::ptr;
 
-use crate::header::{AllocationHeader, FALLBACK_CLASS, header_size, read_header};
+use crate::header::{header_size, read_header, AllocationHeader, FALLBACK_CLASS};
 use crate::system;
+
+const HEADER_ALIGN: usize = mem::align_of::<AllocationHeader>();
 
 #[inline(always)]
 pub unsafe fn alloc(layout: Layout) -> *mut u8 {
-    let align = cmp::max(layout.align(), mem::align_of::<AllocationHeader>());
+    let align = if layout.align() > HEADER_ALIGN {
+        layout.align()
+    } else {
+        HEADER_ALIGN
+    };
     let total = allocation_size(layout);
     let backing_layout = unsafe { Layout::from_size_align_unchecked(total, align) };
     let base_ptr = unsafe { system::alloc(backing_layout) };
@@ -40,7 +45,11 @@ pub unsafe fn alloc_zeroed(layout: Layout) -> *mut u8 {
 pub unsafe fn dealloc(user_ptr: *mut u8, layout: Layout) {
     let header = unsafe { read_header(user_ptr) };
     let base_ptr = unsafe { user_ptr.sub(header.offset as usize) };
-    let align = cmp::max(layout.align(), mem::align_of::<AllocationHeader>());
+    let align = if layout.align() > HEADER_ALIGN {
+        layout.align()
+    } else {
+        HEADER_ALIGN
+    };
     let total = allocation_size(layout);
     let backing_layout = unsafe { Layout::from_size_align_unchecked(total, align) };
     unsafe { system::dealloc(base_ptr, backing_layout) };

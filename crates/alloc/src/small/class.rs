@@ -43,12 +43,16 @@ impl SizeClass {
 
 #[inline(always)]
 pub fn class_for(layout: Layout) -> Option<SizeClass> {
-    if layout.size() == 0 || layout.align() > MAX_SMALL_ALIGN {
+    let size = layout.size();
+    if size == 0 {
         return None;
     }
 
-    let minimum_usable = layout.size().max(std::mem::size_of::<usize>());
+    let minimum_usable = size.max(std::mem::size_of::<usize>());
     if minimum_usable > MAX_SMALL_SIZE {
+        return None;
+    }
+    if layout.align() > MAX_SMALL_ALIGN {
         return None;
     }
 

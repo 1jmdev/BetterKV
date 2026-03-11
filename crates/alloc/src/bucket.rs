@@ -53,6 +53,7 @@ pub struct BucketArray {
     ptr: *mut u32,
     len: usize,
     pool_index: usize,
+    pooled: bool,
 }
 
 unsafe impl Send for BucketArray {}
@@ -62,8 +63,9 @@ impl BucketArray {
     pub fn filled(len: usize, value: u32) -> Self {
         assert!(len != 0, "bucket arrays must be non-empty");
 
+        let pooled = len.is_power_of_two();
         let pool_index = len.trailing_zeros() as usize;
-        let ptr = if len.is_power_of_two() && pool_index <= MAX_BUCKET_POWER {
+        let ptr = if pooled && pool_index <= MAX_BUCKET_POWER {
             let pooled = BUCKET_SLOTS[pool_index].pop();
             if pooled.is_null() {
                 alloc_bucket_block(len)
@@ -78,6 +80,7 @@ impl BucketArray {
             ptr,
             len,
             pool_index,
+            pooled,
         };
         buckets.fill(value);
         buckets
@@ -110,17 +113,24 @@ impl BucketArray {
             return;
         }
 
-        for index in 0..self.len {
+        unsafe {
+            self.ptr.write(value);
+        }
+
+        let mut initialized = 1usize;
+        while initialized < self.len {
+            let copy_len = (self.len - initialized).min(initialized);
             unsafe {
-                self.ptr.add(index).write(value);
+                ptr::copy_nonoverlapping(self.ptr, self.ptr.add(initialized), copy_len);
             }
+            initialized += copy_len;
         }
     }
 }
 
 impl Drop for BucketArray {
     fn drop(&mut self) {
-        if self.len.is_power_of_two() && self.pool_index <= MAX_BUCKET_POWER {
+        if self.pooled && self.pool_index <= MAX_BUCKET_POWER {
             BUCKET_SLOTS[self.pool_index].push(self.ptr);
             return;
         }
