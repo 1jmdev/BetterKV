@@ -19,23 +19,26 @@ fn digits_i64(v: i64) -> usize {
         n /= 10;
         d += 1;
     }
-    if v < 0 { d + 1 } else { d }
+    if v < 0 {
+        d + 1
+    } else {
+        d
+    }
 }
 
-#[inline(always)]
-fn write_int(buf: &mut BytesMut, val: i64) {
-    let mut tmp = itoa::Buffer::new();
-    buf.extend_from_slice(tmp.format(val).as_bytes());
+pub struct Encoder {
+    integer_buffer: itoa::Buffer,
+    usize_buffer: itoa::Buffer,
 }
 
-#[inline(always)]
-fn write_uint(buf: &mut BytesMut, val: usize) {
-    let mut tmp = itoa::Buffer::new();
-    buf.extend_from_slice(tmp.format(val).as_bytes());
+impl Default for Encoder {
+    fn default() -> Self {
+        Self {
+            integer_buffer: itoa::Buffer::new(),
+            usize_buffer: itoa::Buffer::new(),
+        }
+    }
 }
-
-#[derive(Debug, Default, Clone, Copy)]
-pub struct Encoder;
 
 static CRLF: &[u8; 2] = b"\r\n";
 static SIMPLE_OK: &[u8] = b"+OK\r\n";
@@ -95,15 +98,25 @@ fn encoded_len(frame: &RespFrame) -> usize {
 }
 
 #[inline(always)]
-fn write_bulk_slice(buf: &mut BytesMut, slice: &[u8]) {
+fn write_bulk_slice(buf: &mut BytesMut, slice: &[u8], len_buffer: &mut itoa::Buffer) {
     buf.extend_from_slice(b"$");
-    write_uint(buf, slice.len());
+    buf.extend_from_slice(len_buffer.format(slice.len()).as_bytes());
     buf.extend_from_slice(CRLF);
     buf.extend_from_slice(slice);
     buf.extend_from_slice(CRLF);
 }
 
 impl Encoder {
+    #[inline(always)]
+    fn write_int(&mut self, buf: &mut BytesMut, value: i64) {
+        buf.extend_from_slice(self.integer_buffer.format(value).as_bytes());
+    }
+
+    #[inline(always)]
+    fn write_uint(&mut self, buf: &mut BytesMut, value: usize) {
+        buf.extend_from_slice(self.usize_buffer.format(value).as_bytes());
+    }
+
     #[inline(always)]
     pub fn encode(&mut self, frame: &RespFrame, buf: &mut BytesMut) {
         buf.reserve(encoded_len(frame));
@@ -140,32 +153,34 @@ impl Encoder {
             RespFrame::Integer(1) => buf.extend_from_slice(INTEGER_ONE),
             RespFrame::Integer(v) => {
                 buf.extend_from_slice(b":");
-                write_int(buf, *v);
+                self.write_int(buf, *v);
                 buf.extend_from_slice(CRLF);
             }
             RespFrame::Bulk(None) => {
                 buf.extend_from_slice(NULL_BULK);
             }
             RespFrame::Bulk(Some(data)) => {
-                write_bulk_slice(buf, data.as_slice());
+                write_bulk_slice(buf, data.as_slice(), &mut self.usize_buffer);
             }
             RespFrame::BulkOptions(values) => {
                 buf.extend_from_slice(b"*");
-                write_uint(buf, values.len());
+                self.write_uint(buf, values.len());
                 buf.extend_from_slice(CRLF);
                 for value in values {
                     match value {
-                        Some(value) => write_bulk_slice(buf, value.as_slice()),
+                        Some(value) => {
+                            write_bulk_slice(buf, value.as_slice(), &mut self.usize_buffer)
+                        }
                         None => buf.extend_from_slice(NULL_BULK),
                     }
                 }
             }
             RespFrame::BulkValues(values) => {
                 buf.extend_from_slice(b"*");
-                write_uint(buf, values.len());
+                self.write_uint(buf, values.len());
                 buf.extend_from_slice(CRLF);
                 for value in values {
-                    write_bulk_slice(buf, value.as_slice());
+                    write_bulk_slice(buf, value.as_slice(), &mut self.usize_buffer);
                 }
             }
             RespFrame::PreEncoded(bytes) => {
@@ -176,7 +191,7 @@ impl Encoder {
             }
             RespFrame::Array(Some(items)) => {
                 buf.extend_from_slice(b"*");
-                write_uint(buf, items.len());
+                self.write_uint(buf, items.len());
                 buf.extend_from_slice(CRLF);
                 for item in items {
                     self.encode_inner(item, buf);
@@ -184,7 +199,7 @@ impl Encoder {
             }
             RespFrame::Map(pairs) => {
                 buf.extend_from_slice(b"%");
-                write_uint(buf, pairs.len());
+                self.write_uint(buf, pairs.len());
                 buf.extend_from_slice(CRLF);
                 for (key, val) in pairs {
                     self.encode_inner(key, buf);

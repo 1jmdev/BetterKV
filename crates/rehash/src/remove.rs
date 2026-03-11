@@ -74,7 +74,7 @@ where
 
         while cur != NIL {
             let meta = &*metas_ptr.add(cur as usize);
-            if (*keys_ptr.add(cur as usize)).as_ref() == key_bytes {
+            if meta.hash == hash && (*keys_ptr.add(cur as usize)).as_ref() == key_bytes {
                 let next = meta.next;
                 if prev == NIL {
                     *heads_ptr.add(bucket) = next;

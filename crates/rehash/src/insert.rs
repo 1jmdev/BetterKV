@@ -69,7 +69,7 @@ where
             let head = *self.table.heads.as_ptr().add(bucket);
             let idx = self.metas.len() as u32;
 
-            self.metas.push(NodeMeta::new(head));
+            self.metas.push(NodeMeta::new(hash, head));
             self.keys.push(key);
             self.values.push(value);
 

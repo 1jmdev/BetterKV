@@ -3,7 +3,6 @@ use std::mem;
 use super::constants::{
     INITIAL_BUCKETS, MAX_LOAD_FACTOR, NIL, REHASH_BUCKETS_PER_STEP, SMALL_REHASH_THRESHOLD,
 };
-use super::index::hash_key;
 use super::iter::Iter;
 use super::node::NodeMeta;
 use super::table::Table;
@@ -104,7 +103,6 @@ where
         let old_len = old_table.len();
         let metas_ptr = self.metas.as_mut_ptr();
         let heads_ptr = self.table.heads.as_mut_ptr();
-        let keys_ptr = self.keys.as_ptr();
 
         for _ in 0..steps {
             if self.rehash_cursor >= old_len {
@@ -123,8 +121,7 @@ where
                 while idx != NIL {
                     let meta = &mut *metas_ptr.add(idx as usize);
                     let next = meta.next;
-                    let hash = hash_key(self.seed, (*keys_ptr.add(idx as usize)).as_ref());
-                    let new_bucket = self.table.bucket(hash);
+                    let new_bucket = self.table.bucket(meta.hash);
                     meta.next = *heads_ptr.add(new_bucket);
                     *heads_ptr.add(new_bucket) = idx;
                     idx = next;
@@ -161,12 +158,10 @@ where
         if old_table.len() <= SMALL_REHASH_THRESHOLD {
             let heads_ptr = self.table.heads.as_mut_ptr();
             let metas_ptr = self.metas.as_mut_ptr();
-            let keys_ptr = self.keys.as_ptr();
             for idx in 0..self.metas.len() {
                 unsafe {
                     let meta = &mut *metas_ptr.add(idx);
-                    let hash = hash_key(self.seed, (*keys_ptr.add(idx)).as_ref());
-                    let new_bucket = self.table.bucket(hash);
+                    let new_bucket = self.table.bucket(meta.hash);
                     meta.next = *heads_ptr.add(new_bucket);
                     *heads_ptr.add(new_bucket) = idx as u32;
                 }
@@ -183,7 +178,7 @@ where
             return;
         }
 
-        let hash = hash_key(self.seed, self.keys[new_idx as usize].as_ref());
+        let hash = self.metas[new_idx as usize].hash;
         if Self::patch_swapped_in_table_impl(
             &mut self.table,
             &mut self.metas,

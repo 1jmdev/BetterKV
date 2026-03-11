@@ -82,7 +82,7 @@ where
                 let next = meta.next;
 
                 let k = &*keys_ptr.add(idx as usize);
-                if k.as_ref() == key_bytes {
+                if meta.hash == hash && k.as_ref() == key_bytes {
                     return Some(idx);
                 }
 
