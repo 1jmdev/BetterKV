@@ -1,7 +1,7 @@
 use std::cell::UnsafeCell;
 
 use crate::small::central;
-use crate::small::class::{SizeClass, CLASS_COUNT, LOCAL_FLUSH_COUNT, LOCAL_REFILL_COUNT};
+use crate::small::class::{CLASS_COUNT, LOCAL_FLUSH_COUNT, LOCAL_REFILL_COUNT, SizeClass};
 use crate::small::freelist::FreeList;
 
 thread_local! {

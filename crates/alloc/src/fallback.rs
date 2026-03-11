@@ -2,7 +2,7 @@ use std::alloc::Layout;
 use std::mem;
 use std::ptr;
 
-use crate::header::{header_size, read_header, AllocationHeader, FALLBACK_CLASS};
+use crate::header::{AllocationHeader, FALLBACK_CLASS, header_size, read_header};
 use crate::system;
 
 const HEADER_ALIGN: usize = mem::align_of::<AllocationHeader>();

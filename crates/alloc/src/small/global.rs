@@ -5,7 +5,7 @@ use std::cmp;
 use std::ptr;
 
 use crate::fallback;
-use crate::small::class::{class_for, SizeClass, MAX_SMALL_ALIGN};
+use crate::small::class::{MAX_SMALL_ALIGN, SizeClass, class_for};
 use crate::small::local;
 
 pub struct BetterKvAllocator;

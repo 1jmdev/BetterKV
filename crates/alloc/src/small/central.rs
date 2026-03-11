@@ -1,7 +1,7 @@
 use std::alloc::Layout;
 
 use crate::lock::SpinLock;
-use crate::small::class::{SizeClass, CLASS_COUNT};
+use crate::small::class::{CLASS_COUNT, SizeClass};
 use crate::small::freelist::FreeList;
 use crate::system;
 

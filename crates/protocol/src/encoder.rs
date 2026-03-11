@@ -19,11 +19,7 @@ fn digits_i64(v: i64) -> usize {
         n /= 10;
         d += 1;
     }
-    if v < 0 {
-        d + 1
-    } else {
-        d
-    }
+    if v < 0 { d + 1 } else { d }
 }
 
 pub struct Encoder {
