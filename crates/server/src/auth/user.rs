@@ -29,7 +29,6 @@ pub(super) struct CommandRules {
 
 impl Default for User {
     fn default() -> Self {
-        let _trace = profiler::scope("server::auth::default_user");
         Self {
             enabled: true,
             nopass: true,
@@ -50,7 +49,6 @@ impl User {
     }
 
     pub(super) fn new_restricted() -> Self {
-        let _trace = profiler::scope("server::auth::new_restricted_user");
         Self {
             enabled: false,
             nopass: false,
@@ -62,12 +60,10 @@ impl User {
     }
 
     pub(super) fn reset(&mut self) {
-        let _trace = profiler::scope("server::auth::reset_user");
         *self = Self::new_restricted();
     }
 
     pub(super) fn add_password(&mut self, password: &[u8]) {
-        let _trace = profiler::scope("server::auth::add_password");
         self.nopass = false;
         let hash = password_hash(password);
         if !self.password_hashes.contains(&hash) {
@@ -76,13 +72,11 @@ impl User {
     }
 
     pub(super) fn remove_password(&mut self, password: &[u8]) {
-        let _trace = profiler::scope("server::auth::remove_password");
         let hash = password_hash(password);
         self.password_hashes.retain(|candidate| candidate != &hash);
     }
 
     pub(super) fn add_password_hash(&mut self, hash: &str) -> Result<(), String> {
-        let _trace = profiler::scope("server::auth::add_password_hash");
         self.nopass = false;
         let hash = parse_password_hash(hash)?;
         if !self.password_hashes.contains(&hash) {
@@ -92,19 +86,16 @@ impl User {
     }
 
     pub(super) fn remove_password_hash(&mut self, hash: &str) -> Result<(), String> {
-        let _trace = profiler::scope("server::auth::remove_password_hash");
         let hash = parse_password_hash(hash)?;
         self.password_hashes.retain(|candidate| candidate != &hash);
         Ok(())
     }
 
     pub(super) fn check_password(&self, password: &[u8]) -> bool {
-        let _trace = profiler::scope("server::auth::check_password");
         self.nopass || self.password_hashes.contains(&password_hash(password))
     }
 
     pub(super) fn password_tokens(&self) -> Vec<String> {
-        let _trace = profiler::scope("server::auth::password_tokens");
         if self.nopass {
             return vec!["nopass".to_string()];
         }
@@ -118,7 +109,6 @@ impl User {
     }
 
     pub(super) fn acl_tokens(&self) -> Vec<String> {
-        let _trace = profiler::scope("server::auth::acl_tokens");
         let mut tokens = Vec::new();
         tokens.push(if self.enabled {
             "on".to_string()
@@ -143,7 +133,6 @@ impl User {
     }
 
     pub(super) fn acl_line(&self, name: &str) -> String {
-        let _trace = profiler::scope("server::auth::acl_line");
         let mut parts = vec![format!("user {name}")];
         parts.extend(self.acl_tokens());
         parts.join(" ")
@@ -154,7 +143,6 @@ impl User {
         command: CommandId,
         args: &[CompactArg],
     ) -> Result<(), PermissionError> {
-        let _trace = profiler::scope("server::auth::check_permissions");
         let spec = command_spec(command).unwrap_or_else(CommandSpec::unknown);
 
         if !self.command_rules.allows(&spec) {
@@ -188,7 +176,6 @@ impl User {
     }
 
     pub(super) fn getuser_reply(&self, name: &str) -> protocol::types::RespFrame {
-        let _trace = profiler::scope("server::auth::getuser_reply");
         use protocol::types::{BulkData, RespFrame};
 
         let flags = RespFrame::Array(Some(
@@ -259,7 +246,6 @@ impl CommandRules {
     }
 
     pub(super) fn allow_all() -> Self {
-        let _trace = profiler::scope("server::auth::command_rules_allow_all");
         Self {
             allow_all: true,
             allowed_commands: BTreeSet::new(),
@@ -270,7 +256,6 @@ impl CommandRules {
     }
 
     pub(super) fn deny_all() -> Self {
-        let _trace = profiler::scope("server::auth::command_rules_deny_all");
         Self {
             allow_all: false,
             allowed_commands: BTreeSet::new(),
@@ -281,38 +266,32 @@ impl CommandRules {
     }
 
     pub(super) fn reset(&mut self) {
-        let _trace = profiler::scope("server::auth::command_rules_reset");
         *self = Self::deny_all();
     }
 
     pub(super) fn allow_command(&mut self, command: &str) {
-        let _trace = profiler::scope("server::auth::allow_command");
         let command = command.to_ascii_uppercase();
         self.denied_commands.remove(&command);
         self.allowed_commands.insert(command);
     }
 
     pub(super) fn deny_command(&mut self, command: &str) {
-        let _trace = profiler::scope("server::auth::deny_command");
         let command = command.to_ascii_uppercase();
         self.allowed_commands.remove(&command);
         self.denied_commands.insert(command);
     }
 
     pub(super) fn allow_category(&mut self, category: AclCategory) {
-        let _trace = profiler::scope("server::auth::allow_category");
         self.denied_categories.remove(&category);
         self.allowed_categories.insert(category);
     }
 
     pub(super) fn deny_category(&mut self, category: AclCategory) {
-        let _trace = profiler::scope("server::auth::deny_category");
         self.allowed_categories.remove(&category);
         self.denied_categories.insert(category);
     }
 
     pub(super) fn set_allow_all(&mut self, allow_all: bool) {
-        let _trace = profiler::scope("server::auth::set_allow_all_commands");
         self.allow_all = allow_all;
         if allow_all {
             self.allowed_categories.remove(&AclCategory::All);
@@ -320,7 +299,6 @@ impl CommandRules {
     }
 
     pub(super) fn allows(&self, spec: &CommandSpec) -> bool {
-        let _trace = profiler::scope("server::auth::command_rules_allows");
         if self.denied_commands.contains(spec.name) {
             return false;
         }
@@ -342,7 +320,6 @@ impl CommandRules {
     }
 
     pub(super) fn tokens(&self) -> Vec<String> {
-        let _trace = profiler::scope("server::auth::command_rule_tokens");
         let mut out = Vec::new();
         out.push(if self.allow_all {
             "+@all".to_string()
@@ -374,13 +351,11 @@ impl CommandRules {
     }
 
     pub(super) fn describe(&self) -> String {
-        let _trace = profiler::scope("server::auth::describe_command_rules");
         self.tokens().join(" ")
     }
 }
 
 fn describe_patterns(patterns: &[Vec<u8>], prefix: char) -> String {
-    let _trace = profiler::scope("server::auth::describe_patterns");
     if patterns.is_empty() {
         return String::new();
     }
@@ -397,7 +372,6 @@ fn pattern_tokens(
     reset_token: &str,
     prefix: char,
 ) -> Vec<String> {
-    let _trace = profiler::scope("server::auth::pattern_tokens");
     if patterns.is_empty() {
         return vec![reset_token.to_string()];
     }

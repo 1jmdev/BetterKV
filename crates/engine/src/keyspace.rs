@@ -120,7 +120,6 @@ pub enum SortError {
 
 impl Store {
     pub fn del<K: AsRef<[u8]>>(&self, keys: &[K]) -> i64 {
-        let _trace = profiler::scope("engine::keyspace::del");
         let mut removed = 0;
         for key in keys {
             let key = key.as_ref();
@@ -134,7 +133,6 @@ impl Store {
     }
 
     pub fn exists<K: AsRef<[u8]>>(&self, keys: &[K]) -> i64 {
-        let _trace = profiler::scope("engine::keyspace::exists");
         let mut count = 0;
         let now_ms = monotonic_now_ms();
         for key in keys {
@@ -154,17 +152,14 @@ impl Store {
     }
 
     pub fn touch<K: AsRef<[u8]>>(&self, keys: &[K]) -> i64 {
-        let _trace = profiler::scope("engine::keyspace::touch");
         self.exists(keys)
     }
 
     pub fn unlink<K: AsRef<[u8]>>(&self, keys: &[K]) -> i64 {
-        let _trace = profiler::scope("engine::keyspace::unlink");
         self.del(keys)
     }
 
     pub fn rename(&self, from: &[u8], to: &[u8]) -> bool {
-        let _trace = profiler::scope("engine::keyspace::rename");
         let from_idx = self.shard_index(from);
         let now_ms = monotonic_now_ms();
         let to_idx = self.shard_index(to);
@@ -201,7 +196,6 @@ impl Store {
     }
 
     pub fn renamenx(&self, from: &[u8], to: &[u8]) -> Result<i64, ()> {
-        let _trace = profiler::scope("engine::keyspace::renamenx");
         let from_idx = self.shard_index(from);
         let now_ms = monotonic_now_ms();
         let to_idx = self.shard_index(to);
@@ -250,7 +244,6 @@ impl Store {
     }
 
     pub fn copy(&self, from: &[u8], to: &[u8], replace: bool) -> i64 {
-        let _trace = profiler::scope("engine::keyspace::copy");
         let from_idx = self.shard_index(from);
         let now_ms = monotonic_now_ms();
         let to_idx = self.shard_index(to);
@@ -302,7 +295,6 @@ impl Store {
     }
 
     pub fn move_key(&self, key: &[u8], db: i64) -> Result<i64, ()> {
-        let _trace = profiler::scope("engine::keyspace::move_key");
         if !(0..=15).contains(&db) {
             return Err(());
         }
@@ -310,12 +302,10 @@ impl Store {
     }
 
     pub fn key_type(&self, key: &[u8]) -> &'static str {
-        let _trace = profiler::scope("engine::keyspace::key_type");
         self.value_kind(key).unwrap_or("none")
     }
 
     pub fn object_encoding(&self, key: &[u8]) -> Option<&'static str> {
-        let _trace = profiler::scope("engine::keyspace::object_encoding");
         let idx = self.shard_index(key);
         let now_ms = monotonic_now_ms();
         let shard = self.shards[idx].read();
@@ -324,7 +314,6 @@ impl Store {
     }
 
     pub fn object_freq(&self, key: &[u8]) -> Result<Option<i64>, ()> {
-        let _trace = profiler::scope("engine::keyspace::object_freq");
         if self.object_encoding(key).is_none() {
             return Ok(None);
         }
@@ -332,17 +321,14 @@ impl Store {
     }
 
     pub fn object_idletime(&self, key: &[u8]) -> Option<i64> {
-        let _trace = profiler::scope("engine::keyspace::object_idletime");
         self.object_encoding(key).map(|_| 0)
     }
 
     pub fn object_refcount(&self, key: &[u8]) -> Option<i64> {
-        let _trace = profiler::scope("engine::keyspace::object_refcount");
         self.object_encoding(key).map(|_| 1)
     }
 
     pub fn value_kind(&self, key: &[u8]) -> Option<&'static str> {
-        let _trace = profiler::scope("engine::keyspace::value_kind");
         let idx = self.shard_index(key);
         let now_ms = monotonic_now_ms();
         let shard = self.shards[idx].read();
@@ -354,7 +340,6 @@ impl Store {
     }
 
     pub fn dbsize(&self) -> i64 {
-        let _trace = profiler::scope("engine::keyspace::dbsize");
         let now_ms = monotonic_now_ms();
         let mut total = 0;
         for shard in self.shards.iter() {
@@ -369,7 +354,6 @@ impl Store {
     }
 
     pub fn keys(&self, pattern: &[u8]) -> Vec<Vec<u8>> {
-        let _trace = profiler::scope("engine::keyspace::keys");
         let now_ms = monotonic_now_ms();
         let pattern = CompiledPattern::new((pattern != b"*").then_some(pattern));
         let mut out = Vec::new();
@@ -404,7 +388,6 @@ impl Store {
     }
 
     pub fn randomkey(&self) -> Option<Vec<u8>> {
-        let _trace = profiler::scope("engine::keyspace::randomkey");
         let now_ms = monotonic_now_ms();
         let shard_count = self.shards.len();
         if shard_count == 0 {
@@ -442,7 +425,6 @@ impl Store {
         count: usize,
         value_type: Option<&[u8]>,
     ) -> (u64, Vec<CompactKey>) {
-        let _trace = profiler::scope("engine::keyspace::scan");
         let cursor = usize::try_from(cursor).unwrap_or(usize::MAX);
         let now_ms = monotonic_now_ms();
         let pattern = CompiledPattern::new(pattern.filter(|pattern| *pattern != b"*"));
@@ -531,7 +513,6 @@ impl Store {
     }
 
     pub fn dump(&self, key: &[u8]) -> Option<Vec<u8>> {
-        let _trace = profiler::scope("engine::keyspace::dump");
         let idx = self.shard_index(key);
         let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
@@ -549,7 +530,6 @@ impl Store {
         payload: &[u8],
         replace: bool,
     ) -> Result<(), RestoreError> {
-        let _trace = profiler::scope("engine::keyspace::restore");
         let entry = deserialize_entry(payload).ok_or(RestoreError::InvalidPayload)?;
         let deadline = if ttl_ms == 0 {
             None
@@ -567,7 +547,6 @@ impl Store {
         entry: Entry,
         replace: bool,
     ) -> Result<(), RestoreError> {
-        let _trace = profiler::scope("engine::keyspace::restore_decoded");
         let deadline = if ttl_ms == 0 {
             None
         } else {
@@ -578,7 +557,6 @@ impl Store {
     }
 
     pub fn restore_predecoded_unchecked(&self, entries: Vec<PreDecodedRestoreEntry>) {
-        let _trace = profiler::scope("engine::keyspace::restore_predecoded_unchecked");
         if entries.is_empty() {
             return;
         }
@@ -611,7 +589,6 @@ impl Store {
         entry: Entry,
         replace: bool,
     ) -> Result<(), RestoreError> {
-        let _trace = profiler::scope("engine::keyspace::restore_decoded_with_deadline");
 
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
@@ -627,7 +604,6 @@ impl Store {
     }
 
     pub fn sort(&self, key: &[u8], options: &SortOptions) -> Result<SortResult, SortError> {
-        let _trace = profiler::scope("engine::keyspace::sort");
         let idx = self.shard_index(key);
         let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
@@ -697,7 +673,6 @@ impl Store {
     }
 
     fn store_sorted_list(&self, destination: &[u8], values: Vec<Vec<u8>>) -> i64 {
-        let _trace = profiler::scope("engine::keyspace::store_sorted_list");
         let idx = self.shard_index(destination);
         let mut shard = self.shards[idx].write();
         let len = values.len() as i64;
@@ -708,7 +683,6 @@ impl Store {
     }
 
     pub fn flushdb(&self) -> i64 {
-        let _trace = profiler::scope("engine::keyspace::flushdb");
         let mut removed = 0;
         for shard in self.shards.iter() {
             let mut guard = shard.write();
@@ -722,13 +696,11 @@ impl Store {
 }
 
 fn parse_sort_number(raw: &[u8]) -> Option<f64> {
-    let _trace = profiler::scope("engine::keyspace::parse_sort_number");
     let value = std::str::from_utf8(raw).ok()?;
     value.parse::<f64>().ok()
 }
 
 fn serialize_entry(entry: &Entry) -> Vec<u8> {
-    let _trace = profiler::scope("engine::keyspace::serialize_entry");
     let mut out = vec![1u8];
     match entry {
         Entry::String(value) => {
@@ -798,7 +770,6 @@ fn serialize_entry(entry: &Entry) -> Vec<u8> {
 }
 
 fn deserialize_entry(payload: &[u8]) -> Option<Entry> {
-    let _trace = profiler::scope("engine::keyspace::deserialize_entry");
     if payload.len() < 2 || payload[0] != 1 {
         return None;
     }
@@ -935,12 +906,10 @@ fn deserialize_entry(payload: &[u8]) -> Option<Entry> {
 }
 
 fn write_u32(out: &mut Vec<u8>, value: u32) {
-    let _trace = profiler::scope("engine::keyspace::write_u32");
     out.extend_from_slice(&value.to_le_bytes());
 }
 
 fn read_u32(input: &mut &[u8]) -> Option<u32> {
-    let _trace = profiler::scope("engine::keyspace::read_u32");
     if input.len() < 4 {
         return None;
     }
@@ -951,13 +920,11 @@ fn read_u32(input: &mut &[u8]) -> Option<u32> {
 }
 
 fn write_bytes(out: &mut Vec<u8>, value: &[u8]) {
-    let _trace = profiler::scope("engine::keyspace::write_bytes");
     write_u32(out, value.len() as u32);
     out.extend_from_slice(value);
 }
 
 fn read_bytes(input: &mut &[u8]) -> Option<Vec<u8>> {
-    let _trace = profiler::scope("engine::keyspace::read_bytes");
     let len = read_u32(input)? as usize;
     if input.len() < len {
         return None;

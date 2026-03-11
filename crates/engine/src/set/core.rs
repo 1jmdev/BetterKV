@@ -6,7 +6,6 @@ use super::{collect_members, get_set, get_set_mut, new_set_with_capacity};
 
 impl Store {
     pub fn sadd(&self, key: &[u8], members: &[CompactArg]) -> Result<i64, ()> {
-        let _trace = profiler::scope("engine::set::core::sadd");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
         let now_ms = monotonic_now_ms();
@@ -29,7 +28,6 @@ impl Store {
     }
 
     pub fn srem(&self, key: &[u8], members: &[CompactArg]) -> Result<i64, ()> {
-        let _trace = profiler::scope("engine::set::core::srem");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
         let now_ms = monotonic_now_ms();
@@ -56,7 +54,6 @@ impl Store {
     }
 
     pub fn smembers(&self, key: &[u8]) -> Result<Vec<CompactKey>, ()> {
-        let _trace = profiler::scope("engine::set::core::smembers");
         let idx = self.shard_index(key);
         let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
@@ -72,7 +69,6 @@ impl Store {
     }
 
     pub fn sismember(&self, key: &[u8], member: &[u8]) -> Result<i64, ()> {
-        let _trace = profiler::scope("engine::set::core::sismember");
         let idx = self.shard_index(key);
         let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
@@ -88,7 +84,6 @@ impl Store {
     }
 
     pub fn smismember(&self, key: &[u8], members: &[CompactArg]) -> Result<Vec<i64>, ()> {
-        let _trace = profiler::scope("engine::set::core::smismember");
         let idx = self.shard_index(key);
         let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
@@ -107,7 +102,6 @@ impl Store {
     }
 
     pub fn scard(&self, key: &[u8]) -> Result<i64, ()> {
-        let _trace = profiler::scope("engine::set::core::scard");
         let idx = self.shard_index(key);
         let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
@@ -123,7 +117,6 @@ impl Store {
     }
 
     pub fn smove(&self, source: &[u8], destination: &[u8], member: &[u8]) -> Result<i64, ()> {
-        let _trace = profiler::scope("engine::set::core::smove");
         let source_idx = self.shard_index(source);
         let destination_idx = self.shard_index(destination);
         let now_ms = monotonic_now_ms();
@@ -164,7 +157,6 @@ fn smove_inside_shard(
     destination: &[u8],
     member: &[u8],
 ) -> Result<i64, ()> {
-    let _trace = profiler::scope("engine::set::core::smove_inside_shard");
     let Some(source_entry) = shard.entries.get_mut(source) else {
         return Ok(0);
     };
@@ -194,7 +186,6 @@ fn smove_across_shards(
     destination: &[u8],
     member: &[u8],
 ) -> Result<i64, ()> {
-    let _trace = profiler::scope("engine::set::core::smove_across_shards");
     let Some(source_entry) = source_shard.entries.get_mut(source) else {
         return Ok(0);
     };

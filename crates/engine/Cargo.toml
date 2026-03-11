@@ -3,12 +3,8 @@ name = "engine"
 version.workspace = true
 edition.workspace = true
 
-[features]
-profiling = ["profiler/enabled"]
-
 [dependencies]
 rehash.workspace = true
-profiler.workspace = true
 types.workspace = true
 ahash.workspace = true
 bytes.workspace = true

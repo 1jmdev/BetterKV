@@ -544,7 +544,6 @@ pub async fn restore(store: &Store, config: &Config) -> Result<RestoreOutcome, S
 }
 
 fn replay_aof(store: &Store, bytes: &[u8]) -> Result<(u64, bool), String> {
-    let _trace = profiler::scope("server::persistence::replay_aof");
     let mut buffer = BytesMut::from(bytes);
     let mut args = Vec::with_capacity(16);
     let mut transaction_state = TransactionState::default();

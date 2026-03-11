@@ -44,7 +44,6 @@ pub enum AppendFsync {
 
 impl Default for Config {
     fn default() -> Self {
-        let _trace = profiler::scope("server::config::default");
         Self {
             bind: "127.0.0.1".to_string(),
             port: 6379,
@@ -84,28 +83,23 @@ impl Default for Config {
 
 impl Config {
     pub fn addr(&self) -> String {
-        let _trace = profiler::scope("server::config::addr");
         format!("{}:{}", self.bind, self.port)
     }
 
     pub fn snapshot_path(&self) -> std::path::PathBuf {
-        let _trace = profiler::scope("server::config::snapshot_path");
         std::path::Path::new(&self.data_dir).join(&self.dbfilename)
     }
 
     pub fn appendonly_path(&self) -> std::path::PathBuf {
-        let _trace = profiler::scope("server::config::appendonly_path");
         std::path::Path::new(&self.data_dir).join(&self.appendfilename)
     }
 }
 
 fn default_shards() -> usize {
-    let _trace = profiler::scope("server::config::default_shards");
     default_threads() * 64
 }
 
 fn default_threads() -> usize {
-    let _trace = profiler::scope("server::config::default_threads");
     match std::thread::available_parallelism() {
         Ok(value) => value.get().max(1),
         Err(_) => 4,

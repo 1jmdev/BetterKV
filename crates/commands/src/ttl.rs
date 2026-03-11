@@ -3,7 +3,6 @@ use engine::store::Store;
 use protocol::types::RespFrame;
 
 pub(crate) fn expire(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::ttl::expire");
     if args.len() != 3 {
         return wrong_args("EXPIRE");
     }
@@ -21,7 +20,6 @@ pub(crate) fn expire(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn ttl(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::ttl::ttl");
     if args.len() != 2 {
         return wrong_args("TTL");
     }
@@ -29,7 +27,6 @@ pub(crate) fn ttl(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn pexpire(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::ttl::pexpire");
     if args.len() != 3 {
         return wrong_args("PEXPIRE");
     }
@@ -44,7 +41,6 @@ pub(crate) fn pexpire(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn expireat(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::ttl::expireat");
     if args.len() != 3 {
         return wrong_args("EXPIREAT");
     }
@@ -56,7 +52,6 @@ pub(crate) fn expireat(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn pexpireat(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::ttl::pexpireat");
     if args.len() != 3 {
         return wrong_args("PEXPIREAT");
     }
@@ -68,7 +63,6 @@ pub(crate) fn pexpireat(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn persist(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::ttl::persist");
     if args.len() != 2 {
         return wrong_args("PERSIST");
     }
@@ -76,7 +70,6 @@ pub(crate) fn persist(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn pttl(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::ttl::pttl");
     if args.len() != 2 {
         return wrong_args("PTTL");
     }

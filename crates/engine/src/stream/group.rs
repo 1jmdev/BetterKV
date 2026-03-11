@@ -15,7 +15,6 @@ impl Store {
         id: StreamId,
         mkstream: bool,
     ) -> Result<bool, ()> {
-        let _trace = profiler::scope("engine::stream::group::xgroup_create");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
         let now_ms = monotonic_now_ms();
@@ -49,7 +48,6 @@ impl Store {
     }
 
     pub fn xgroup_setid(&self, key: &[u8], group: &[u8], id: StreamId) -> Result<bool, ()> {
-        let _trace = profiler::scope("engine::stream::group::xgroup_setid");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
         let now_ms = monotonic_now_ms();
@@ -68,7 +66,6 @@ impl Store {
     }
 
     pub fn xgroup_destroy(&self, key: &[u8], group: &[u8]) -> Result<i64, ()> {
-        let _trace = profiler::scope("engine::stream::group::xgroup_destroy");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
         let now_ms = monotonic_now_ms();
@@ -88,7 +85,6 @@ impl Store {
         group: &[u8],
         _consumer: &[u8],
     ) -> Result<i64, ()> {
-        let _trace = profiler::scope("engine::stream::group::xgroup_createconsumer");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
         let now_ms = monotonic_now_ms();

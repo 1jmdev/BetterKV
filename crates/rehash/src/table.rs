@@ -9,7 +9,6 @@ pub(super) struct Table {
 
 impl Table {
     pub(super) fn with_buckets(count: usize) -> Self {
-        let _trace = profiler::scope("rehash::table::with_buckets");
         let count = count.max(INITIAL_BUCKETS).next_power_of_two();
         Self {
             heads: BucketArray::filled(count, NIL),

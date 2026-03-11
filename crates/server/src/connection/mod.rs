@@ -12,7 +12,6 @@ use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 
 use crate::auth::AuthService;
 use crate::persistence::PersistenceHandle;
-use crate::profile::ProfileHub;
 use engine::store::Store;
 use protocol::encoder::Encoder;
 use protocol::parser::parse_command_into;
@@ -170,9 +169,7 @@ pub async fn handle_connection(
     pubsub_hub: PubSubHub,
     auth: AuthService,
     persistence: PersistenceHandle,
-    profiler: ProfileHub,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let _trace = profiler::scope("server::connection::handle_connection");
     let mut read_buf = BytesMut::with_capacity(READ_BUFFER_INITIAL);
     let mut write_buf = BytesMut::with_capacity(WRITE_BUFFER_INITIAL);
 
@@ -234,7 +231,6 @@ pub async fn handle_connection(
                         &auth,
                         &persistence,
                         persistence_enabled,
-                        &profiler,
                         &mut encoder,
                         &mut write_buf,
                         &mut persistence_buf,
@@ -269,7 +265,6 @@ pub async fn handle_connection(
                 &auth,
                 &persistence,
                 persistence_enabled,
-                &profiler,
                 &mut encoder,
                 &mut write_buf,
                 &mut persistence_buf,
@@ -305,7 +300,6 @@ fn process_read_buf(
     auth: &AuthService,
     persistence: &PersistenceHandle,
     persistence_enabled: bool,
-    profiler: &ProfileHub,
     encoder: &mut Encoder,
     write_buf: &mut BytesMut,
     persistence_buf: &mut Vec<u8>,
@@ -317,21 +311,8 @@ fn process_read_buf(
     auth_state: &mut crate::auth::SessionAuth,
 ) -> Result<(), protocol::parser::ParseError> {
     while parse_command_into(read_buf, command_args_buf)?.is_some() {
-        #[cfg(feature = "profiling")]
-        let _trace = if profiler.is_enabled() {
-            command_args_buf
-                .first()
-                .map(|command| profiler::begin_request_unconditional(command.as_slice()))
-        } else {
-            command_args_buf
-                .first()
-                .and_then(|command| profiler::begin_request(command.as_slice()))
-        };
-        #[cfg(not(feature = "profiling"))]
         let _trace = command_args_buf
-            .first()
-            .and_then(|command| profiler::begin_request(command.as_slice()));
-
+            .first();
         let command = identify(command_args_buf[0].as_slice());
         let response = if tx_state.is_plain_mode() && !is_transaction_command(command) {
             store.with_command_gate(|| {
@@ -342,7 +323,6 @@ fn process_read_buf(
                     client_state,
                     auth,
                     auth_state,
-                    profiler,
                     command,
                     command_args_buf,
                 )
@@ -360,7 +340,6 @@ fn process_read_buf(
                         client_state,
                         auth,
                         auth_state,
-                        profiler,
                         command,
                         args,
                     )

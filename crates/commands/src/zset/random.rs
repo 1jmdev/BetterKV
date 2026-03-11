@@ -5,7 +5,6 @@ use engine::store::Store;
 use protocol::types::{BulkData, RespFrame};
 
 pub(crate) fn zrandmember(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::zset::random::zrandmember");
     if args.len() < 2 || args.len() > 4 {
         return wrong_args("ZRANDMEMBER");
     }

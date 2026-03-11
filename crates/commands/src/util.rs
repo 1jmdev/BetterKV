@@ -43,13 +43,11 @@ pub fn wrong_type() -> RespFrame {
 }
 
 pub fn u64_to_bytes(value: u64) -> Vec<u8> {
-    let _trace = profiler::scope("commands::util::u64_to_bytes");
     let mut buffer = itoa::Buffer::new();
     buffer.format(value).as_bytes().to_vec()
 }
 
 pub fn f64_to_bytes(value: f64) -> Vec<u8> {
-    let _trace = profiler::scope("commands::util::f64_to_bytes");
     let mut buffer = ryu::Buffer::new();
     let formatted = buffer.format(value);
     if let Some(trimmed) = formatted.strip_suffix(".0") {
@@ -60,7 +58,6 @@ pub fn f64_to_bytes(value: f64) -> Vec<u8> {
 }
 
 pub fn parse_i64_bytes(raw: &[u8]) -> Option<i64> {
-    let _trace = profiler::scope("commands::util::parse_i64_bytes");
     if raw.is_empty() {
         return None;
     }
@@ -154,7 +151,6 @@ pub fn parse_u64_bytes(raw: &[u8]) -> Option<u64> {
 }
 
 pub fn preencode_bulk_str(value: &str) -> bytes::Bytes {
-    let _trace = profiler::scope("commands::util::preencode_bulk_str");
     let mut len_buf = itoa::Buffer::new();
     let mut out = BytesMut::with_capacity(1 + 20 + 2 + value.len() + 2);
     out.put_u8(b'$');

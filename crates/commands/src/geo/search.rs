@@ -6,7 +6,6 @@ use engine::store::{GeoSearchMatch, Store};
 use protocol::types::{BulkData, RespFrame};
 
 pub(crate) fn geosearch(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::geo::search::geosearch");
     if args.len() < 7 {
         return wrong_args("GEOSEARCH");
     }
@@ -45,7 +44,6 @@ pub(crate) fn geosearch(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn geosearchstore(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::geo::search::geosearchstore");
     if args.len() < 8 {
         return wrong_args("GEOSEARCHSTORE");
     }
@@ -130,7 +128,6 @@ pub(crate) fn run_radius_search(
     radius_meters: f64,
     options: SearchOptions,
 ) -> RespFrame {
-    let _trace = profiler::scope("commands::geo::search::run_radius_search");
     run_search(store, key, center, Some(radius_meters), None, options)
 }
 
@@ -142,7 +139,6 @@ fn run_search(
     box_size: Option<(f64, f64)>,
     options: SearchOptions,
 ) -> RespFrame {
-    let _trace = profiler::scope("commands::geo::search::run_search");
     if let Some(destination) = options.storedist.clone() {
         let ascending = !matches!(options.sort, Some(SortOrder::Desc));
         return match store.geosearchstore(
@@ -186,7 +182,6 @@ fn run_search(
 type ParsedSearchShape = (Option<f64>, Option<(f64, f64)>, usize);
 
 fn parse_shape(args: &Args, index: usize) -> Result<ParsedSearchShape, RespFrame> {
-    let _trace = profiler::scope("commands::geo::search::parse_shape");
     if index >= args.len() {
         return Err(crate::util::syntax_error());
     }
@@ -211,7 +206,6 @@ fn parse_shape(args: &Args, index: usize) -> Result<ParsedSearchShape, RespFrame
 }
 
 fn format_matches(matches: Vec<GeoSearchMatch>, options: SearchOptions) -> RespFrame {
-    let _trace = profiler::scope("commands::geo::search::format_matches");
     RespFrame::Array(Some(
         matches
             .into_iter()

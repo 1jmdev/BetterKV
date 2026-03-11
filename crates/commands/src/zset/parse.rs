@@ -1,7 +1,6 @@
 use protocol::types::RespFrame;
 
 pub(super) fn parse_score(raw: &[u8]) -> Result<f64, RespFrame> {
-    let _trace = profiler::scope("commands::zset::parse::parse_score");
     match std::str::from_utf8(raw) {
         Ok(value) => value
             .parse::<f64>()

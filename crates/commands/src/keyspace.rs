@@ -6,7 +6,6 @@ use engine::store::{RestoreError, SortError, SortOptions, SortOrder, SortResult,
 use protocol::types::{BulkData, RespFrame};
 
 pub(crate) fn del(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::keyspace::del");
     if args.len() < 2 {
         return wrong_args("DEL");
     }
@@ -14,7 +13,6 @@ pub(crate) fn del(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn exists(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::keyspace::exists");
     if args.len() < 2 {
         return wrong_args("EXISTS");
     }
@@ -22,7 +20,6 @@ pub(crate) fn exists(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn touch(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::keyspace::touch");
     if args.len() < 2 {
         return wrong_args("TOUCH");
     }
@@ -30,7 +27,6 @@ pub(crate) fn touch(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn unlink(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::keyspace::unlink");
     if args.len() < 2 {
         return wrong_args("UNLINK");
     }
@@ -38,7 +34,6 @@ pub(crate) fn unlink(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn key_type(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::keyspace::key_type");
     if args.len() != 2 {
         return wrong_args("TYPE");
     }
@@ -46,7 +41,6 @@ pub(crate) fn key_type(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn rename(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::keyspace::rename");
     if args.len() != 3 {
         return wrong_args("RENAME");
     }
@@ -58,7 +52,6 @@ pub(crate) fn rename(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn renamenx(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::keyspace::renamenx");
     if args.len() != 3 {
         return wrong_args("RENAMENX");
     }
@@ -69,7 +62,6 @@ pub(crate) fn renamenx(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn dbsize(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::keyspace::dbsize");
     if args.len() != 1 {
         return wrong_args("DBSIZE");
     }
@@ -77,7 +69,6 @@ pub(crate) fn dbsize(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn keys(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::keyspace::keys");
     if args.len() != 2 {
         return wrong_args("KEYS");
     }
@@ -92,7 +83,6 @@ pub(crate) fn keys(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn randomkey(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::keyspace::randomkey");
     if args.len() != 1 {
         return wrong_args("RANDOMKEY");
     }
@@ -101,7 +91,6 @@ pub(crate) fn randomkey(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn scan(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::keyspace::scan");
     if args.len() < 2 {
         return wrong_args("SCAN");
     }
@@ -155,7 +144,6 @@ pub(crate) fn scan(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn move_key(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::keyspace::move_key");
     if args.len() != 3 {
         return wrong_args("MOVE");
     }
@@ -176,7 +164,6 @@ pub(crate) fn move_key(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn dump(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::keyspace::dump");
     if args.len() != 2 {
         return wrong_args("DUMP");
     }
@@ -184,7 +171,6 @@ pub(crate) fn dump(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn restore(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::keyspace::restore");
     if args.len() < 4 {
         return wrong_args("RESTORE");
     }
@@ -217,7 +203,6 @@ pub(crate) fn restore(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn sort(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::keyspace::sort");
     if args.len() < 2 {
         return wrong_args("SORT");
     }
@@ -279,7 +264,6 @@ pub(crate) fn sort(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn copy(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::keyspace::copy");
     if args.len() < 3 {
         return wrong_args("COPY");
     }
@@ -316,7 +300,6 @@ pub(crate) fn copy(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn flushdb(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::keyspace::flushdb");
     if args.len() > 2 {
         return crate::util::syntax_error();
     }
@@ -328,7 +311,6 @@ pub(crate) fn flushdb(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn flushall(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::keyspace::flushall");
     if args.len() > 2 {
         return crate::util::syntax_error();
     }

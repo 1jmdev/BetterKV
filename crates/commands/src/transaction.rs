@@ -39,7 +39,6 @@ impl TransactionState {
     where
         F: FnMut(&Store, CommandId, &[CompactArg]) -> RespFrame,
     {
-        let _trace = profiler::scope("commands::transaction::handle_args_with");
         if args.is_empty() {
             return TransactionOutcome {
                 response: RespFrame::error_static("ERR empty command"),
@@ -140,7 +139,6 @@ fn multi(
     in_multi: &mut bool,
     queued: &mut Vec<(CommandId, Vec<CompactArg>)>,
 ) -> RespFrame {
-    let _trace = profiler::scope("commands::transaction::multi");
     if args.len() != 1 {
         return wrong_args("MULTI");
     }
@@ -164,7 +162,6 @@ fn exec_with<F>(
 where
     F: FnMut(&Store, CommandId, &[CompactArg]) -> RespFrame,
 {
-    let _trace = profiler::scope("commands::transaction::exec_with");
     if args.len() != 1 {
         return TransactionOutcome {
             response: wrong_args("EXEC"),
@@ -216,7 +213,6 @@ fn discard(
     queued: &mut Vec<(CommandId, Vec<CompactArg>)>,
     watched: &mut WatchState,
 ) -> RespFrame {
-    let _trace = profiler::scope("commands::transaction::discard");
     if args.len() != 1 {
         return wrong_args("DISCARD");
     }
@@ -231,7 +227,6 @@ fn discard(
 }
 
 fn watch(store: &Store, args: &Args, watched: &mut WatchState, in_multi: bool) -> RespFrame {
-    let _trace = profiler::scope("commands::transaction::watch");
     if args.len() < 2 {
         return wrong_args("WATCH");
     }
@@ -246,7 +241,6 @@ fn watch(store: &Store, args: &Args, watched: &mut WatchState, in_multi: bool) -
 }
 
 fn unwatch(_store: &Store, args: &Args, watched: &mut WatchState) -> RespFrame {
-    let _trace = profiler::scope("commands::transaction::unwatch");
     if args.len() != 1 {
         return wrong_args("UNWATCH");
     }

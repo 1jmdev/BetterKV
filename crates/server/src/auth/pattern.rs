@@ -1,5 +1,4 @@
 pub(super) fn wildcard_match(pattern: &[u8], text: &[u8]) -> bool {
-    let _trace = profiler::scope("server::auth::wildcard_match");
     let mut pattern_index = 0;
     let mut text_index = 0;
     let mut star = None;
@@ -39,7 +38,6 @@ pub(super) fn wildcard_match(pattern: &[u8], text: &[u8]) -> bool {
 }
 
 pub(super) fn any_pattern_matches(patterns: &[Vec<u8>], value: &[u8]) -> bool {
-    let _trace = profiler::scope("server::auth::any_pattern_matches");
     patterns
         .iter()
         .any(|pattern| wildcard_match(pattern, value))

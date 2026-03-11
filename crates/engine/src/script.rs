@@ -4,7 +4,6 @@ use types::value::{CompactArg, CompactKey, CompactValue};
 
 impl Store {
     pub fn script_load(&self, script: &[u8]) -> Vec<u8> {
-        let _trace = profiler::scope("engine::script::script_load");
         let digest = sha1_hex(script);
 
         {
@@ -22,13 +21,11 @@ impl Store {
     }
 
     pub fn script_get(&self, digest: &[u8]) -> Option<Vec<u8>> {
-        let _trace = profiler::scope("engine::script::script_get");
         let scripts = self.scripts.read();
         scripts.get(digest).map(|script| script.to_vec())
     }
 
     pub fn script_exists(&self, digests: &[CompactArg]) -> Vec<bool> {
-        let _trace = profiler::scope("engine::script::script_exists");
         let scripts = self.scripts.read();
         digests
             .iter()
@@ -37,7 +34,6 @@ impl Store {
     }
 
     pub fn script_flush(&self) -> usize {
-        let _trace = profiler::scope("engine::script::script_flush");
         let mut scripts = self.scripts.write();
         let removed = scripts.len();
         scripts.clear();
@@ -46,7 +42,6 @@ impl Store {
 }
 
 fn sha1_hex(script: &[u8]) -> Vec<u8> {
-    let _trace = profiler::scope("engine::script::sha1_hex");
     let digest = Sha1::digest(script);
     let mut out = Vec::with_capacity(digest.len() * 2);
     for byte in digest {

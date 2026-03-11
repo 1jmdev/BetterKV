@@ -52,7 +52,6 @@ pub(super) fn parse_count(raw: &[u8]) -> Result<usize, RespFrame> {
 }
 
 pub(super) fn parse_xtrim_args(args: &Args, mut index: usize) -> Result<ParsedTrimArgs, RespFrame> {
-    let _trace = profiler::scope("commands::stream::parse::parse_xtrim_args");
     if index >= args.len() || !args[index].eq_ignore_ascii_case(b"MAXLEN") {
         return Ok((None, index));
     }
@@ -82,7 +81,6 @@ pub(super) fn parse_xtrim_args(args: &Args, mut index: usize) -> Result<ParsedTr
 }
 
 pub(super) fn stream_id_to_bulk(id: StreamId) -> RespFrame {
-    let _trace = profiler::scope("commands::stream::parse::stream_id_to_bulk");
     RespFrame::Bulk(Some(protocol::types::BulkData::from_vec(
         format!("{}-{}", id.ms, id.seq).into_bytes(),
     )))

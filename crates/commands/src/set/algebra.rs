@@ -4,7 +4,6 @@ use protocol::types::{BulkData, RespFrame};
 use types::value::CompactKey;
 
 pub(crate) fn sinter(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::set::algebra::sinter");
     if args.len() < 2 {
         return wrong_args("SINTER");
     }
@@ -12,7 +11,6 @@ pub(crate) fn sinter(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn sinterstore(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::set::algebra::sinterstore");
     if args.len() < 3 {
         return wrong_args("SINTERSTORE");
     }
@@ -23,7 +21,6 @@ pub(crate) fn sinterstore(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn sunion(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::set::algebra::sunion");
     if args.len() < 2 {
         return wrong_args("SUNION");
     }
@@ -31,7 +28,6 @@ pub(crate) fn sunion(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn sunionstore(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::set::algebra::sunionstore");
     if args.len() < 3 {
         return wrong_args("SUNIONSTORE");
     }
@@ -42,7 +38,6 @@ pub(crate) fn sunionstore(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn sdiff(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::set::algebra::sdiff");
     if args.len() < 2 {
         return wrong_args("SDIFF");
     }
@@ -50,7 +45,6 @@ pub(crate) fn sdiff(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn sdiffstore(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::set::algebra::sdiffstore");
     if args.len() < 3 {
         return wrong_args("SDIFFSTORE");
     }
@@ -61,7 +55,6 @@ pub(crate) fn sdiffstore(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn sintercard(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::set::algebra::sintercard");
     if args.len() < 3 {
         return wrong_args("SINTERCARD");
     }
@@ -95,7 +88,6 @@ pub(crate) fn sintercard(store: &Store, args: &Args) -> RespFrame {
 }
 
 fn members_response(result: Result<Vec<CompactKey>, ()>) -> RespFrame {
-    let _trace = profiler::scope("commands::set::algebra::members_response");
     match result {
         Ok(members) => RespFrame::Array(Some(
             members

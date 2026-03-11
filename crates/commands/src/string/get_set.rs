@@ -6,7 +6,6 @@ use protocol::types::{BulkData, RespFrame};
 use types::value::CompactArg;
 
 pub(crate) fn get(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::string::get");
     if args.len() != 2 {
         return wrong_args("GET");
     }
@@ -17,7 +16,6 @@ pub(crate) fn get(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn set(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::string::get_set::set");
     if args.len() < 3 {
         return wrong_args("SET");
     }
@@ -93,7 +91,6 @@ pub(crate) fn set(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn setnx(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::string::get_set::setnx");
     if args.len() != 3 {
         return wrong_args("SETNX");
     }
@@ -101,7 +98,6 @@ pub(crate) fn setnx(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn getset(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::string::get_set::getset");
     if args.len() != 3 {
         return wrong_args("GETSET");
     }
@@ -112,7 +108,6 @@ pub(crate) fn getset(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn getdel(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::string::get_set::getdel");
     if args.len() != 2 {
         return wrong_args("GETDEL");
     }

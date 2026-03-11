@@ -3,7 +3,6 @@ use engine::store::Store;
 use protocol::types::{BulkData, RespFrame};
 
 pub(crate) fn hset(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::hash::core::hset");
     if args.len() < 4 || !args.len().is_multiple_of(2) {
         return wrong_args("HSET");
     }
@@ -15,7 +14,6 @@ pub(crate) fn hset(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn hmset(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::hash::core::hmset");
     if args.len() < 4 || !args.len().is_multiple_of(2) {
         return wrong_args("HMSET");
     }
@@ -27,7 +25,6 @@ pub(crate) fn hmset(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn hsetnx(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::hash::core::hsetnx");
     if args.len() != 4 {
         return wrong_args("HSETNX");
     }
@@ -38,7 +35,6 @@ pub(crate) fn hsetnx(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn hget(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::hash::core::hget");
     if args.len() != 3 {
         return wrong_args("HGET");
     }
@@ -49,7 +45,6 @@ pub(crate) fn hget(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn hmget(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::hash::core::hmget");
     if args.len() < 3 {
         return wrong_args("HMGET");
     }
@@ -65,7 +60,6 @@ pub(crate) fn hmget(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn hgetall(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::hash::core::hgetall");
     if args.len() != 2 {
         return wrong_args("HGETALL");
     }
@@ -76,7 +70,6 @@ pub(crate) fn hgetall(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn hdel(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::hash::core::hdel");
     if args.len() < 3 {
         return wrong_args("HDEL");
     }
@@ -87,7 +80,6 @@ pub(crate) fn hdel(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn hexists(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::hash::core::hexists");
     if args.len() != 3 {
         return wrong_args("HEXISTS");
     }
@@ -98,7 +90,6 @@ pub(crate) fn hexists(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn hkeys(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::hash::core::hkeys");
     if args.len() != 2 {
         return wrong_args("HKEYS");
     }
@@ -114,7 +105,6 @@ pub(crate) fn hkeys(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn hvals(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::hash::core::hvals");
     if args.len() != 2 {
         return wrong_args("HVALS");
     }
@@ -130,7 +120,6 @@ pub(crate) fn hvals(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn hlen(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::hash::core::hlen");
     if args.len() != 2 {
         return wrong_args("HLEN");
     }
@@ -141,7 +130,6 @@ pub(crate) fn hlen(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn hstrlen(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::hash::core::hstrlen");
     if args.len() != 3 {
         return wrong_args("HSTRLEN");
     }

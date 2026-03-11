@@ -2,7 +2,6 @@ use crate::util::{Args, eq_ascii, parse_i64_bytes, parse_u64_bytes, wrong_args};
 use protocol::types::{BulkData, RespFrame};
 
 pub(crate) fn auth(args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::connection::auth");
     if args.len() != 2 && args.len() != 3 {
         return wrong_args("AUTH");
     }
@@ -10,7 +9,6 @@ pub(crate) fn auth(args: &Args) -> RespFrame {
 }
 
 pub(crate) fn hello(args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::connection::hello");
     if args.len() == 1 {
         return hello_response(2);
     }
@@ -26,7 +24,6 @@ pub(crate) fn hello(args: &Args) -> RespFrame {
 }
 
 fn hello_response(proto: u8) -> RespFrame {
-    let _trace = profiler::scope("commands::connection::hello_response");
     if proto == 3 {
         return RespFrame::Map(vec![
             (
@@ -83,7 +80,6 @@ fn hello_response(proto: u8) -> RespFrame {
 }
 
 pub(crate) fn client(args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::connection::client");
     if args.len() < 2 {
         return wrong_args("CLIENT");
     }
@@ -101,7 +97,6 @@ pub(crate) fn client(args: &Args) -> RespFrame {
 }
 
 pub(crate) fn select_db(args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::connection::select_db");
     if args.len() != 2 {
         return wrong_args("SELECT");
     }
@@ -114,12 +109,10 @@ pub(crate) fn select_db(args: &Args) -> RespFrame {
 }
 
 pub(crate) fn quit(_args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::connection::quit");
     RespFrame::ok()
 }
 
 pub(crate) fn ping(args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::connection::ping");
     if args.len() == 1 {
         return RespFrame::simple_static("PONG");
     }
@@ -130,7 +123,6 @@ pub(crate) fn ping(args: &Args) -> RespFrame {
 }
 
 pub(crate) fn echo(args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::connection::echo");
     if args.len() != 2 {
         return wrong_args("ECHO");
     }

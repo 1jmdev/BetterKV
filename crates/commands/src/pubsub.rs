@@ -27,7 +27,6 @@ pub trait DispatchContext {
 }
 
 pub fn dispatch(context: &mut dyn DispatchContext, command: CommandId, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::pubsub::dispatch");
     match command {
         CommandId::Publish => publish_command(context, args),
         CommandId::SPublish => spublish_command(context, args),
@@ -44,7 +43,6 @@ pub fn dispatch(context: &mut dyn DispatchContext, command: CommandId, args: &Ar
 }
 
 fn publish_command(context: &mut dyn DispatchContext, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::pubsub::publish_command");
     if args.len() != 3 {
         return wrong_args("PUBLISH");
     }
@@ -52,7 +50,6 @@ fn publish_command(context: &mut dyn DispatchContext, args: &Args) -> RespFrame 
 }
 
 fn spublish_command(context: &mut dyn DispatchContext, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::pubsub::spublish_command");
     if args.len() != 3 {
         return wrong_args("SPUBLISH");
     }
@@ -60,7 +57,6 @@ fn spublish_command(context: &mut dyn DispatchContext, args: &Args) -> RespFrame
 }
 
 fn subscribe_command(context: &mut dyn DispatchContext, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::pubsub::subscribe_command");
     if args.len() < 2 {
         return wrong_args("SUBSCRIBE");
     }
@@ -78,7 +74,6 @@ fn subscribe_command(context: &mut dyn DispatchContext, args: &Args) -> RespFram
 }
 
 fn unsubscribe_command(context: &mut dyn DispatchContext, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::pubsub::unsubscribe_command");
     let channels = if args.len() == 1 {
         context.unsubscribe_all()
     } else {
@@ -98,7 +93,6 @@ fn unsubscribe_command(context: &mut dyn DispatchContext, args: &Args) -> RespFr
 }
 
 fn psubscribe_command(context: &mut dyn DispatchContext, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::pubsub::psubscribe_command");
     if args.len() < 2 {
         return wrong_args("PSUBSCRIBE");
     }
@@ -116,7 +110,6 @@ fn psubscribe_command(context: &mut dyn DispatchContext, args: &Args) -> RespFra
 }
 
 fn punsubscribe_command(context: &mut dyn DispatchContext, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::pubsub::punsubscribe_command");
     let patterns = if args.len() == 1 {
         context.punsubscribe_all()
     } else {
@@ -136,7 +129,6 @@ fn punsubscribe_command(context: &mut dyn DispatchContext, args: &Args) -> RespF
 }
 
 fn ssubscribe_command(context: &mut dyn DispatchContext, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::pubsub::ssubscribe_command");
     if args.len() < 2 {
         return wrong_args("SSUBSCRIBE");
     }
@@ -154,7 +146,6 @@ fn ssubscribe_command(context: &mut dyn DispatchContext, args: &Args) -> RespFra
 }
 
 fn sunsubscribe_command(context: &mut dyn DispatchContext, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::pubsub::sunsubscribe_command");
     let channels = if args.len() == 1 {
         context.sunsubscribe_all()
     } else {
@@ -174,7 +165,6 @@ fn sunsubscribe_command(context: &mut dyn DispatchContext, args: &Args) -> RespF
 }
 
 fn pubsub_command(context: &mut dyn DispatchContext, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::pubsub::pubsub_command");
     if args.len() < 2 {
         return wrong_args("PUBSUB");
     }
@@ -229,7 +219,6 @@ fn pubsub_command(context: &mut dyn DispatchContext, args: &Args) -> RespFrame {
 }
 
 fn config_command(context: &mut dyn DispatchContext, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::pubsub::config_command");
     if args.len() < 2 {
         return wrong_args("CONFIG");
     }

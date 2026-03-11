@@ -16,7 +16,6 @@ pub struct Client {
 
 impl Client {
     pub async fn connect(options: &ConnectionOptions) -> Result<Self, String> {
-        let _trace = profiler::scope("cli::client::connect");
         let address = format!("{}:{}", options.host, options.port);
         let stream = TcpStream::connect(address.as_str())
             .await
@@ -58,7 +57,6 @@ impl Client {
     }
 
     pub async fn execute(&mut self, command: Vec<Vec<u8>>) -> Result<RespFrame, String> {
-        let _trace = profiler::scope("cli::client::execute");
         let frame = RespFrame::Array(Some(
             command
                 .into_iter()
@@ -76,7 +74,6 @@ impl Client {
     }
 
     async fn read_frame(&mut self) -> Result<RespFrame, String> {
-        let _trace = profiler::scope("cli::client::read_frame");
         loop {
             match parser::parse_frame(&mut self.read_buf) {
                 Ok(Some(frame)) => return Ok(frame),
@@ -104,12 +101,10 @@ impl Client {
 }
 
 fn strings_to_bytes(parts: Vec<String>) -> Vec<Vec<u8>> {
-    let _trace = profiler::scope("cli::client::strings_to_bytes");
     parts.into_iter().map(String::into_bytes).collect()
 }
 
 fn parts(parts: Vec<&str>) -> Vec<Vec<u8>> {
-    let _trace = profiler::scope("cli::client::parts");
     parts
         .into_iter()
         .map(|value| value.as_bytes().to_vec())

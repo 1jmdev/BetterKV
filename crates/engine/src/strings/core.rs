@@ -10,7 +10,6 @@ use super::write_entry;
 
 impl Store {
     pub fn get(&self, key: &[u8]) -> Result<Option<CompactValue>, ()> {
-        let _trace = profiler::scope("engine::strings::core::get");
         let idx = self.shard_index(key);
         let shard = self.shards[idx].read();
         let entry = if shard.has_ttls() {
@@ -29,7 +28,6 @@ impl Store {
     }
 
     pub fn set(&self, key: &[u8], value: &[u8], ttl: Option<Duration>) {
-        let _trace = profiler::scope("engine::strings::core::set");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
         write_entry(
@@ -41,7 +39,6 @@ impl Store {
     }
 
     pub fn setnx(&self, key: &[u8], value: &[u8], ttl: Option<Duration>) -> bool {
-        let _trace = profiler::scope("engine::strings::core::setnx");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
         if !shard.has_ttls() {
@@ -65,7 +62,6 @@ impl Store {
     }
 
     pub fn setxx(&self, key: &[u8], value: &[u8], ttl: Option<Duration>) -> bool {
-        let _trace = profiler::scope("engine::strings::core::setxx");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
         if !shard.has_ttls() {
@@ -89,7 +85,6 @@ impl Store {
     }
 
     pub fn getset(&self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>, ()> {
-        let _trace = profiler::scope("engine::strings::core::getset");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
         if shard.has_ttls() {
@@ -116,7 +111,6 @@ impl Store {
     }
 
     pub fn getdel(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ()> {
-        let _trace = profiler::scope("engine::strings::core::getdel");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
         if shard.has_ttls() {
@@ -136,7 +130,6 @@ impl Store {
     }
 
     pub fn append(&self, key: &[u8], suffix: &[u8]) -> Result<usize, ()> {
-        let _trace = profiler::scope("engine::strings::core::append");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
 
@@ -171,7 +164,6 @@ impl Store {
     }
 
     pub fn strlen(&self, key: &[u8]) -> Result<usize, ()> {
-        let _trace = profiler::scope("engine::strings::core::strlen");
         let idx = self.shard_index(key);
         let shard = self.shards[idx].read();
         let entry = if shard.has_ttls() {

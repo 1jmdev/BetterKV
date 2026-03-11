@@ -5,7 +5,6 @@ use engine::store::{ListSide, Store};
 use protocol::types::{BulkData, RespFrame};
 
 pub(crate) fn lmove(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::list::moves::lmove");
     if args.len() != 5 {
         return wrong_args("LMOVE");
     }
@@ -26,7 +25,6 @@ pub(crate) fn lmove(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn brpoplpush(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::list::moves::brpoplpush");
     if args.len() != 4 {
         return wrong_args("BRPOPLPUSH");
     }
@@ -41,7 +39,6 @@ pub(crate) fn brpoplpush(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn rpoplpush(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::list::moves::rpoplpush");
     if args.len() != 3 {
         return wrong_args("RPOPLPUSH");
     }
@@ -53,7 +50,6 @@ pub(crate) fn rpoplpush(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn lmpop(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::list::moves::lmpop");
     if args.len() < 4 {
         return wrong_args("LMPOP");
     }
@@ -101,7 +97,6 @@ pub(crate) fn lmpop(store: &Store, args: &Args) -> RespFrame {
 }
 
 fn parse_side(raw: &[u8]) -> Result<ListSide, RespFrame> {
-    let _trace = profiler::scope("commands::list::moves::parse_side");
     if eq_ascii(raw, b"LEFT") {
         Ok(ListSide::Left)
     } else if eq_ascii(raw, b"RIGHT") {
@@ -117,7 +112,6 @@ fn parse_usize(raw: &[u8]) -> Result<usize, RespFrame> {
 }
 
 fn parse_timeout(raw: &[u8]) -> Result<f64, ()> {
-    let _trace = profiler::scope("commands::list::moves::parse_timeout");
     std::str::from_utf8(raw)
         .ok()
         .and_then(|value| value.parse::<f64>().ok())

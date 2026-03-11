@@ -24,12 +24,10 @@ where
     K: Eq + AsRef<[u8]>,
 {
     pub fn new() -> Self {
-        let _trace = profiler::scope("rehash::types::new");
         Self::with_capacity(INITIAL_BUCKETS)
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
-        let _trace = profiler::scope("rehash::types::with_capacity");
         let storage_capacity = capacity.max(INITIAL_BUCKETS);
         Self {
             seed: random_seed(),
@@ -43,24 +41,20 @@ where
     }
 
     pub fn reserve(&mut self, additional: usize) {
-        let _trace = profiler::scope("rehash::types::reserve");
         self.reserve_for_batch(additional);
     }
 
     #[inline(always)]
     pub fn len(&self) -> usize {
-        let _trace = profiler::scope("rehash::types::len");
         self.metas.len()
     }
 
     #[inline(always)]
     pub fn is_empty(&self) -> bool {
-        let _trace = profiler::scope("rehash::types::is_empty");
         self.metas.is_empty()
     }
 
     pub fn clear(&mut self) {
-        let _trace = profiler::scope("rehash::types::clear");
         self.table = Table::with_buckets(INITIAL_BUCKETS);
         self.old_table = None;
         self.rehash_cursor = 0;
@@ -70,18 +64,15 @@ where
     }
 
     pub fn iter(&self) -> Iter<'_, K, V> {
-        let _trace = profiler::scope("rehash::types::iter");
         Iter::new(&self.keys, &self.values)
     }
 
     pub fn slices(&self) -> (&[K], &[V]) {
-        let _trace = profiler::scope("rehash::types::slices");
         (&self.keys, &self.values)
     }
 
     #[inline(always)]
     pub(super) fn maybe_grow(&mut self) {
-        let _trace = profiler::scope("rehash::types::maybe_grow");
         if self.old_table.is_some() {
             return;
         }
@@ -92,7 +83,6 @@ where
     }
 
     pub(super) fn reserve_for_batch(&mut self, additional: usize) {
-        let _trace = profiler::scope("rehash::types::reserve_for_batch");
         if additional == 0 {
             return;
         }
@@ -107,7 +97,6 @@ where
     }
 
     pub(super) fn rehash_step(&mut self, steps: usize) {
-        let _trace = profiler::scope("rehash::types::rehash_step");
         let Some(old_table) = self.old_table.as_mut() else {
             return;
         };
@@ -159,7 +148,6 @@ where
     }
 
     fn start_rehash(&mut self, new_bucket_count: usize) {
-        let _trace = profiler::scope("rehash::types::start_rehash");
         let new_bucket_count = new_bucket_count.next_power_of_two();
         if new_bucket_count <= self.table.len() {
             return;
@@ -193,7 +181,6 @@ where
     }
 
     pub(super) fn patch_swapped(&mut self, old_idx: u32, new_idx: u32) {
-        let _trace = profiler::scope("rehash::types::patch_swapped");
         if old_idx == new_idx {
             return;
         }
@@ -262,7 +249,6 @@ where
 }
 
 fn random_seed() -> u64 {
-    let _trace = profiler::scope("rehash::types::random_seed");
     let mut buf = [0u8; 8];
     if getrandom::fill(&mut buf).is_ok() {
         return u64::from_ne_bytes(buf);

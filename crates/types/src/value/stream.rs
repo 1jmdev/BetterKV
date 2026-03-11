@@ -32,7 +32,6 @@ pub struct StreamValue {
 
 impl StreamValue {
     pub fn new() -> Self {
-        let _trace = profiler::scope("crates::types::src::value::new");
         Self {
             entries: BTreeMap::new(),
             groups: HashMap::with_hasher(RandomState::new()),

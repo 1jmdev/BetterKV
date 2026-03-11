@@ -10,7 +10,6 @@ use super::PubSubSession;
 use super::notifications::emit_command_notifications;
 use super::util::wrong_args;
 use crate::auth::{self, AuthError, AuthService, SessionAuth, no_perm};
-use crate::profile::ProfileHub;
 
 #[derive(Default)]
 pub(super) struct ClientState {
@@ -32,11 +31,9 @@ pub(super) fn execute_regular_command(
     client_state: &mut ClientState,
     auth: &AuthService,
     auth_state: &mut SessionAuth,
-    profiler: &ProfileHub,
     command: CommandId,
     args: &[CompactArg],
 ) -> RespFrame {
-    let _trace = profiler::scope("server::connection::dispatch::execute_regular_command");
     if args.is_empty() {
         return RespFrame::error_static("ERR empty command");
     }
@@ -59,7 +56,7 @@ pub(super) fn execute_regular_command(
     }
 
     if auth.fast_path() {
-        return dispatch_authorized(store, hub, pubsub, client_state, profiler, command, args);
+        return dispatch_authorized(store, hub, pubsub, client_state, command, args);
     }
 
     // Hot path: already authorized
@@ -73,14 +70,14 @@ pub(super) fn execute_regular_command(
         {
             return no_perm(error);
         }
-        return dispatch_authorized(store, hub, pubsub, client_state, profiler, command, args);
+        return dispatch_authorized(store, hub, pubsub, client_state, command, args);
     }
 
     if !is_allowed_without_auth(command) {
         return auth::no_auth();
     }
 
-    dispatch_authorized(store, hub, pubsub, client_state, profiler, command, args)
+    dispatch_authorized(store, hub, pubsub, client_state, command, args)
 }
 
 #[inline]
@@ -90,7 +87,6 @@ fn dispatch_authorized(
     hub: &PubSubHub,
     pubsub: &mut PubSubSession,
     client_state: &mut ClientState,
-    profiler: &ProfileHub,
     command: CommandId,
     args: &[CompactArg],
 ) -> RespFrame {
@@ -98,19 +94,15 @@ fn dispatch_authorized(
         return client_command(client_state, args);
     }
 
-    let key = args.get(1).map(CompactArg::as_slice);
-    profiler.run_command(key, || {
-        let mut context = ServerDispatchContext { hub, pubsub };
-        let response = dispatch_with_context(store, &mut context, command, args);
-        if hub.keyspace_notifications_enabled() {
-            emit_command_notifications(hub, command, args, &response);
-        }
-        response
-    })
+    let mut context = ServerDispatchContext { hub, pubsub };
+    let response = dispatch_with_context(store, &mut context, command, args);
+    if hub.keyspace_notifications_enabled() {
+        emit_command_notifications(hub, command, args, &response);
+    }
+    response
 }
 
 fn client_command(client_state: &mut ClientState, args: &[CompactArg]) -> RespFrame {
-    let _trace = profiler::scope("server::connection::dispatch::client_command");
     if args.len() < 2 {
         return RespFrame::error_static("ERR wrong number of arguments for 'client' command");
     }
@@ -184,7 +176,6 @@ fn auth_command(
     auth_state: &mut SessionAuth,
     args: &[CompactArg],
 ) -> RespFrame {
-    let _trace = profiler::scope("server::connection::dispatch::auth_command");
     if args.len() == 2 {
         if !auth.default_user_has_password() {
             return RespFrame::error_static(
@@ -205,7 +196,6 @@ fn authenticate_with(
     username: &[u8],
     password: &[u8],
 ) -> RespFrame {
-    let _trace = profiler::scope("server::connection::dispatch::authenticate_with");
     match auth.authenticate(username, password) {
         Ok(user) => {
             auth_state.set_user(user.username);
@@ -226,7 +216,6 @@ fn hello_with_auth(
     auth_state: &mut SessionAuth,
     args: &[CompactArg],
 ) -> Option<RespFrame> {
-    let _trace = profiler::scope("server::connection::dispatch::hello_with_auth");
     if args.len() < 4 {
         return None;
     }
@@ -257,7 +246,6 @@ fn hello_with_auth(
 }
 
 fn is_allowed_without_auth(command: CommandId) -> bool {
-    let _trace = profiler::scope("server::connection::dispatch::is_allowed_without_auth");
     matches!(
         command,
         CommandId::Auth | CommandId::Hello | CommandId::Quit
@@ -265,7 +253,6 @@ fn is_allowed_without_auth(command: CommandId) -> bool {
 }
 
 fn response_is_ok(response: &RespFrame) -> bool {
-    let _trace = profiler::scope("server::connection::dispatch::response_is_ok");
     match response {
         RespFrame::SimpleStatic(value) => *value == "OK",
         RespFrame::Simple(value) => value == "OK",

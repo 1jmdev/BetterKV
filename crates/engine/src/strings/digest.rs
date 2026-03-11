@@ -21,7 +21,6 @@ pub enum SharedTtl {
 
 impl Store {
     pub fn digest(&self, key: &[u8]) -> Result<Option<Vec<u8>>, ()> {
-        let _trace = profiler::scope("engine::strings::digest::digest");
         let idx = self.shard_index(key);
         let now_ms = monotonic_now_ms();
         let shard = self.shards[idx].read();
@@ -40,7 +39,6 @@ impl Store {
         condition: MSetExExistCondition,
         ttl: SharedTtl,
     ) -> i64 {
-        let _trace = profiler::scope("engine::strings::digest::msetex");
         let now_ms = monotonic_now_ms();
 
         for (key, _) in pairs {

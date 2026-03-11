@@ -14,7 +14,6 @@ fn stream_write_error_response(error: StreamWriteError) -> RespFrame {
 }
 
 pub(crate) fn xadd(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::stream::add::xadd");
     if args.len() < 4 {
         return wrong_args("XADD");
     }
@@ -57,7 +56,6 @@ pub(crate) fn xadd(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn xlen(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::stream::add::xlen");
     if args.len() != 2 {
         return wrong_args("XLEN");
     }
@@ -68,7 +66,6 @@ pub(crate) fn xlen(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn xtrim(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::stream::add::xtrim");
     if args.len() < 4 {
         return wrong_args("XTRIM");
     }

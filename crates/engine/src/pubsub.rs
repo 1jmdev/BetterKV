@@ -56,7 +56,6 @@ pub trait PubSubSink: Send + Sync {
 
 impl PubSubHub {
     pub fn new() -> Self {
-        let _trace = profiler::scope("engine::pubsub::new");
         let shard_count = std::thread::available_parallelism()
             .map(|value| value.get())
             .unwrap_or(1)
@@ -84,12 +83,10 @@ impl PubSubHub {
     }
 
     pub fn next_connection_id(&self) -> u64 {
-        let _trace = profiler::scope("engine::pubsub::next_connection_id");
         self.next_id.fetch_add(1, Ordering::Relaxed)
     }
 
     pub fn subscribe(&self, id: u64, channel: &[u8], sink: &SharedPubSubSink) -> bool {
-        let _trace = profiler::scope("engine::pubsub::subscribe");
         let idx = self.shard_index(channel);
         let mut shard = self.shards[idx].write();
         let subscribers = shard.channels.entry(channel.to_vec()).or_default();
@@ -97,7 +94,6 @@ impl PubSubHub {
     }
 
     pub fn unsubscribe(&self, id: u64, channel: &[u8]) -> bool {
-        let _trace = profiler::scope("engine::pubsub::unsubscribe");
         let idx = self.shard_index(channel);
         let mut shard = self.shards[idx].write();
         let Some(subscribers) = shard.channels.get_mut(channel) else {
@@ -112,7 +108,6 @@ impl PubSubHub {
     }
 
     pub fn psubscribe(&self, id: u64, pattern: &[u8], sink: &SharedPubSubSink) -> bool {
-        let _trace = profiler::scope("engine::pubsub::psubscribe");
         let prefix = pattern_prefix(pattern);
         let idx = self.shard_index(prefix.as_slice());
         let mut shard = self.shards[idx].write();
@@ -127,7 +122,6 @@ impl PubSubHub {
     }
 
     pub fn punsubscribe(&self, id: u64, pattern: &[u8]) -> bool {
-        let _trace = profiler::scope("engine::pubsub::punsubscribe");
         let prefix = pattern_prefix(pattern);
         let idx = self.shard_index(prefix.as_slice());
         let mut shard = self.shards[idx].write();
@@ -149,7 +143,6 @@ impl PubSubHub {
     }
 
     pub fn ssubscribe(&self, id: u64, channel: &[u8], sink: &SharedPubSubSink) -> bool {
-        let _trace = profiler::scope("engine::pubsub::ssubscribe");
         let idx = self.shard_index(channel);
         let mut shard = self.shards[idx].write();
         let subscribers = shard.shard_channels.entry(channel.to_vec()).or_default();
@@ -157,7 +150,6 @@ impl PubSubHub {
     }
 
     pub fn sunsubscribe(&self, id: u64, channel: &[u8]) -> bool {
-        let _trace = profiler::scope("engine::pubsub::sunsubscribe");
         let idx = self.shard_index(channel);
         let mut shard = self.shards[idx].write();
         let Some(subscribers) = shard.shard_channels.get_mut(channel) else {
@@ -172,7 +164,6 @@ impl PubSubHub {
     }
 
     pub fn cleanup_connection(&self, id: u64) {
-        let _trace = profiler::scope("engine::pubsub::cleanup_connection");
         for shard in self.shards.iter() {
             let mut shard = shard.write();
             shard.channels.retain(|_, subscribers| {
@@ -194,7 +185,6 @@ impl PubSubHub {
     }
 
     pub fn publish(&self, channel: &[u8], payload: &[u8]) -> i64 {
-        let _trace = profiler::scope("engine::pubsub::publish");
         let channel_subscribers = {
             let idx = self.shard_index(channel);
             let shard = self.shards[idx].read();
@@ -255,7 +245,6 @@ impl PubSubHub {
     }
 
     pub fn spublish(&self, channel: &[u8], payload: &[u8]) -> i64 {
-        let _trace = profiler::scope("engine::pubsub::spublish");
         let subscribers = {
             let idx = self.shard_index(channel);
             let shard = self.shards[idx].read();
@@ -281,7 +270,6 @@ impl PubSubHub {
     }
 
     pub fn pubsub_channels(&self, pattern: Option<&[u8]>) -> Vec<Vec<u8>> {
-        let _trace = profiler::scope("engine::pubsub::pubsub_channels");
         let mut channels = Vec::new();
         for shard in self.shards.iter() {
             let shard = shard.read();
@@ -300,7 +288,6 @@ impl PubSubHub {
     }
 
     pub fn pubsub_numsub(&self, channels: &[Vec<u8>]) -> Vec<(Vec<u8>, i64)> {
-        let _trace = profiler::scope("engine::pubsub::pubsub_numsub");
         channels
             .iter()
             .map(|channel| {
@@ -316,7 +303,6 @@ impl PubSubHub {
     }
 
     pub fn pubsub_numpat(&self) -> i64 {
-        let _trace = profiler::scope("engine::pubsub::pubsub_numpat");
         self.shards
             .iter()
             .map(|shard| {
@@ -331,7 +317,6 @@ impl PubSubHub {
     }
 
     pub fn pubsub_shardchannels(&self, pattern: Option<&[u8]>) -> Vec<Vec<u8>> {
-        let _trace = profiler::scope("engine::pubsub::pubsub_shardchannels");
         let mut channels = Vec::new();
         for shard in self.shards.iter() {
             let shard = shard.read();
@@ -350,7 +335,6 @@ impl PubSubHub {
     }
 
     pub fn pubsub_shardnumsub(&self, channels: &[Vec<u8>]) -> Vec<(Vec<u8>, i64)> {
-        let _trace = profiler::scope("engine::pubsub::pubsub_shardnumsub");
         channels
             .iter()
             .map(|channel| {
@@ -366,7 +350,6 @@ impl PubSubHub {
     }
 
     pub fn set_notify_flags(&self, flags: &[u8]) -> Result<(), ()> {
-        let _trace = profiler::scope("engine::pubsub::set_notify_flags");
         let mask = flags_to_mask(flags)?;
         self.notify_mask.store(mask, Ordering::Relaxed);
         let has_output_target = (mask & (FLAG_KEYSPACE | FLAG_KEYEVENT)) != 0;
@@ -379,17 +362,14 @@ impl PubSubHub {
     }
 
     pub fn get_notify_flags(&self) -> Vec<u8> {
-        let _trace = profiler::scope("engine::pubsub::get_notify_flags");
         mask_to_flags(self.notify_mask.load(Ordering::Relaxed))
     }
 
     pub fn keyspace_notifications_enabled(&self) -> bool {
-        let _trace = profiler::scope("engine::pubsub::keyspace_notifications_enabled");
         self.notify_enabled.load(Ordering::Relaxed)
     }
 
     pub fn emit_keyspace_event(&self, event: &[u8], key: &[u8], class: u8) {
-        let _trace = profiler::scope("engine::pubsub::emit_keyspace_event");
         let mask = self.notify_mask.load(Ordering::Relaxed);
         if !notifications_enabled(mask, class) {
             return;
@@ -406,7 +386,6 @@ impl PubSubHub {
     }
 
     fn shard_index(&self, key: &[u8]) -> usize {
-        let _trace = profiler::scope("engine::pubsub::shard_index");
         let hash = self.hash_builder.hash_one(key);
         (hash as usize) & self.shard_mask
     }
@@ -420,7 +399,6 @@ impl Default for PubSubHub {
 
 impl ConnectionPubSub {
     pub fn new(id: u64) -> Self {
-        let _trace = profiler::scope("engine::pubsub::connection::new");
         Self {
             id,
             channels: AHashSet::new(),
@@ -434,14 +412,12 @@ impl ConnectionPubSub {
     }
 
     pub fn subscribe(&mut self, hub: &PubSubHub, channel: &[u8], sink: &SharedPubSubSink) {
-        let _trace = profiler::scope("engine::pubsub::connection::subscribe");
         if self.channels.insert(channel.to_vec()) {
             hub.subscribe(self.id, channel, sink);
         }
     }
 
     pub fn unsubscribe(&mut self, hub: &PubSubHub, channel: &[u8]) -> bool {
-        let _trace = profiler::scope("engine::pubsub::connection::unsubscribe");
         if self.channels.remove(channel) {
             hub.unsubscribe(self.id, channel);
             true
@@ -451,14 +427,12 @@ impl ConnectionPubSub {
     }
 
     pub fn psubscribe(&mut self, hub: &PubSubHub, pattern: &[u8], sink: &SharedPubSubSink) {
-        let _trace = profiler::scope("engine::pubsub::connection::psubscribe");
         if self.patterns.insert(pattern.to_vec()) {
             hub.psubscribe(self.id, pattern, sink);
         }
     }
 
     pub fn punsubscribe(&mut self, hub: &PubSubHub, pattern: &[u8]) -> bool {
-        let _trace = profiler::scope("engine::pubsub::connection::punsubscribe");
         if self.patterns.remove(pattern) {
             hub.punsubscribe(self.id, pattern);
             true
@@ -468,14 +442,12 @@ impl ConnectionPubSub {
     }
 
     pub fn ssubscribe(&mut self, hub: &PubSubHub, channel: &[u8], sink: &SharedPubSubSink) {
-        let _trace = profiler::scope("engine::pubsub::connection::ssubscribe");
         if self.shard_channels.insert(channel.to_vec()) {
             hub.ssubscribe(self.id, channel, sink);
         }
     }
 
     pub fn sunsubscribe(&mut self, hub: &PubSubHub, channel: &[u8]) -> bool {
-        let _trace = profiler::scope("engine::pubsub::connection::sunsubscribe");
         if self.shard_channels.remove(channel) {
             hub.sunsubscribe(self.id, channel);
             true
@@ -485,7 +457,6 @@ impl ConnectionPubSub {
     }
 
     pub fn unsubscribe_all(&mut self, hub: &PubSubHub) -> Vec<Vec<u8>> {
-        let _trace = profiler::scope("engine::pubsub::connection::unsubscribe_all");
         let channels = self.channels.drain().collect::<Vec<_>>();
         for channel in &channels {
             hub.unsubscribe(self.id, channel);
@@ -494,7 +465,6 @@ impl ConnectionPubSub {
     }
 
     pub fn punsubscribe_all(&mut self, hub: &PubSubHub) -> Vec<Vec<u8>> {
-        let _trace = profiler::scope("engine::pubsub::connection::punsubscribe_all");
         let patterns = self.patterns.drain().collect::<Vec<_>>();
         for pattern in &patterns {
             hub.punsubscribe(self.id, pattern);
@@ -503,7 +473,6 @@ impl ConnectionPubSub {
     }
 
     pub fn sunsubscribe_all(&mut self, hub: &PubSubHub) -> Vec<Vec<u8>> {
-        let _trace = profiler::scope("engine::pubsub::connection::sunsubscribe_all");
         let channels = self.shard_channels.drain().collect::<Vec<_>>();
         for channel in &channels {
             hub.sunsubscribe(self.id, channel);
@@ -512,7 +481,6 @@ impl ConnectionPubSub {
     }
 
     pub fn subscription_count(&self) -> i64 {
-        let _trace = profiler::scope("engine::pubsub::connection::subscription_count");
         (self.channels.len() + self.patterns.len() + self.shard_channels.len()) as i64
     }
 }
@@ -529,7 +497,6 @@ const FLAG_KEYSPACE: u16 = 1 << 8;
 const FLAG_A: u16 = 1 << 9;
 
 fn flag_to_mask(flag: u8) -> Option<u16> {
-    let _trace = profiler::scope("engine::pubsub::flag_to_mask");
     match flag {
         b'g' => Some(FLAG_G),
         b'$' => Some(FLAG_DOLLAR),
@@ -547,7 +514,6 @@ fn flag_to_mask(flag: u8) -> Option<u16> {
 }
 
 fn flags_to_mask(flags: &[u8]) -> Result<u16, ()> {
-    let _trace = profiler::scope("engine::pubsub::flags_to_mask");
     let mut mask = 0_u16;
     for &flag in flags {
         let bit = flag_to_mask(flag).ok_or(())?;
@@ -557,7 +523,6 @@ fn flags_to_mask(flags: &[u8]) -> Result<u16, ()> {
 }
 
 fn mask_to_flags(mask: u16) -> Vec<u8> {
-    let _trace = profiler::scope("engine::pubsub::mask_to_flags");
     let mut out = Vec::new();
     if mask & FLAG_A != 0 {
         out.push(b'A');
@@ -593,22 +558,18 @@ fn mask_to_flags(mask: u16) -> Vec<u8> {
 }
 
 fn notifications_enabled(mask: u16, class: u8) -> bool {
-    let _trace = profiler::scope("engine::pubsub::notifications_enabled");
     (mask & FLAG_A) != 0 || flag_to_mask(class).is_some_and(|bit| (mask & bit) != 0)
 }
 
 fn notifications_enabled_keyspace(mask: u16) -> bool {
-    let _trace = profiler::scope("engine::pubsub::notifications_enabled_keyspace");
     (mask & FLAG_KEYSPACE) != 0
 }
 
 fn notifications_enabled_keyevent(mask: u16) -> bool {
-    let _trace = profiler::scope("engine::pubsub::notifications_enabled_keyevent");
     (mask & FLAG_KEYEVENT) != 0
 }
 
 fn pattern_prefix(pattern: &[u8]) -> Vec<u8> {
-    let _trace = profiler::scope("engine::pubsub::pattern_prefix");
     let mut index = 0;
     while index < pattern.len() {
         match pattern[index] {
@@ -621,7 +582,6 @@ fn pattern_prefix(pattern: &[u8]) -> Vec<u8> {
 }
 
 fn make_notification_channel(prefix: &[u8], value: &[u8]) -> Vec<u8> {
-    let _trace = profiler::scope("engine::pubsub::make_notification_channel");
     let mut out = Vec::with_capacity(prefix.len() + value.len());
     out.extend_from_slice(prefix);
     out.extend_from_slice(value);

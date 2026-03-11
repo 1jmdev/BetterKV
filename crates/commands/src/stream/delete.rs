@@ -14,7 +14,6 @@ fn stream_write_error_response(error: StreamWriteError) -> RespFrame {
 }
 
 pub(crate) fn xdel(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::stream::delete::xdel");
     if args.len() < 3 {
         return wrong_args("XDEL");
     }
@@ -32,7 +31,6 @@ pub(crate) fn xdel(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn xdelex(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::stream::delete::xdelex");
     if args.len() < 5 {
         return wrong_args("XDELEX");
     }

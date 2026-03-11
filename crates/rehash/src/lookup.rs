@@ -12,7 +12,6 @@ where
     where
         Q: AsRef<[u8]> + ?Sized,
     {
-        let _trace = profiler::scope("rehash::lookup::contains_key");
         self.find_index(key).is_some()
     }
 
@@ -21,7 +20,6 @@ where
     where
         Q: AsRef<[u8]> + ?Sized,
     {
-        let _trace = profiler::scope("rehash::lookup::get");
         let idx = self.find_index(key)?;
         Some(unsafe { &*self.values.as_ptr().add(idx as usize) })
     }
@@ -31,7 +29,6 @@ where
     where
         Q: AsRef<[u8]> + ?Sized,
     {
-        let _trace = profiler::scope("rehash::lookup::get_mut");
         let idx = self.find_index(key)?;
         Some(unsafe { &mut *self.values.as_mut_ptr().add(idx as usize) })
     }
@@ -40,7 +37,6 @@ where
     where
         Q: AsRef<[u8]> + ?Sized,
     {
-        let _trace = profiler::scope("rehash::lookup::get_batch");
         keys.map(|key| self.get(key))
     }
 
@@ -49,7 +45,6 @@ where
     where
         Q: AsRef<[u8]> + ?Sized,
     {
-        let _trace = profiler::scope("rehash::lookup::find_index");
         let hash = hash_key(self.seed, key.as_ref());
         self.find_index_hashed(key, hash)
     }
@@ -59,7 +54,6 @@ where
     where
         Q: AsRef<[u8]> + ?Sized,
     {
-        let _trace = profiler::scope("rehash::lookup::find_index_hashed");
         let key_bytes = key.as_ref();
         if let Some(idx) = self.find_index_in_table(&self.table, key_bytes, hash) {
             return Some(idx);

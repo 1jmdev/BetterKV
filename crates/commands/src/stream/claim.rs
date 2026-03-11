@@ -5,7 +5,6 @@ use protocol::types::{BulkData, RespFrame};
 use types::value::StreamId;
 
 pub(crate) fn xreadgroup(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::stream::claim::xreadgroup");
     if args.len() < 7 {
         return wrong_args("XREADGROUP");
     }
@@ -84,7 +83,6 @@ pub(crate) fn xreadgroup(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn xclaim(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::stream::claim::xclaim");
     if args.len() < 6 {
         return wrong_args("XCLAIM");
     }
@@ -104,7 +102,6 @@ pub(crate) fn xclaim(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn xautoclaim(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::stream::claim::xautoclaim");
     if args.len() < 6 {
         return wrong_args("XAUTOCLAIM");
     }

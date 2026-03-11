@@ -6,7 +6,6 @@ use super::super::helpers::{monotonic_now_ms, purge_if_expired};
 
 impl Store {
     pub fn mget<K: AsRef<[u8]>>(&self, keys: &[K]) -> Result<Vec<Option<CompactValue>>, ()> {
-        let _trace = profiler::scope("engine::strings::multi::mget");
         let count = keys.len();
         if count == 0 {
             return Ok(Vec::new());
@@ -120,7 +119,6 @@ impl Store {
     }
 
     pub fn mget_encode<K: AsRef<[u8]>>(&self, keys: &[K]) -> Result<bytes::Bytes, ()> {
-        let _trace = profiler::scope("engine::strings::multi::mget_encode");
         let count = keys.len();
         if count == 0 {
             return Ok(bytes::Bytes::from_static(b"*0\r\n"));
@@ -146,7 +144,6 @@ impl Store {
     }
 
     pub fn mset_args(&self, pairs: &[CompactArg]) {
-        let _trace = profiler::scope("engine::strings::multi::mset_args");
         let shard_count = self.shards.len();
         let pair_count = pairs.len() / 2;
 
@@ -184,7 +181,6 @@ impl Store {
     }
 
     pub fn mset(&self, pairs: Vec<(CompactArg, CompactArg)>) {
-        let _trace = profiler::scope("engine::strings::multi::mset");
         let shard_count = self.shards.len();
         let mut grouped = vec![Vec::new(); shard_count];
 
@@ -206,7 +202,6 @@ impl Store {
     }
 
     pub fn msetnx(&self, pairs: Vec<(CompactArg, CompactArg)>) -> bool {
-        let _trace = profiler::scope("engine::strings::multi::msetnx");
         let now_ms = monotonic_now_ms();
         for (key, _) in &pairs {
             let idx = self.shard_index(key);

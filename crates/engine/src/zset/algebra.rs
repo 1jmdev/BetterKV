@@ -10,7 +10,6 @@ use super::{compare_member_score, get_zset};
 
 impl Store {
     pub fn zinter(&self, keys: &[CompactArg]) -> Result<Vec<(CompactKey, f64)>, ()> {
-        let _trace = profiler::scope("engine::zset::algebra::zinter");
         let snapshots = self.zset_snapshots(keys)?;
         if snapshots.is_empty() || snapshots.iter().any(|set| set.is_empty()) {
             return Ok(Vec::new());
@@ -30,7 +29,6 @@ impl Store {
     }
 
     pub fn zunion(&self, keys: &[CompactArg]) -> Result<Vec<(CompactKey, f64)>, ()> {
-        let _trace = profiler::scope("engine::zset::algebra::zunion");
         let snapshots = self.zset_snapshots(keys)?;
         let mut out = HashMap::with_hasher(RandomState::new());
         for set in snapshots {
@@ -43,7 +41,6 @@ impl Store {
     }
 
     pub fn zdiff(&self, keys: &[CompactArg]) -> Result<Vec<(CompactKey, f64)>, ()> {
-        let _trace = profiler::scope("engine::zset::algebra::zdiff");
         let snapshots = self.zset_snapshots(keys)?;
         let Some((first, rest)) = snapshots.split_first() else {
             return Ok(Vec::new());
@@ -59,7 +56,6 @@ impl Store {
     }
 
     pub fn zstore_items(&self, destination: &[u8], items: &[(CompactKey, f64)]) -> Result<i64, ()> {
-        let _trace = profiler::scope("engine::zset::algebra::zstore_items");
         let idx = self.shard_index(destination);
         let mut shard = self.shards[idx].write();
         let _ = purge_if_expired(&mut shard, destination, monotonic_now_ms());
@@ -82,7 +78,6 @@ impl Store {
     }
 
     fn zset_snapshots(&self, keys: &[CompactArg]) -> Result<Vec<ZSetValueMap>, ()> {
-        let _trace = profiler::scope("engine::zset::algebra::zset_snapshots");
         let mut snapshots = Vec::with_capacity(keys.len());
         let now_ms = monotonic_now_ms();
         for key in keys {
@@ -109,7 +104,6 @@ fn sort_snapshot(
     values: &HashMap<CompactKey, f64, RandomState>,
     reverse: bool,
 ) -> Vec<(CompactKey, f64)> {
-    let _trace = profiler::scope("engine::zset::algebra::sort_snapshot");
     let mut out: Vec<_> = values
         .iter()
         .map(|(member, score)| (member.clone(), *score))

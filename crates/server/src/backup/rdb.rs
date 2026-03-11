@@ -57,7 +57,6 @@ pub(super) fn write_rdb_value<W: Write>(
     key: &[u8],
     value: RdbValue,
 ) -> Result<(), String> {
-    let _trace = profiler::scope("server::backup::write_rdb_value");
     match value {
         RdbValue::String(v) => {
             out.write_all(&[TYPE_STRING])
@@ -105,7 +104,6 @@ pub(super) fn write_rdb_value<W: Write>(
 }
 
 pub(super) fn encode_len<W: Write>(out: &mut W, len: usize) -> Result<(), String> {
-    let _trace = profiler::scope("server::backup::encode_len");
     if len < (1 << 6) {
         out.write_all(&[len as u8]).map_err(|err| err.to_string())?;
         return Ok(());
@@ -124,14 +122,12 @@ pub(super) fn encode_len<W: Write>(out: &mut W, len: usize) -> Result<(), String
 }
 
 pub(super) fn encode_string<W: Write>(out: &mut W, value: &[u8]) -> Result<(), String> {
-    let _trace = profiler::scope("server::backup::encode_string");
     encode_len(out, value.len())?;
     out.write_all(value).map_err(|err| err.to_string())?;
     Ok(())
 }
 
 fn encode_zset_score<W: Write>(out: &mut W, score: f64) -> Result<(), String> {
-    let _trace = profiler::scope("server::backup::encode_zset_score");
     if score.is_nan() {
         out.write_all(&[253]).map_err(|err| err.to_string())?;
         return Ok(());
@@ -187,7 +183,6 @@ impl<W: Write> Write for CountingWriter<W> {
 }
 
 pub(super) fn parse_rdb(input: &[u8]) -> Result<Vec<LoadedEntry>, String> {
-    let _trace = profiler::scope("server::backup::parse_rdb");
     if input.len() < 9 {
         return Err("snapshot file is too short".to_string());
     }
@@ -299,13 +294,11 @@ pub(super) fn parse_rdb(input: &[u8]) -> Result<Vec<LoadedEntry>, String> {
 }
 
 fn decode_len(input: &[u8], cursor: &mut usize) -> Result<usize, String> {
-    let _trace = profiler::scope("server::backup::decode_len");
     let first = read_u8(input, cursor)?;
     decode_len_with_first(input, cursor, first)
 }
 
 fn decode_string(input: &[u8], cursor: &mut usize) -> Result<Vec<u8>, String> {
-    let _trace = profiler::scope("server::backup::decode_string");
     let first = read_u8(input, cursor)?;
     let mode = first >> 6;
     if mode != 0b11 {
@@ -344,7 +337,6 @@ fn decode_string(input: &[u8], cursor: &mut usize) -> Result<Vec<u8>, String> {
 }
 
 fn decode_len_with_first(input: &[u8], cursor: &mut usize, first: u8) -> Result<usize, String> {
-    let _trace = profiler::scope("server::backup::decode_len_with_first");
     let mode = first >> 6;
     match mode {
         0b00 => Ok((first & 0x3F) as usize),
@@ -371,7 +363,6 @@ fn decode_len_with_first(input: &[u8], cursor: &mut usize, first: u8) -> Result<
 }
 
 fn lzf_decompress(input: &[u8], expected_len: usize) -> Result<Vec<u8>, String> {
-    let _trace = profiler::scope("server::backup::lzf_decompress");
     let mut out = Vec::with_capacity(expected_len);
     let mut i = 0usize;
 
@@ -427,7 +418,6 @@ fn lzf_decompress(input: &[u8], expected_len: usize) -> Result<Vec<u8>, String> 
 }
 
 fn decode_zset_score(input: &[u8], cursor: &mut usize) -> Result<f64, String> {
-    let _trace = profiler::scope("server::backup::decode_zset_score");
     let len = read_u8(input, cursor)?;
     match len {
         253 => Ok(f64::NAN),
@@ -444,7 +434,6 @@ fn decode_zset_score(input: &[u8], cursor: &mut usize) -> Result<f64, String> {
 }
 
 fn read_u8(input: &[u8], cursor: &mut usize) -> Result<u8, String> {
-    let _trace = profiler::scope("server::backup::read_u8");
     if *cursor >= input.len() {
         return Err("unexpected EOF".to_string());
     }
@@ -454,7 +443,6 @@ fn read_u8(input: &[u8], cursor: &mut usize) -> Result<u8, String> {
 }
 
 fn read_exact(input: &[u8], cursor: &mut usize, out: &mut [u8]) -> Result<(), String> {
-    let _trace = profiler::scope("server::backup::read_exact");
     let remaining = input.len().saturating_sub(*cursor);
     if out.len() > remaining {
         return Err("unexpected EOF".to_string());
@@ -465,7 +453,6 @@ fn read_exact(input: &[u8], cursor: &mut usize, out: &mut [u8]) -> Result<(), St
 }
 
 pub(super) fn decode_custom_entry(payload: &[u8]) -> Result<Value, String> {
-    let _trace = profiler::scope("server::backup::decode_custom_entry");
     if payload.len() < 2 || payload[0] != 1 {
         return Err("invalid payload".to_string());
     }
@@ -571,7 +558,6 @@ pub(super) fn decode_custom_entry(payload: &[u8]) -> Result<Value, String> {
 }
 
 fn read_u32(input: &mut &[u8]) -> Result<u32, String> {
-    let _trace = profiler::scope("server::backup::read_u32");
     if input.len() < 4 {
         return Err("unexpected EOF".to_string());
     }
@@ -582,7 +568,6 @@ fn read_u32(input: &mut &[u8]) -> Result<u32, String> {
 }
 
 fn read_bytes(input: &mut &[u8]) -> Result<Vec<u8>, String> {
-    let _trace = profiler::scope("server::backup::read_bytes");
     let len = read_u32(input)? as usize;
     if input.len() < len {
         return Err("unexpected EOF".to_string());

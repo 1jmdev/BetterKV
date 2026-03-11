@@ -3,7 +3,6 @@ use engine::store::{Store, StringDigestCondition};
 use protocol::types::RespFrame;
 
 pub(crate) fn delex(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::string::delete::delex");
     if args.len() < 2 {
         return wrong_args("DELEX");
     }

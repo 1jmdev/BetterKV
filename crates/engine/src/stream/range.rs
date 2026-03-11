@@ -14,7 +14,6 @@ impl Store {
         reverse: bool,
         count: Option<usize>,
     ) -> Result<Vec<StreamRangeItem>, ()> {
-        let _trace = profiler::scope("engine::stream::range::xrange");
         let idx = self.shard_index(key);
         let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
@@ -34,7 +33,6 @@ impl Store {
         streams: &[(CompactArg, StreamId)],
         count: Option<usize>,
     ) -> Result<Vec<(CompactArg, Vec<StreamRangeItem>)>, ()> {
-        let _trace = profiler::scope("engine::stream::range::xread");
         let mut out = Vec::new();
         for (key, last_seen) in streams {
             let next = StreamId {

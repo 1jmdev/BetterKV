@@ -9,7 +9,6 @@ use tokio::time::Duration;
 use crate::auth::AuthService;
 use crate::config::Config;
 use crate::persistence::{self, PersistenceHandle};
-use crate::profile::ProfileHub;
 use accept::{bind_reuse_port_listeners, run_accept_loop};
 use background::{spawn_cached_clock_updater, spawn_expiry_sweeper};
 use engine::pubsub::PubSubHub;
@@ -17,19 +16,10 @@ use engine::store::Store;
 use shutdown::shutdown_signal;
 
 pub async fn run_listener(config: Config) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    run_listener_with_profile(config, None).await
-}
-
-pub async fn run_listener_with_profile(
-    config: Config,
-    profile_hub: Option<ProfileHub>,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let _trace = profiler::scope("server::listener::run_listener");
     let bind_addr = config.addr();
     let listeners = bind_reuse_port_listeners(bind_addr.clone(), config.io_threads).await?;
     let store = Store::new(config.shards);
     let pubsub = PubSubHub::new();
-    let profiler = profile_hub.unwrap_or_else(ProfileHub::disabled);
     let auth = AuthService::from_config(&config).map_err(io::Error::other)?;
     let restore = persistence::restore(&store, &config).await;
     match restore {
@@ -76,7 +66,6 @@ pub async fn run_listener_with_profile(
         let shared_pubsub = pubsub.clone();
         let shared_auth = auth.clone();
         let shared_persistence = persistence.clone();
-        let shared_profiler = profiler.clone();
         accept_tasks.spawn(async move {
             run_accept_loop(
                 listener,
@@ -84,7 +73,6 @@ pub async fn run_listener_with_profile(
                 shared_pubsub,
                 shared_auth,
                 shared_persistence,
-                shared_profiler,
             )
             .await
         });

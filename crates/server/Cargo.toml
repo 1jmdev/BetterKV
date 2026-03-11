@@ -7,9 +7,6 @@ edition.workspace = true
 name = "betterkv-server"
 path = "src/main.rs"
 
-[features]
-profiling = ["profiler/enabled"]
-
 [dependencies]
 betterkv-alloc.workspace = true
 clap.workspace = true
@@ -17,7 +14,6 @@ commands.workspace = true
 engine.workspace = true
 types.workspace = true
 protocol.workspace = true
-profiler.workspace = true
 ahash.workspace = true
 bytes.workspace = true
 hashbrown.workspace = true

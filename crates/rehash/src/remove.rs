@@ -13,7 +13,6 @@ where
     where
         Q: AsRef<[u8]> + ?Sized,
     {
-        let _trace = profiler::scope("rehash::remove::remove");
         self.rehash_write_step();
         let key_bytes = key.as_ref();
         let hash = hash_key(self.seed, key_bytes);

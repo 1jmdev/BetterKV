@@ -35,7 +35,6 @@ pub struct RestoreStats {
 }
 
 pub async fn load_snapshot(store: &Store, path: &Path) -> Result<RestoreStats, String> {
-    let _trace = profiler::scope("server::backup::load_snapshot");
     let bytes = decode_snapshot_file(&io::read_snapshot_bytes(path).await?)?;
     let entries = parse_rdb(&bytes)?;
 
@@ -77,7 +76,6 @@ pub fn write_snapshot(
     path: &Path,
     compression: SnapshotCompression,
 ) -> Result<SnapshotStats, String> {
-    let _trace = profiler::scope("server::backup::write_snapshot");
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|err| {
             format!(
@@ -111,7 +109,6 @@ pub fn write_snapshot(
 }
 
 fn build_rdb_snapshot(store: &Store, path: &Path) -> Result<(u64, Vec<u8>), String> {
-    let _trace = profiler::scope("server::backup::build_rdb_snapshot");
     let mut writer = CountingWriter::new(Vec::with_capacity(256 * 1024));
 
     writer
@@ -186,7 +183,6 @@ const SNAPSHOT_CODEC_NONE: u8 = 0;
 const SNAPSHOT_CODEC_LZ4: u8 = 1;
 
 fn encode_snapshot_file(raw_rdb: &[u8], compression: SnapshotCompression) -> Vec<u8> {
-    let _trace = profiler::scope("server::backup::encode_snapshot_file");
     match compression {
         SnapshotCompression::None => raw_rdb.to_vec(),
         SnapshotCompression::Lz4 => {
@@ -201,7 +197,6 @@ fn encode_snapshot_file(raw_rdb: &[u8], compression: SnapshotCompression) -> Vec
 }
 
 fn decode_snapshot_file(bytes: &[u8]) -> Result<Vec<u8>, String> {
-    let _trace = profiler::scope("server::backup::decode_snapshot_file");
     if bytes.starts_with(RDB_MAGIC_PREFIX) {
         return Ok(bytes.to_vec());
     }
@@ -218,7 +213,6 @@ fn decode_snapshot_file(bytes: &[u8]) -> Result<Vec<u8>, String> {
 }
 
 fn value_into_store_entry(value: Value) -> StoreEntry {
-    let _trace = profiler::scope("server::backup::value_into_store_entry");
     match value {
         Value::String(v) => StoreEntry::String(CompactValue::from_vec(v)),
         Value::Hash(values) => {
@@ -279,7 +273,6 @@ fn value_into_store_entry(value: Value) -> StoreEntry {
 }
 
 fn now_unix_seconds() -> u64 {
-    let _trace = profiler::scope("server::backup::now_unix_seconds");
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())

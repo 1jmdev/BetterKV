@@ -17,7 +17,6 @@ pub struct LcsResult {
 
 impl Store {
     pub fn lcs(&self, first_key: &[u8], second_key: &[u8]) -> Result<LcsResult, ()> {
-        let _trace = profiler::scope("engine::strings::lcs::lcs");
         let first = self.get_string_or_empty(first_key)?;
         let second = self.get_string_or_empty(second_key)?;
         Ok(compute_lcs(&first, &second))

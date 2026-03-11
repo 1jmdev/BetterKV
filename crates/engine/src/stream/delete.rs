@@ -17,7 +17,6 @@ impl Store {
         key: &[u8],
         ids: &[StreamId],
     ) -> Result<i64, super::write::StreamWriteError> {
-        let _trace = profiler::scope("engine::stream::delete::xdel");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
         let now_ms = monotonic_now_ms();
@@ -44,7 +43,6 @@ impl Store {
         policy: XDelexPolicy,
         ids: &[StreamId],
     ) -> Result<Vec<i64>, super::write::StreamWriteError> {
-        let _trace = profiler::scope("engine::stream::delete::xdelex");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
         let now_ms = monotonic_now_ms();

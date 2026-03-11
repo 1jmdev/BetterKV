@@ -3,7 +3,6 @@ use engine::store::{ListInsertPosition, ListSetError, Store};
 use protocol::types::{BulkData, RespFrame};
 
 pub(crate) fn lindex(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::list::range::lindex");
     if args.len() != 3 {
         return wrong_args("LINDEX");
     }
@@ -18,7 +17,6 @@ pub(crate) fn lindex(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn lrange(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::list::range::lrange");
     if args.len() != 4 {
         return wrong_args("LRANGE");
     }
@@ -37,7 +35,6 @@ pub(crate) fn lrange(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn lset(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::list::range::lset");
     if args.len() != 4 {
         return wrong_args("LSET");
     }
@@ -54,7 +51,6 @@ pub(crate) fn lset(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn ltrim(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::list::range::ltrim");
     if args.len() != 4 {
         return wrong_args("LTRIM");
     }
@@ -73,7 +69,6 @@ pub(crate) fn ltrim(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn linsert(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::list::range::linsert");
     if args.len() != 5 {
         return wrong_args("LINSERT");
     }
@@ -91,7 +86,6 @@ pub(crate) fn linsert(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn lpos(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::list::range::lpos");
     if args.len() < 3 {
         return wrong_args("LPOS");
     }
@@ -148,7 +142,6 @@ pub(crate) fn lpos(store: &Store, args: &Args) -> RespFrame {
 }
 
 fn parse_i64(raw: &[u8]) -> Result<i64, RespFrame> {
-    let _trace = profiler::scope("commands::list::range::parse_i64");
     if raw.is_empty() {
         return Err(int_error());
     }

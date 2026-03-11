@@ -9,7 +9,6 @@ use super::{collect_members, get_set, new_set};
 
 impl Store {
     pub fn sinter(&self, keys: &[CompactArg]) -> Result<Vec<CompactKey>, ()> {
-        let _trace = profiler::scope("engine::set::algebra::sinter");
         let now_ms = monotonic_now_ms();
         let guards = self.read_set_guards(keys, now_ms)?;
 
@@ -36,7 +35,6 @@ impl Store {
     }
 
     pub fn sunion(&self, keys: &[CompactArg]) -> Result<Vec<CompactKey>, ()> {
-        let _trace = profiler::scope("engine::set::algebra::sunion");
         let now_ms = monotonic_now_ms();
         let guards = self.read_set_guards(keys, now_ms)?;
 
@@ -50,7 +48,6 @@ impl Store {
     }
 
     pub fn sdiff(&self, keys: &[CompactArg]) -> Result<Vec<CompactKey>, ()> {
-        let _trace = profiler::scope("engine::set::algebra::sdiff");
         let now_ms = monotonic_now_ms();
         let guards = self.read_set_guards(keys, now_ms)?;
 
@@ -75,25 +72,21 @@ impl Store {
     }
 
     pub fn sinterstore(&self, destination: &[u8], keys: &[CompactArg]) -> Result<i64, ()> {
-        let _trace = profiler::scope("engine::set::algebra::sinterstore");
         let result = self.sinter(keys)?;
         self.write_set_result(destination, result)
     }
 
     pub fn sunionstore(&self, destination: &[u8], keys: &[CompactArg]) -> Result<i64, ()> {
-        let _trace = profiler::scope("engine::set::algebra::sunionstore");
         let result = self.sunion(keys)?;
         self.write_set_result(destination, result)
     }
 
     pub fn sdiffstore(&self, destination: &[u8], keys: &[CompactArg]) -> Result<i64, ()> {
-        let _trace = profiler::scope("engine::set::algebra::sdiffstore");
         let result = self.sdiff(keys)?;
         self.write_set_result(destination, result)
     }
 
     pub fn sintercard(&self, keys: &[CompactArg], limit: Option<usize>) -> Result<i64, ()> {
-        let _trace = profiler::scope("engine::set::algebra::sintercard");
         let mut values = self.sinter(keys)?;
         if let Some(limit) = limit {
             values.truncate(limit);
@@ -106,7 +99,6 @@ impl Store {
         keys: &[CompactArg],
         _now_ms: u64,
     ) -> Result<Vec<RwLockReadGuard<'_, Shard>>, ()> {
-        let _trace = profiler::scope("engine::set::algebra::set_snapshots");
         let mut guards = Vec::with_capacity(keys.len());
         for key in keys {
             let idx = self.shard_index(key.as_slice());
@@ -122,7 +114,6 @@ fn resolve_set<'g>(
     key: &[u8],
     now_ms: u64,
 ) -> Option<&'g SetValue> {
-    let _trace = profiler::scope("engine::set::algebra::resolve_set");
     if is_expired(guard, key, now_ms) {
         return None;
     }
@@ -134,7 +125,6 @@ fn resolve_set<'g>(
 
 impl Store {
     fn write_set_result(&self, destination: &[u8], values: Vec<CompactKey>) -> Result<i64, ()> {
-        let _trace = profiler::scope("engine::set::algebra::write_set_result");
         let idx = self.shard_index(destination);
         let mut shard = self.shards[idx].write();
         let now_ms = monotonic_now_ms();

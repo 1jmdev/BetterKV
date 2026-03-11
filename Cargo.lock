@@ -144,21 +144,9 @@ version = "0.1.0"
 dependencies = [
  "bytes",
  "clap",
- "profiler",
  "protocol",
  "rustyline",
  "shlex",
- "tokio",
-]
-
-[[package]]
-name = "betterkv-prof"
-version = "0.1.0"
-dependencies = [
- "betterkv-server",
- "bytes",
- "clap",
- "protocol",
  "tokio",
 ]
 
@@ -178,7 +166,6 @@ dependencies = [
  "itoa",
  "lz4_flex",
  "parking_lot",
- "profiler",
  "protocol",
  "rand 0.10.0",
  "sha2",
@@ -414,7 +401,6 @@ dependencies = [
  "memchr",
  "mlua",
  "parking_lot",
- "profiler",
  "protocol",
  "ryu",
  "serde_json",
@@ -627,7 +613,6 @@ dependencies = [
  "indexmap",
  "itoa",
  "parking_lot",
- "profiler",
  "proptest",
  "rehash",
  "ryu",
@@ -1251,10 +1236,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "profiler"
-version = "0.1.0"
-
-[[package]]
 name = "proptest"
 version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1281,7 +1262,6 @@ dependencies = [
  "criterion",
  "itoa",
  "memchr",
- "profiler",
  "ryu",
  "smallvec",
  "thiserror",
@@ -1445,7 +1425,6 @@ dependencies = [
  "betterkv-alloc",
  "criterion",
  "getrandom 0.3.4",
- "profiler",
 ]
 
 [[package]]
@@ -1894,7 +1873,6 @@ dependencies = [
  "bytes",
  "hashbrown 0.16.1",
  "indexmap",
- "profiler",
  "serde_json",
 ]
 

@@ -15,7 +15,6 @@ pub(super) fn handle_acl_command(
     session: &SessionAuth,
     args: &[CompactArg],
 ) -> RespFrame {
-    let _trace = profiler::scope("server::auth::acl_command");
     if !session.is_authorized() {
         return no_auth();
     }

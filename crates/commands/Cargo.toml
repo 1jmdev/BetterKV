@@ -3,9 +3,6 @@ name = "commands"
 version.workspace = true
 edition.workspace = true
 
-[features]
-profiling = ["profiler/enabled"]
-
 [dev-dependencies]
 criterion.workspace = true
 
@@ -17,7 +14,6 @@ harness = false
 engine.workspace = true
 types.workspace = true
 protocol.workspace = true
-profiler.workspace = true
 ahash.workspace = true
 bytes.workspace = true
 memchr.workspace = true

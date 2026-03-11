@@ -9,7 +9,6 @@ use betterkv_server::backup;
 use betterkv_server::config::{Config, SnapshotCompression};
 use betterkv_server::connection;
 use betterkv_server::persistence::{PersistenceHandle, should_log_command};
-use betterkv_server::profile::ProfileHub;
 use commands::dispatch::CommandId;
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use engine::pubsub::PubSubHub;
@@ -140,7 +139,6 @@ impl ConnectionHarness {
             Err(error) => panic!("failed to build auth service: {error}"),
         };
         let persistence = PersistenceHandle::spawn(store.clone(), runtime_config);
-        let profiler = ProfileHub::disabled();
 
         let task = tokio::spawn(async move {
             let accepted = listener.accept().await;
@@ -155,7 +153,6 @@ impl ConnectionHarness {
                 pubsub,
                 auth,
                 persistence.clone(),
-                profiler,
             )
             .await
             {

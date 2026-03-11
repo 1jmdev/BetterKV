@@ -69,7 +69,6 @@ pub struct ReplHelper;
 
 impl ReplHelper {
     pub fn new() -> Self {
-        let _trace = profiler::scope("cli::repl::helper::new");
         Self
     }
 }
@@ -78,7 +77,6 @@ impl Completer for ReplHelper {
     type Candidate = Pair;
 
     fn complete(&self, line: &str, pos: usize, _: &Context<'_>) -> Result<(usize, Vec<Pair>)> {
-        let _trace = profiler::scope("cli::repl::helper::complete");
         let pos = pos.min(line.len());
         let prefix = &line[..pos];
         let start = prefix.rfind(char::is_whitespace).map_or(0, |idx| idx + 1);

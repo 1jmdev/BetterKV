@@ -6,7 +6,6 @@ use betterkv_server::config::Config;
 use crate::cli::runtime::parse_config_content_into;
 
 pub(crate) fn load_config_file_into(path: &str, config: &mut Config) -> Result<(), String> {
-    let _trace = profiler::scope("server::main::load_config_file_into");
     let mut visited = BTreeSet::new();
     load_file_recursive(Path::new(path), &mut visited, config)
 }
@@ -16,7 +15,6 @@ fn load_file_recursive(
     visited: &mut BTreeSet<PathBuf>,
     config: &mut Config,
 ) -> Result<(), String> {
-    let _trace = profiler::scope("server::main::load_file_recursive");
     let canonical = std::fs::canonicalize(path)
         .map_err(|err| format!("failed to read {}: {err}", path.display()))?;
     if !visited.insert(canonical.clone()) {

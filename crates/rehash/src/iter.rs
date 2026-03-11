@@ -5,7 +5,6 @@ pub struct Iter<'a, K, V> {
 
 impl<'a, K, V> Iter<'a, K, V> {
     pub(super) fn new(keys: &'a [K], values: &'a [V]) -> Self {
-        let _trace = profiler::scope("rehash::iter::new");
         Self {
             keys: keys.iter(),
             values: values.iter(),
@@ -18,7 +17,6 @@ impl<'a, K, V> Iterator for Iter<'a, K, V> {
 
     #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
-        let _trace = profiler::scope("rehash::iter::next");
         match (self.keys.next(), self.values.next()) {
             (Some(k), Some(v)) => Some((k, v)),
             _ => None,
@@ -27,7 +25,6 @@ impl<'a, K, V> Iterator for Iter<'a, K, V> {
 
     #[inline(always)]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let _trace = profiler::scope("rehash::iter::size_hint");
         self.keys.size_hint()
     }
 }

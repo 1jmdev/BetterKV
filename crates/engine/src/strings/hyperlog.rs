@@ -20,7 +20,6 @@ pub enum HyperLogLogError {
 
 impl Store {
     pub fn pfadd(&self, key: &[u8], elements: &[CompactArg]) -> Result<i64, HyperLogLogError> {
-        let _trace = profiler::scope("engine::strings::hyperlog::pfadd");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
         let now_ms = monotonic_now_ms();
@@ -53,7 +52,6 @@ impl Store {
     }
 
     pub fn pfcount(&self, keys: &[CompactArg]) -> Result<i64, HyperLogLogError> {
-        let _trace = profiler::scope("engine::strings::hyperlog::pfcount");
         let mut union = HashSet::with_hasher(RandomState::new());
         for key in keys {
             let Some(value) = self
@@ -71,7 +69,6 @@ impl Store {
     }
 
     pub fn pfmerge(&self, destination: &[u8], keys: &[CompactArg]) -> Result<(), HyperLogLogError> {
-        let _trace = profiler::scope("engine::strings::hyperlog::pfmerge");
         let mut union = HashSet::with_hasher(RandomState::new());
         if let Some(value) = self
             .get(destination)
@@ -100,14 +97,12 @@ impl Store {
 }
 
 fn hash_element(value: &[u8]) -> u64 {
-    let _trace = profiler::scope("engine::strings::hyperlog::hash_element");
     let mut hasher = DefaultHasher::new();
     value.hash(&mut hasher);
     hasher.finish()
 }
 
 fn encode_hll(entries: &HashSet<u64, RandomState>) -> Vec<u8> {
-    let _trace = profiler::scope("engine::strings::hyperlog::encode_hll");
     let mut values: Vec<u64> = entries.iter().copied().collect();
     values.sort_unstable();
 
@@ -121,7 +116,6 @@ fn encode_hll(entries: &HashSet<u64, RandomState>) -> Vec<u8> {
 }
 
 fn decode_hll(raw: &[u8]) -> Option<HashSet<u64, RandomState>> {
-    let _trace = profiler::scope("engine::strings::hyperlog::decode_hll");
     if raw.is_empty() {
         return Some(HashSet::with_hasher(RandomState::new()));
     }

@@ -75,22 +75,18 @@ pub enum Entry {
 
 impl Entry {
     pub fn from_slice(value: &[u8]) -> Self {
-        let _trace = profiler::scope("crates::types::src::value::from_slice");
         Self::String(CompactValue::from_slice(value))
     }
 
     pub fn new(value: Vec<u8>) -> Self {
-        let _trace = profiler::scope("crates::types::src::value::new");
         Self::String(CompactValue::from_vec(value))
     }
 
     pub fn empty_hash() -> Self {
-        let _trace = profiler::scope("crates::types::src::value::empty_hash");
         Self::Hash(Box::new(HashValue::new()))
     }
 
     pub fn as_string(&self) -> Option<&CompactValue> {
-        let _trace = profiler::scope("crates::types::src::value::as_string");
         match self {
             Self::String(value) => Some(value),
             Self::Hash(_)
@@ -104,7 +100,6 @@ impl Entry {
     }
 
     pub fn into_string(self) -> Option<CompactValue> {
-        let _trace = profiler::scope("crates::types::src::value::into_string");
         match self {
             Self::String(value) => Some(value),
             Self::Hash(_)
@@ -118,7 +113,6 @@ impl Entry {
     }
 
     pub fn as_hash(&self) -> Option<&HashValueMap> {
-        let _trace = profiler::scope("crates::types::src::value::as_hash");
         match self {
             Self::Hash(value) => Some(value.map()),
             Self::String(_)
@@ -132,7 +126,6 @@ impl Entry {
     }
 
     pub fn as_hash_mut(&mut self) -> Option<&mut HashValueMap> {
-        let _trace = profiler::scope("crates::types::src::value::as_hash_mut");
         match self {
             Self::Hash(value) => Some(value.map_mut()),
             Self::String(_) => None,
@@ -146,7 +139,6 @@ impl Entry {
     }
 
     pub fn as_list(&self) -> Option<&ListValue> {
-        let _trace = profiler::scope("crates::types::src::value::as_list");
         match self {
             Self::List(value) => Some(value),
             Self::String(_)
@@ -160,7 +152,6 @@ impl Entry {
     }
 
     pub fn as_list_mut(&mut self) -> Option<&mut ListValue> {
-        let _trace = profiler::scope("crates::types::src::value::as_list_mut");
         match self {
             Self::List(value) => Some(value),
             Self::String(_)
@@ -174,7 +165,6 @@ impl Entry {
     }
 
     pub fn as_set(&self) -> Option<&SetValue> {
-        let _trace = profiler::scope("crates::types::src::value::as_set");
         match self {
             Self::Set(value) => Some(value),
             Self::String(_)
@@ -188,7 +178,6 @@ impl Entry {
     }
 
     pub fn as_set_mut(&mut self) -> Option<&mut SetValue> {
-        let _trace = profiler::scope("crates::types::src::value::as_set_mut");
         match self {
             Self::Set(value) => Some(value),
             Self::String(_)
@@ -202,7 +191,6 @@ impl Entry {
     }
 
     pub fn as_zset(&self) -> Option<&ZSetValueMap> {
-        let _trace = profiler::scope("crates::types::src::value::as_zset");
         match self {
             Self::ZSet(value) => Some(value),
             Self::String(_)
@@ -216,7 +204,6 @@ impl Entry {
     }
 
     pub fn as_zset_mut(&mut self) -> Option<&mut ZSetValueMap> {
-        let _trace = profiler::scope("crates::types::src::value::as_zset_mut");
         match self {
             Self::ZSet(value) => Some(value),
             Self::String(_)
@@ -230,7 +217,6 @@ impl Entry {
     }
 
     pub fn as_geo(&self) -> Option<&GeoValue> {
-        let _trace = profiler::scope("crates::types::src::value::as_geo");
         match self {
             Self::Geo(value) => Some(value),
             Self::String(_)
@@ -244,7 +230,6 @@ impl Entry {
     }
 
     pub fn as_geo_mut(&mut self) -> Option<&mut GeoValue> {
-        let _trace = profiler::scope("crates::types::src::value::as_geo_mut");
         match self {
             Self::Geo(value) => Some(value),
             Self::String(_)
@@ -258,7 +243,6 @@ impl Entry {
     }
 
     pub fn as_stream(&self) -> Option<&StreamValue> {
-        let _trace = profiler::scope("crates::types::src::value::as_stream");
         match self {
             Self::Stream(value) => Some(value),
             Self::String(_)
@@ -272,7 +256,6 @@ impl Entry {
     }
 
     pub fn hash_getall_cache(&self) -> Option<&Bytes> {
-        let _trace = profiler::scope("crates::types::src::value::hash_getall_cache");
         match self {
             Self::Hash(value) => value.getall_cache(),
             Self::String(_)
@@ -286,7 +269,6 @@ impl Entry {
     }
 
     pub fn set_hash_getall_cache(&mut self, encoded: Bytes) -> bool {
-        let _trace = profiler::scope("crates::types::src::value::set_hash_getall_cache");
         match self {
             Self::Hash(value) => {
                 value.set_getall_cache(encoded);
@@ -303,14 +285,12 @@ impl Entry {
     }
 
     pub fn invalidate_hash_getall_cache(&mut self) {
-        let _trace = profiler::scope("crates::types::src::value::invalidate_hash_getall_cache");
         if let Self::Hash(value) = self {
             value.invalidate_getall_cache();
         }
     }
 
     pub fn as_stream_mut(&mut self) -> Option<&mut StreamValue> {
-        let _trace = profiler::scope("crates::types::src::value::as_stream_mut");
         match self {
             Self::Stream(value) => Some(value),
             Self::String(_)
@@ -324,7 +304,6 @@ impl Entry {
     }
 
     pub fn as_json(&self) -> Option<&JsonValue> {
-        let _trace = profiler::scope("crates::types::src::value::as_json");
         match self {
             Self::Json(value) => Some(value),
             Self::String(_)
@@ -338,7 +317,6 @@ impl Entry {
     }
 
     pub fn as_json_mut(&mut self) -> Option<&mut JsonValue> {
-        let _trace = profiler::scope("crates::types::src::value::as_json_mut");
         match self {
             Self::Json(value) => Some(value),
             Self::String(_)
@@ -352,7 +330,6 @@ impl Entry {
     }
 
     pub fn kind(&self) -> &'static str {
-        let _trace = profiler::scope("crates::types::src::value::kind");
         match self {
             Self::String(_) => "string",
             Self::Hash(_) => "hash",

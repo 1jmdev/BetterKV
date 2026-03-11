@@ -10,7 +10,6 @@ pub(super) enum CompiledPattern<'a> {
 
 impl<'a> CompiledPattern<'a> {
     pub(super) fn new(pattern: Option<&'a [u8]>) -> Self {
-        let _trace = profiler::scope("engine::pattern::compiled_new");
         let Some(pattern) = pattern else {
             return Self::Any;
         };
@@ -58,7 +57,6 @@ impl<'a> CompiledPattern<'a> {
 }
 
 pub fn wildcard_match(pattern: &[u8], text: &[u8]) -> bool {
-    let _trace = profiler::scope("engine::pattern::wildcard_match");
     wildcard_match_from(pattern, 0, text, 0)
 }
 

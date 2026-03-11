@@ -28,7 +28,6 @@ fn random_next(state: &mut u64) -> u64 {
 
 impl Store {
     pub fn spop(&self, key: &[u8], count: usize) -> Result<Option<Vec<CompactKey>>, ()> {
-        let _trace = profiler::scope("engine::set::random::spop");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
         let now_ms = monotonic_now_ms();
@@ -85,7 +84,6 @@ impl Store {
     }
 
     pub fn srandmember(&self, key: &[u8], count: i64) -> Result<Option<Vec<CompactKey>>, ()> {
-        let _trace = profiler::scope("engine::set::random::srandmember");
         let idx = self.shard_index(key);
         let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();

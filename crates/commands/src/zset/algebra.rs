@@ -5,7 +5,6 @@ use engine::store::Store;
 use protocol::types::{BulkData, RespFrame};
 
 pub(crate) fn zop(store: &Store, args: &Args, command: &str) -> RespFrame {
-    let _trace = profiler::scope("commands::zset::algebra::zop");
     if args.len() < 3 {
         return wrong_args(command);
     }
@@ -64,7 +63,6 @@ pub(crate) fn zop(store: &Store, args: &Args, command: &str) -> RespFrame {
 }
 
 pub(crate) fn zop_store(store: &Store, args: &Args, command: &str) -> RespFrame {
-    let _trace = profiler::scope("commands::zset::algebra::zop_store");
     if args.len() < 4 {
         return wrong_args(command);
     }

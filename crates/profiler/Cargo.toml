@@ -1,7 +1,0 @@
-[package]
-name = "profiler"
-version.workspace = true
-edition.workspace = true
-
-[features]
-enabled = []

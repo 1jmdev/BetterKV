@@ -4,13 +4,11 @@ members = [
     "crates/rehash",
     "crates/protocol",
     "crates/types",
-    "crates/profiler",
     "crates/engine",
     "crates/commands",
     "crates/server",
     "crates/cli",
     "crates/benchmark-cli",
-    "crates/prof-cli",
     "crates/test-cli",
 ]
 resolver = "3"
@@ -19,24 +17,11 @@ resolver = "3"
 version = "0.1.0"
 edition = "2024"
 
-[workspace.features]
-profiling = [
-    "benchmark-cli/profiling",
-    "cli/profiling",
-    "commands/profiling",
-    "engine/profiling",
-    "protocol/profiling",
-    "rehash/profiling",
-    "server/profiling",
-    "types/profiling",
-]
-
 [workspace.dependencies]
 betterkv-alloc = { path = "crates/alloc" }
 rehash   = { path = "crates/rehash" }
 protocol = { path = "crates/protocol" }
 types    = { path = "crates/types" }
-profiler = { path = "crates/profiler" }
 engine   = { path = "crates/engine" }
 commands = { path = "crates/commands" }
 betterkv-server = { path = "crates/server" }

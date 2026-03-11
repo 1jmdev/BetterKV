@@ -12,28 +12,24 @@ pub(super) struct AuthState {
 
 impl AuthState {
     pub(super) fn new() -> Self {
-        let _trace = profiler::scope("server::auth::state_new");
         let mut users = BTreeMap::new();
         users.insert(DEFAULT_USER.to_string(), User::default());
         Self { users }
     }
 
     pub(super) fn default_user_has_password(&self) -> bool {
-        let _trace = profiler::scope("server::auth::default_user_has_password");
         self.users
             .get(DEFAULT_USER)
             .is_some_and(|user| !user.nopass && !user.password_hashes.is_empty())
     }
 
     pub(super) fn default_user_auto_auth(&self) -> bool {
-        let _trace = profiler::scope("server::auth::default_user_auto_auth");
         self.users
             .get(DEFAULT_USER)
             .is_some_and(|user| user.enabled && user.nopass)
     }
 
     pub(super) fn set_user(&mut self, username: &str, rules: &[String]) -> Result<(), String> {
-        let _trace = profiler::scope("server::auth::set_user");
         let user = self
             .users
             .entry(username.to_string())

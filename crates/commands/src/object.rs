@@ -7,7 +7,6 @@ const OBJECT_FREQ_DISABLED: &str =
     "ERR An LFU maxmemory policy is not selected, access frequency not tracked.";
 
 pub(crate) fn object(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::object::object");
     if args.len() != 3 {
         return wrong_args("OBJECT");
     }

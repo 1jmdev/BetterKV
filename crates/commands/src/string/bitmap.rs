@@ -3,7 +3,6 @@ use engine::store::{BitFieldEncoding, BitFieldOp, BitFieldOverflow, BitOp, Store
 use protocol::types::RespFrame;
 
 pub(crate) fn getbit(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::string::bitmap::getbit");
     if args.len() != 3 {
         return wrong_args("GETBIT");
     }
@@ -19,7 +18,6 @@ pub(crate) fn getbit(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn setbit(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::string::bitmap::setbit");
     if args.len() != 4 {
         return wrong_args("SETBIT");
     }
@@ -42,7 +40,6 @@ pub(crate) fn setbit(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn bitcount(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::string::bitmap::bitcount");
     if args.len() != 2 && args.len() != 4 && args.len() != 5 {
         return wrong_args("BITCOUNT");
     }
@@ -75,7 +72,6 @@ pub(crate) fn bitcount(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn bitpos(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::string::bitmap::bitpos");
     if !(3..=6).contains(&args.len()) {
         return wrong_args("BITPOS");
     }
@@ -117,7 +113,6 @@ pub(crate) fn bitpos(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn bitop(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::string::bitmap::bitop");
     if args.len() < 4 {
         return wrong_args("BITOP");
     }
@@ -148,17 +143,14 @@ pub(crate) fn bitop(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn bitfield(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::string::bitmap::bitfield");
     bitfield_impl(store, args, false)
 }
 
 pub(crate) fn bitfield_ro(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::string::bitmap::bitfield_ro");
     bitfield_impl(store, args, true)
 }
 
 fn bitfield_impl(store: &Store, args: &Args, read_only: bool) -> RespFrame {
-    let _trace = profiler::scope("commands::string::bitmap::bitfield_impl");
     if args.len() < 2 {
         return wrong_args(if read_only { "BITFIELD_RO" } else { "BITFIELD" });
     }
@@ -299,7 +291,6 @@ fn parse_non_negative_usize(raw: &[u8], err: RespFrame) -> Result<usize, RespFra
 }
 
 fn parse_bit(raw: &[u8]) -> Result<u8, RespFrame> {
-    let _trace = profiler::scope("commands::string::bitmap::parse_bit");
     match raw {
         b"0" => Ok(0),
         b"1" => Ok(1),
@@ -310,7 +301,6 @@ fn parse_bit(raw: &[u8]) -> Result<u8, RespFrame> {
 }
 
 fn parse_index_unit(raw: &[u8]) -> Result<bool, RespFrame> {
-    let _trace = profiler::scope("commands::string::bitmap::parse_index_unit");
     if raw.eq_ignore_ascii_case(b"BYTE") {
         Ok(false)
     } else if raw.eq_ignore_ascii_case(b"BIT") {
@@ -321,7 +311,6 @@ fn parse_index_unit(raw: &[u8]) -> Result<bool, RespFrame> {
 }
 
 fn parse_bitfield_encoding(raw: &[u8]) -> Result<BitFieldEncoding, RespFrame> {
-    let _trace = profiler::scope("commands::string::bitmap::parse_bitfield_encoding");
     if raw.len() < 2 {
         return Err(RespFrame::Error("ERR invalid bitfield type".to_string()));
     }
@@ -339,7 +328,6 @@ fn parse_bitfield_encoding(raw: &[u8]) -> Result<BitFieldEncoding, RespFrame> {
 }
 
 fn parse_bitfield_offset(raw: &[u8], encoding: BitFieldEncoding) -> Result<usize, RespFrame> {
-    let _trace = profiler::scope("commands::string::bitmap::parse_bitfield_offset");
     if let Some(rest) = raw.strip_prefix(b"#") {
         let stride = match encoding {
             BitFieldEncoding::Signed { bits } | BitFieldEncoding::Unsigned { bits } => bits as u64,

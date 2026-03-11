@@ -31,7 +31,6 @@ pub struct AuthService {
 
 impl AuthService {
     pub fn from_config(config: &Config) -> Result<Self, String> {
-        let _trace = profiler::scope("server::auth::from_config");
         let mut state = AuthState::new();
 
         if let Some(requirepass) = &config.requirepass {
@@ -63,7 +62,6 @@ impl AuthService {
     }
 
     pub fn new_session(&self) -> SessionAuth {
-        let _trace = profiler::scope("server::auth::new_session");
         let state = self.inner.read();
         if state.default_user_auto_auth() {
             let mut session = SessionAuth::auto_authorized();
@@ -77,7 +75,6 @@ impl AuthService {
     }
 
     pub fn is_authorized(&self, session: &SessionAuth) -> bool {
-        let _trace = profiler::scope("server::auth::is_authorized");
         session.is_authorized()
     }
 
@@ -86,7 +83,6 @@ impl AuthService {
         username: &[u8],
         password: &[u8],
     ) -> Result<AuthenticatedUser, AuthError> {
-        let _trace = profiler::scope("server::auth::authenticate");
         let username = std::str::from_utf8(username)
             .map_err(|_| AuthError::WrongPass)?
             .to_ascii_lowercase();
@@ -114,12 +110,10 @@ impl AuthService {
     }
 
     pub fn acl_command(&self, session: &SessionAuth, args: &[CompactArg]) -> RespFrame {
-        let _trace = profiler::scope("server::auth::acl_command");
         acl::handle_acl_command(&self.inner, &self.acl_epoch, session, args)
     }
 
     pub fn default_user_has_password(&self) -> bool {
-        let _trace = profiler::scope("server::auth::default_user_has_password");
         self.inner.read().default_user_has_password()
     }
 
@@ -129,7 +123,6 @@ impl AuthService {
     }
 
     pub fn refresh_session(&self, session: &mut SessionAuth, acl_epoch: u64) -> bool {
-        let _trace = profiler::scope("server::auth::refresh_session");
         let Some(username) = session.user() else {
             session.revoke();
             return false;
@@ -154,7 +147,6 @@ impl AuthService {
         command: CommandId,
         args: &[CompactArg],
     ) -> Result<(), PermissionError> {
-        let _trace = profiler::scope("server::auth::dry_run");
         let state = self.inner.read();
         let Some(user) = state.users.get(username) else {
             return Err(PermissionError::Command("ACL DRYRUN".to_string()));

@@ -149,7 +149,6 @@ fn script_runtime() -> &'static ScriptRuntimeSync {
 
 impl Drop for ScriptExecutionGuard {
     fn drop(&mut self) {
-        let _trace = profiler::scope("commands::scripting::ScriptExecutionGuard::drop");
         let runtime = script_runtime();
         let mut state = runtime.state.lock();
         state
@@ -159,17 +158,14 @@ impl Drop for ScriptExecutionGuard {
 }
 
 pub(crate) fn eval(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::scripting::eval");
     eval_impl(store, args, false, "EVAL")
 }
 
 pub(crate) fn eval_ro(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::scripting::eval_ro");
     eval_impl(store, args, true, "EVAL_RO")
 }
 
 fn eval_impl(store: &Store, args: &Args, readonly: bool, command: &str) -> RespFrame {
-    let _trace = profiler::scope("commands::scripting::eval_impl");
     if args.len() < 3 {
         return wrong_args(command);
     }
@@ -192,17 +188,14 @@ fn eval_impl(store: &Store, args: &Args, readonly: bool, command: &str) -> RespF
 }
 
 pub(crate) fn evalsha(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::scripting::evalsha");
     evalsha_impl(store, args, false, "EVALSHA")
 }
 
 pub(crate) fn evalsha_ro(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::scripting::evalsha_ro");
     evalsha_impl(store, args, true, "EVALSHA_RO")
 }
 
 fn evalsha_impl(store: &Store, args: &Args, readonly: bool, command: &str) -> RespFrame {
-    let _trace = profiler::scope("commands::scripting::evalsha_impl");
     if args.len() < 3 {
         return wrong_args(command);
     }
@@ -228,7 +221,6 @@ fn evalsha_impl(store: &Store, args: &Args, readonly: bool, command: &str) -> Re
 }
 
 pub(crate) fn script(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::scripting::script");
     if args.len() < 2 {
         return wrong_args("SCRIPT");
     }
@@ -341,7 +333,6 @@ fn parse_numkeys(raw: &[u8]) -> Result<usize, RespFrame> {
 }
 
 fn begin_script_execution() -> Result<ScriptExecutionGuard, RespFrame> {
-    let _trace = profiler::scope("commands::scripting::begin_script_execution");
     let runtime = script_runtime();
     let mut spins = 0usize;
     let permit = loop {
@@ -381,7 +372,6 @@ fn begin_script_execution() -> Result<ScriptExecutionGuard, RespFrame> {
 }
 
 fn script_kill() -> RespFrame {
-    let _trace = profiler::scope("commands::scripting::script_kill");
     let runtime = script_runtime();
     let state = runtime.state.lock();
     if state.running.is_empty() {
@@ -411,7 +401,6 @@ fn run_lua_script(
     digest: &[u8],
     readonly: bool,
 ) -> RespFrame {
-    let _trace = profiler::scope("commands::scripting::run_lua_script");
     match prepare_fast_script(script, digest) {
         Ok(Some(fast_script)) => {
             return fast_script_response(store, keys, argv, readonly, digest, fast_script);
@@ -518,7 +507,6 @@ fn execute_lua(
     readonly: bool,
     execution: &ScriptExecutionGuard,
 ) -> Result<RespFrame, String> {
-    let _trace = profiler::scope("commands::scripting::execute_lua");
     LUA_RUNTIME.with(|runtime| {
         let mut runtime = runtime.borrow_mut();
         let runtime = runtime.as_mut().map_err(|error| error.clone())?;
@@ -669,7 +657,6 @@ fn create_redis_lua_function(lua: &Lua, protected: bool) -> mlua::Result<mlua::F
 }
 
 fn write_lua_args_table(lua: &Lua, table: &mut Table, args: &[CompactArg]) -> mlua::Result<()> {
-    let _trace = profiler::scope("commands::scripting::build_lua_args_table");
     let previous_len = table.raw_len();
     for (idx, arg) in args.iter().enumerate() {
         table.raw_set(idx + 1, lua.create_string(arg.as_slice())?)?;
@@ -692,7 +679,6 @@ fn execute_redis_call(
     readonly: bool,
     wrote: &Arc<AtomicBool>,
 ) -> mlua::Result<Value> {
-    let _trace = profiler::scope("commands::scripting::execute_redis_call");
     if values.is_empty() {
         return Err(mlua::Error::RuntimeError(
             "ERR wrong number of arguments for 'redis.call' command".to_string(),
@@ -748,7 +734,6 @@ fn execute_redis_call(
 }
 
 fn redis_call_error(lua: &Lua, protected: bool, message: &str) -> mlua::Result<Value> {
-    let _trace = profiler::scope("commands::scripting::redis_call_error");
     if protected {
         let table = lua.create_table()?;
         table.set("err", lua.create_string(message.as_bytes())?)?;
@@ -759,12 +744,10 @@ fn redis_call_error(lua: &Lua, protected: bool, message: &str) -> mlua::Result<V
 }
 
 fn is_write_command(command: &[u8]) -> bool {
-    let _trace = profiler::scope("commands::scripting::is_write_command");
     is_write_command_id(identify(command))
 }
 
 fn lua_value_to_arg(value: Value) -> mlua::Result<CompactArg> {
-    let _trace = profiler::scope("commands::scripting::lua_value_to_arg");
     let bytes = match value {
         Value::String(value) => value.as_bytes().to_vec(),
         Value::Integer(value) => value.to_string().into_bytes(),
@@ -794,7 +777,6 @@ fn lua_value_to_arg(value: Value) -> mlua::Result<CompactArg> {
 }
 
 fn resp_frame_to_lua(lua: &Lua, frame: RespFrame, protected: bool) -> mlua::Result<Value> {
-    let _trace = profiler::scope("commands::scripting::resp_frame_to_lua");
     match frame {
         RespFrame::Simple(value) => {
             let table = lua.create_table()?;
@@ -866,7 +848,6 @@ fn resp_frame_to_lua(lua: &Lua, frame: RespFrame, protected: bool) -> mlua::Resu
 }
 
 fn lua_value_to_resp(value: Value) -> Result<RespFrame, String> {
-    let _trace = profiler::scope("commands::scripting::lua_value_to_resp");
     match value {
         Value::Nil => Ok(RespFrame::Bulk(None)),
         Value::Boolean(flag) => {
@@ -917,7 +898,6 @@ fn lua_value_to_resp(value: Value) -> Result<RespFrame, String> {
 }
 
 fn lua_error_to_string(error: mlua::Error) -> String {
-    let _trace = profiler::scope("commands::scripting::lua_error_to_string");
     error.to_string()
 }
 

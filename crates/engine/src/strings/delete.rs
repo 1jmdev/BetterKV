@@ -17,7 +17,6 @@ impl Store {
         key: &[u8],
         condition: Option<StringDigestCondition<'_>>,
     ) -> Result<bool, ()> {
-        let _trace = profiler::scope("engine::strings::delete::delex");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
         let now_ms = monotonic_now_ms();

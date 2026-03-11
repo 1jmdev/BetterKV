@@ -3,7 +3,6 @@ use engine::store::Store;
 use protocol::types::{BulkData, RespFrame};
 
 pub(crate) fn lpush(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::list::core::lpush");
     if args.len() < 3 {
         return wrong_args("LPUSH");
     }
@@ -14,7 +13,6 @@ pub(crate) fn lpush(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn lpushx(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::list::core::lpushx");
     if args.len() < 3 {
         return wrong_args("LPUSHX");
     }
@@ -25,7 +23,6 @@ pub(crate) fn lpushx(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn rpush(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::list::core::rpush");
     if args.len() < 3 {
         return wrong_args("RPUSH");
     }
@@ -36,7 +33,6 @@ pub(crate) fn rpush(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn rpushx(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::list::core::rpushx");
     if args.len() < 3 {
         return wrong_args("RPUSHX");
     }
@@ -47,17 +43,14 @@ pub(crate) fn rpushx(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn lpop(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::list::core::lpop");
     pop(store, args, true)
 }
 
 pub(crate) fn rpop(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::list::core::rpop");
     pop(store, args, false)
 }
 
 fn pop(store: &Store, args: &Args, left: bool) -> RespFrame {
-    let _trace = profiler::scope("commands::list::core::pop");
     if args.len() != 2 && args.len() != 3 {
         return wrong_args(if left { "LPOP" } else { "RPOP" });
     }
@@ -92,7 +85,6 @@ fn pop(store: &Store, args: &Args, left: bool) -> RespFrame {
 }
 
 pub(crate) fn llen(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::list::core::llen");
     if args.len() != 2 {
         return wrong_args("LLEN");
     }
@@ -103,7 +95,6 @@ pub(crate) fn llen(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn lrem(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::list::core::lrem");
     if args.len() != 4 {
         return wrong_args("LREM");
     }

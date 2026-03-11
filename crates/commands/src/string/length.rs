@@ -3,7 +3,6 @@ use engine::store::Store;
 use protocol::types::{BulkData, RespFrame};
 
 pub(crate) fn append(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::string::length::append");
     if args.len() != 3 {
         return wrong_args("APPEND");
     }
@@ -14,7 +13,6 @@ pub(crate) fn append(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn strlen(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::string::length::strlen");
     if args.len() != 2 {
         return wrong_args("STRLEN");
     }
@@ -25,7 +23,6 @@ pub(crate) fn strlen(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn setrange(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::string::length::setrange");
     if args.len() != 4 {
         return wrong_args("SETRANGE");
     }
@@ -41,7 +38,6 @@ pub(crate) fn setrange(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn getrange(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::string::length::getrange");
     if args.len() != 4 {
         return wrong_args("GETRANGE");
     }
@@ -61,7 +57,6 @@ pub(crate) fn getrange(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn substr(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::string::length::substr");
     if args.len() != 4 {
         return wrong_args("SUBSTR");
     }

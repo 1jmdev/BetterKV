@@ -6,7 +6,6 @@ use engine::store::Store;
 use protocol::types::{BulkData, RespFrame};
 
 pub(crate) fn sscan(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::set::scan::sscan");
     if args.len() < 3 {
         return wrong_args("SSCAN");
     }
@@ -59,7 +58,6 @@ fn parse_u64(raw: &[u8]) -> Result<u64, RespFrame> {
 }
 
 fn parse_usize(raw: &[u8]) -> Result<usize, RespFrame> {
-    let _trace = profiler::scope("commands::set::scan::parse_usize");
     let value = parse_u64(raw)?;
     usize::try_from(value).map_err(|_| int_error())
 }

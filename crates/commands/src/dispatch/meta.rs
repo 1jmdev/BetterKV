@@ -80,7 +80,6 @@ impl AclCategory {
     }
 
     pub fn parse(value: &str) -> Result<Self, String> {
-        let _trace = profiler::scope("commands::dispatch::parse_acl_category");
         match value.to_ascii_lowercase().as_str() {
             "all" => Ok(Self::All),
             "admin" => Ok(Self::Admin),

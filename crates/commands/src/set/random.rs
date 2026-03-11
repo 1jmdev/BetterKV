@@ -3,7 +3,6 @@ use engine::store::Store;
 use protocol::types::{BulkData, RespFrame};
 
 pub(crate) fn spop(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::set::random::spop");
     if args.len() != 2 && args.len() != 3 {
         return wrong_args("SPOP");
     }
@@ -31,7 +30,6 @@ pub(crate) fn spop(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn srandmember(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::set::random::srandmember");
     if args.len() != 2 && args.len() != 3 {
         return wrong_args("SRANDMEMBER");
     }

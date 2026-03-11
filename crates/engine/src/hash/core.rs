@@ -58,7 +58,6 @@ fn encode_hgetall_map(map: &HashValueMap) -> bytes::Bytes {
 
 impl Store {
     pub fn hset_args(&self, key: &[u8], pairs: &[CompactArg]) -> Result<i64, ()> {
-        let _trace = profiler::scope("engine::hash::core::hset_args");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
         let now_ms = monotonic_now_ms();
@@ -91,7 +90,6 @@ impl Store {
     }
 
     pub fn hset(&self, key: &[u8], pairs: &[(CompactArg, CompactArg)]) -> Result<i64, ()> {
-        let _trace = profiler::scope("engine::hash::core::hset");
         if pairs.is_empty() {
             return Ok(0);
         }
@@ -106,7 +104,6 @@ impl Store {
     }
 
     pub fn hsetnx(&self, key: &[u8], field: &[u8], value: &[u8]) -> Result<i64, ()> {
-        let _trace = profiler::scope("engine::hash::core::hsetnx");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
         let now_ms = monotonic_now_ms();
@@ -131,7 +128,6 @@ impl Store {
     }
 
     pub fn hget(&self, key: &[u8], field: &[u8]) -> Result<Option<CompactValue>, ()> {
-        let _trace = profiler::scope("engine::hash::core::hget");
         let idx = self.shard_index(key);
         let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
@@ -147,7 +143,6 @@ impl Store {
         key: &[u8],
         fields: &[CompactArg],
     ) -> Result<Vec<Option<CompactValue>>, ()> {
-        let _trace = profiler::scope("engine::hash::core::hmget");
         let idx = self.shard_index(key);
         let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
@@ -163,7 +158,6 @@ impl Store {
     }
 
     pub fn hgetall(&self, key: &[u8]) -> Result<Vec<(CompactKey, CompactValue)>, ()> {
-        let _trace = profiler::scope("engine::hash::core::hgetall");
         let idx = self.shard_index(key);
         let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
@@ -175,7 +169,6 @@ impl Store {
     }
 
     pub fn hgetall_encode(&self, key: &[u8]) -> Result<bytes::Bytes, ()> {
-        let _trace = profiler::scope("engine::hash::core::hgetall_encode");
         let idx = self.shard_index(key);
         {
             let shard = self.shards[idx].read();
@@ -208,7 +201,6 @@ impl Store {
     }
 
     pub fn hdel(&self, key: &[u8], fields: &[CompactArg]) -> Result<i64, ()> {
-        let _trace = profiler::scope("engine::hash::core::hdel");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
         let now_ms = monotonic_now_ms();
@@ -235,24 +227,20 @@ impl Store {
     }
 
     pub fn hexists(&self, key: &[u8], field: &[u8]) -> Result<i64, ()> {
-        let _trace = profiler::scope("engine::hash::core::hexists");
         Ok(self.hget(key, field)?.is_some() as i64)
     }
 
     pub fn hkeys(&self, key: &[u8]) -> Result<Vec<CompactKey>, ()> {
-        let _trace = profiler::scope("engine::hash::core::hkeys");
         let pairs = self.hgetall(key)?;
         Ok(pairs.into_iter().map(|(field, _)| field).collect())
     }
 
     pub fn hvals(&self, key: &[u8]) -> Result<Vec<CompactValue>, ()> {
-        let _trace = profiler::scope("engine::hash::core::hvals");
         let pairs = self.hgetall(key)?;
         Ok(pairs.into_iter().map(|(_, value)| value).collect())
     }
 
     pub fn hlen(&self, key: &[u8]) -> Result<i64, ()> {
-        let _trace = profiler::scope("engine::hash::core::hlen");
         let idx = self.shard_index(key);
         let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
@@ -264,7 +252,6 @@ impl Store {
     }
 
     pub fn hstrlen(&self, key: &[u8], field: &[u8]) -> Result<usize, ()> {
-        let _trace = profiler::scope("engine::hash::core::hstrlen");
         Ok(self.hget(key, field)?.map(|value| value.len()).unwrap_or(0))
     }
 }

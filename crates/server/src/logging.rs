@@ -8,7 +8,6 @@ pub struct LoggingGuard {
 }
 
 pub fn init_logging(config: &Config) -> Result<LoggingGuard, String> {
-    let _trace = profiler::scope("server::logging::init_logging");
     let max_level = parse_level(&config.log_level)?;
 
     if let Some(log_file) = &config.log_file {
@@ -53,7 +52,6 @@ pub fn init_logging(config: &Config) -> Result<LoggingGuard, String> {
 }
 
 fn parse_level(raw: &str) -> Result<tracing::Level, String> {
-    let _trace = profiler::scope("server::logging::parse_level");
     match raw.to_ascii_lowercase().as_str() {
         "trace" => Ok(tracing::Level::TRACE),
         "debug" => Ok(tracing::Level::DEBUG),

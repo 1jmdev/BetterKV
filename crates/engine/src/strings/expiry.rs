@@ -5,7 +5,6 @@ use crate::store::{GetExMode, Store};
 
 impl Store {
     pub fn getex(&self, key: &[u8], mode: GetExMode) -> Result<Option<Vec<u8>>, ()> {
-        let _trace = profiler::scope("engine::strings::expiry::getex");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
         let now_ms = monotonic_now_ms();
@@ -45,7 +44,6 @@ impl Store {
 }
 
 fn apply_getex_absolute_deadline(shard: &mut super::super::Shard, key: &[u8], timestamp_ms: u64) {
-    let _trace = profiler::scope("engine::strings::expiry::apply_getex_absolute_deadline");
     let now_unix_ms = unix_time_ms();
     if timestamp_ms <= now_unix_ms {
         let _ = shard.remove_key(key);

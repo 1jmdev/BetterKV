@@ -199,7 +199,6 @@ pub struct Shard {
 
 impl Shard {
     fn new() -> Self {
-        let _trace = profiler::scope("engine::lib::new");
         Self {
             entries: RehashingMap::with_capacity(256),
             expirations: RehashingMap::with_capacity(64),
@@ -233,7 +232,6 @@ impl Shard {
 
     #[inline]
     pub fn set_ttl(&mut self, key: &[u8], deadline: u64) -> bool {
-        let _trace = profiler::scope("engine::lib::set_ttl");
         if !self.entries.contains_key(key) {
             return false;
         }
@@ -250,7 +248,6 @@ impl Shard {
 
     #[inline]
     pub fn set_ttl_existing(&mut self, key: &[u8], deadline: u64) -> bool {
-        let _trace = profiler::scope("engine::lib::set_ttl_existing");
         if self
             .expirations
             .insert(CompactKey::from_slice(key), deadline)
@@ -263,7 +260,6 @@ impl Shard {
     }
 
     pub fn clear_ttl(&mut self, key: &[u8]) -> Option<u64> {
-        let _trace = profiler::scope("engine::lib::clear_ttl");
         if self.ttl_count == 0 {
             return None;
         }
@@ -278,7 +274,6 @@ impl Shard {
     }
 
     pub fn insert_entry(&mut self, key: CompactKey, entry: Entry, deadline: Option<u64>) {
-        let _trace = profiler::scope("engine::lib::insert_entry");
         if self
             .entries
             .insert(key.clone(), StoredEntry::new(entry))
@@ -299,7 +294,6 @@ impl Shard {
     }
 
     pub fn remove_key(&mut self, key: &[u8]) -> Option<Entry> {
-        let _trace = profiler::scope("engine::lib::remove_key");
         let entry = self.entries.remove(key)?;
         if self.ttl_count != 0 && self.expirations.remove(key).is_some() {
             self.ttl_count -= 1;
@@ -324,7 +318,6 @@ pub struct Store {
 
 impl Store {
     pub fn new(shards: usize) -> Self {
-        let _trace = profiler::scope("engine::lib::new");
         let shard_count = shards.max(1).next_power_of_two();
         let mut shard_vec = Vec::with_capacity(shard_count);
 
@@ -345,7 +338,6 @@ impl Store {
 
     #[inline]
     pub fn with_command_gate<T>(&self, operation: impl FnOnce() -> T) -> T {
-        let _trace = profiler::scope("engine::lib::with_command_gate");
         loop {
             while self.writer_pending.load(Ordering::Acquire) {
                 spin_loop();
@@ -364,13 +356,11 @@ impl Store {
 
     #[inline]
     pub fn with_watch_gate<T>(&self, operation: impl FnOnce() -> T) -> T {
-        let _trace = profiler::scope("engine::lib::with_watch_gate");
         self.with_command_gate(operation)
     }
 
     #[inline]
     pub fn with_transaction_gate<T>(&self, operation: impl FnOnce() -> T) -> T {
-        let _trace = profiler::scope("engine::lib::with_transaction_gate");
         let _guard = self.transaction_gate.write();
         self.writer_pending.store(true, Ordering::Release);
         while self.active_commands.load(Ordering::Acquire) != 0 {
@@ -382,7 +372,6 @@ impl Store {
     }
 
     pub fn sweep_expired(&self) -> usize {
-        let _trace = profiler::scope("engine::lib::sweep_expired");
         let now_ms = helpers::monotonic_now_ms();
         let mut removed = 0;
         for shard in self.shards.iter() {
@@ -422,12 +411,10 @@ impl Store {
     }
 
     pub fn refresh_cached_time(&self) {
-        let _trace = profiler::scope("engine::lib::refresh_cached_time");
         helpers::refresh_monotonic_now_ms();
     }
 
     pub(crate) fn shard_index(&self, key: &[u8]) -> usize {
-        let _trace = profiler::scope("engine::lib::shard_index");
         let hash = self.hash_builder.hash_one(key);
         (hash as usize) & self.shard_mask
     }

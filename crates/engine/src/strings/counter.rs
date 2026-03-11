@@ -13,12 +13,10 @@ pub enum StringIntOpError {
 
 impl Store {
     pub fn incr(&self, key: &[u8]) -> Result<i64, StringIntOpError> {
-        let _trace = profiler::scope("engine::strings::counter::incr");
         self.incr_by(key, 1)
     }
 
     pub fn incr_by(&self, key: &[u8], delta: i64) -> Result<i64, StringIntOpError> {
-        let _trace = profiler::scope("engine::strings::counter::incr_by");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
         let now_ms = monotonic_now_ms();
@@ -59,7 +57,6 @@ impl Store {
     }
 
     pub fn incr_by_float(&self, key: &[u8], delta: f64) -> Result<f64, ()> {
-        let _trace = profiler::scope("engine::strings::counter::incr_by_float");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
         let now_ms = monotonic_now_ms();

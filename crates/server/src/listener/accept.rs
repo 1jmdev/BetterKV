@@ -8,7 +8,6 @@ use crate::auth::AuthService;
 use crate::connection::handle_connection;
 use crate::listener::ListenerResult;
 use crate::persistence::PersistenceHandle;
-use crate::profile::ProfileHub;
 use engine::pubsub::PubSubHub;
 use engine::store::Store;
 
@@ -18,9 +17,7 @@ pub(crate) async fn run_accept_loop(
     pubsub: PubSubHub,
     auth: AuthService,
     persistence: PersistenceHandle,
-    profiler: ProfileHub,
 ) -> ListenerResult {
-    let _trace = profiler::scope("server::listener::run_accept_loop");
     loop {
         let (socket, _) = listener.accept().await?;
         socket.set_nodelay(true)?;
@@ -29,7 +26,6 @@ pub(crate) async fn run_accept_loop(
         let shared_pubsub = pubsub.clone();
         let shared_auth = auth.clone();
         let shared_persistence = persistence.clone();
-        let shared_profiler = profiler.clone();
         tokio::spawn(async move {
             if let Err(err) = handle_connection(
                 socket,
@@ -37,7 +33,6 @@ pub(crate) async fn run_accept_loop(
                 shared_pubsub,
                 shared_auth,
                 shared_persistence,
-                shared_profiler,
             )
             .await
             {
@@ -51,7 +46,6 @@ pub(crate) async fn bind_reuse_port_listeners(
     bind_addr: String,
     io_threads: usize,
 ) -> Result<Vec<TcpListener>, io::Error> {
-    let _trace = profiler::scope("server::listener::bind_reuse_port_listeners");
     let mut addresses = tokio::net::lookup_host(bind_addr).await?;
     let Some(address) = addresses.next() else {
         return Err(io::Error::new(
@@ -70,7 +64,6 @@ pub(crate) async fn bind_reuse_port_listeners(
 }
 
 fn bind_single_listener(address: SocketAddr) -> Result<TcpListener, io::Error> {
-    let _trace = profiler::scope("server::listener::bind_single_listener");
     let domain = if address.is_ipv4() {
         Domain::IPV4
     } else {

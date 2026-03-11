@@ -6,7 +6,6 @@ use crate::cli::action::Cli;
 use crate::cli::config::load_config_file_into;
 
 pub(crate) fn run(cli: Cli) -> Result<(), String> {
-    let _trace = profiler::scope("server::main::run");
     let mut config = Config::default();
 
     if let Some(ref path) = cli.config {
@@ -122,7 +121,6 @@ pub(crate) fn run(cli: Cli) -> Result<(), String> {
 }
 
 fn load_stdin_into(config: &mut Config) -> Result<(), String> {
-    let _trace = profiler::scope("server::main::load_stdin_into");
     use std::io::Read;
     let mut content = String::new();
     std::io::stdin()
@@ -132,7 +130,6 @@ fn load_stdin_into(config: &mut Config) -> Result<(), String> {
 }
 
 pub(crate) fn parse_config_content_into(content: &str, config: &mut Config) -> Result<(), String> {
-    let _trace = profiler::scope("server::main::parse_config_content_into");
     use betterkv_server::auth::parse_user_directive;
 
     for line in content.lines() {
@@ -239,7 +236,6 @@ pub(crate) fn parse_config_content_into(content: &str, config: &mut Config) -> R
 }
 
 fn parse_save_rules(values: &[String]) -> Result<Vec<SaveRule>, String> {
-    let _trace = profiler::scope("server::main::parse_save_rules");
     if values.is_empty() {
         return Ok(Vec::new());
     }

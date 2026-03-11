@@ -5,7 +5,6 @@ pub struct UserDirectiveConfig {
 }
 
 pub fn parse_user_directive(values: &[String]) -> Result<UserDirectiveConfig, String> {
-    let _trace = profiler::scope("server::auth::parse_user_directive");
     if values.is_empty() {
         return Err("directive 'user' requires at least a username".to_string());
     }

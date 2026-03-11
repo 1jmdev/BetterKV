@@ -3,7 +3,6 @@ use engine::store::Store;
 use protocol::types::{BulkData, RespFrame};
 
 pub(crate) fn lcs(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::string::lcs::lcs");
     if args.len() < 3 {
         return wrong_args("LCS");
     }

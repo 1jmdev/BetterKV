@@ -3,12 +3,8 @@ name = "rehash"
 version.workspace = true
 edition.workspace = true
 
-[features]
-profiling = ["profiler/enabled"]
-
 [dependencies]
 betterkv-alloc.workspace = true
-profiler.workspace = true
 getrandom = "0.3"
 
 [dev-dependencies]

@@ -3,7 +3,6 @@ use engine::store::{Store, StringIntOpError};
 use protocol::types::{BulkData, RespFrame};
 
 pub(crate) fn incr(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::string::counter::incr");
     if args.len() != 2 {
         return wrong_args("INCR");
     }
@@ -18,7 +17,6 @@ pub(crate) fn incr(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn incrby(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::string::counter::incrby");
     if args.len() != 3 {
         return wrong_args("INCRBY");
     }
@@ -38,7 +36,6 @@ pub(crate) fn incrby(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn decr(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::string::counter::decr");
     if args.len() != 2 {
         return wrong_args("DECR");
     }
@@ -53,7 +50,6 @@ pub(crate) fn decr(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn incrbyfloat(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::string::counter::incrbyfloat");
     if args.len() != 3 {
         return wrong_args("INCRBYFLOAT");
     }
@@ -72,7 +68,6 @@ pub(crate) fn incrbyfloat(store: &Store, args: &Args) -> RespFrame {
 }
 
 pub(crate) fn decrby(store: &Store, args: &Args) -> RespFrame {
-    let _trace = profiler::scope("commands::string::counter::decrby");
     if args.len() != 3 {
         return wrong_args("DECRBY");
     }

@@ -11,7 +11,6 @@ pub(super) fn emit_command_notifications(
     args: &[CompactArg],
     response: &RespFrame,
 ) {
-    let _trace = profiler::scope("server::connection::notifications::emit_command_notifications");
     let Some(spec) = command_notification_spec(command) else {
         return;
     };
@@ -24,7 +23,6 @@ pub(super) fn emit_command_notifications(
 }
 
 fn response_matches(policy: NotificationResponsePolicy, response: &RespFrame) -> bool {
-    let _trace = profiler::scope("server::connection::notifications::response_matches");
     match policy {
         NotificationResponsePolicy::AnySuccess => {
             !matches!(response, RespFrame::Error(_) | RespFrame::ErrorStatic(_))
@@ -47,7 +45,6 @@ fn emit_keys(
     keys: NotificationKeyArguments,
     args: &[CompactArg],
 ) {
-    let _trace = profiler::scope("server::connection::notifications::emit_keys");
     match keys {
         NotificationKeyArguments::Argument(index) => {
             if let Some(key) = args.get(index) {

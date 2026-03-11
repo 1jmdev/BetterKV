@@ -6,7 +6,6 @@ use super::{collect_pairs, get_hash_map};
 
 impl Store {
     pub fn hrandfield_one(&self, key: &[u8]) -> Result<Option<CompactKey>, ()> {
-        let _trace = profiler::scope("engine::hash::random::hrandfield_one");
         let selected = self.hrandfield_pairs(key, 1)?;
         Ok(selected.into_iter().next().map(|(field, _)| field))
     }
@@ -16,7 +15,6 @@ impl Store {
         key: &[u8],
         count: i64,
     ) -> Result<Vec<(CompactKey, CompactValue)>, ()> {
-        let _trace = profiler::scope("engine::hash::random::hrandfield_pairs");
         let idx = self.shard_index(key);
         let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();

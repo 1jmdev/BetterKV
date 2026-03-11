@@ -2,7 +2,6 @@ use std::path::{Path, PathBuf};
 
 #[cfg(target_os = "linux")]
 pub(super) async fn read_snapshot_bytes(path: &Path) -> Result<Vec<u8>, String> {
-    let _trace = profiler::scope("server::backup::read_snapshot_bytes");
     match read_snapshot_bytes_io_uring(path).await {
         Ok(bytes) => Ok(bytes),
         Err(err) => {
@@ -20,13 +19,11 @@ pub(super) async fn read_snapshot_bytes(path: &Path) -> Result<Vec<u8>, String> 
 
 #[cfg(not(target_os = "linux"))]
 pub(super) async fn read_snapshot_bytes(path: &Path) -> Result<Vec<u8>, String> {
-    let _trace = profiler::scope("server::backup::read_snapshot_bytes");
     std::fs::read(path).map_err(|err| format!("failed to read snapshot {}: {err}", path.display()))
 }
 
 #[cfg(target_os = "linux")]
 async fn read_snapshot_bytes_io_uring(path: &Path) -> Result<Vec<u8>, String> {
-    let _trace = profiler::scope("server::backup::read_snapshot_bytes_io_uring");
     let path_buf = path.to_path_buf();
     let path_for_runtime = path_buf.clone();
     let file_size = file_size_bytes(&path_buf)?;
@@ -45,7 +42,6 @@ async fn read_snapshot_bytes_io_uring(path: &Path) -> Result<Vec<u8>, String> {
 
 #[cfg(target_os = "linux")]
 async fn read_with_io_uring(path: PathBuf, file_size: usize) -> Result<Vec<u8>, String> {
-    let _trace = profiler::scope("server::backup::read_with_io_uring");
     let file = tokio_uring::fs::File::open(path.clone())
         .await
         .map_err(|err| format!("failed to open snapshot {}: {err}", path.display()))?;
@@ -77,7 +73,6 @@ async fn read_with_io_uring(path: PathBuf, file_size: usize) -> Result<Vec<u8>, 
 
 #[cfg(target_os = "linux")]
 fn file_size_bytes(path: &Path) -> Result<usize, String> {
-    let _trace = profiler::scope("server::backup::file_size_bytes");
     let len = std::fs::metadata(path)
         .map_err(|err| format!("failed to stat snapshot {}: {err}", path.display()))?
         .len();
@@ -90,7 +85,6 @@ fn file_size_bytes(path: &Path) -> Result<usize, String> {
 }
 
 pub(super) fn sync_file_path(path: &Path) -> Result<(), String> {
-    let _trace = profiler::scope("server::backup::sync_file_path");
     let file = std::fs::OpenOptions::new()
         .read(true)
         .open(path)
@@ -100,7 +94,6 @@ pub(super) fn sync_file_path(path: &Path) -> Result<(), String> {
 }
 
 pub(super) fn sync_directory(path: &Path) -> Result<(), String> {
-    let _trace = profiler::scope("server::backup::sync_directory");
     let Some(parent) = path.parent() else {
         return Ok(());
     };

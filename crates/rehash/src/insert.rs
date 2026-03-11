@@ -11,7 +11,6 @@ where
     where
         I: IntoIterator<Item = (K, V)>,
     {
-        let _trace = profiler::scope("rehash::insert::insert_batch");
         let iter = entries.into_iter();
         let (lower_bound, _) = iter.size_hint();
         self.reserve_for_batch(lower_bound.min(BULK_RESERVE_CAP));
@@ -23,7 +22,6 @@ where
 
     #[inline(always)]
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
-        let _trace = profiler::scope("rehash::insert::insert");
         self.rehash_write_step();
         let key_bytes = key.as_ref();
         let hash = hash_key(self.seed, key_bytes);
@@ -45,7 +43,6 @@ where
     where
         F: FnOnce() -> V,
     {
-        let _trace = profiler::scope("rehash::insert::get_or_insert_with");
         self.rehash_write_step();
         let key_bytes = key.as_ref();
         let hash = hash_key(self.seed, key_bytes);

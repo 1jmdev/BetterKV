@@ -11,7 +11,6 @@ use protocol::types::{BulkData, RespFrame};
 use types::value::CompactArg;
 
 pub fn dispatch(store: &Store, frame: RespFrame) -> RespFrame {
-    let _trace = profiler::scope("commands::dispatcher::dispatch");
     let mut args = Vec::new();
     if let Err(err) = parse_command_into(frame, &mut args) {
         return RespFrame::error_static(err);
@@ -22,7 +21,6 @@ pub fn dispatch(store: &Store, frame: RespFrame) -> RespFrame {
 
 #[inline]
 pub fn dispatch_args(store: &Store, args: &[CompactArg]) -> RespFrame {
-    let _trace = profiler::scope("commands::dispatcher::dispatch_args");
     if args.is_empty() {
         return RespFrame::error_static("ERR empty command");
     }
@@ -111,7 +109,6 @@ macro_rules! generate_dispatch {
 with_command_registry!(generate_dispatch);
 
 pub fn parse_command(frame: RespFrame) -> Result<Vec<CompactArg>, &'static str> {
-    let _trace = profiler::scope("commands::dispatcher::parse_command");
     let mut args = Vec::new();
     parse_command_into(frame, &mut args)?;
     Ok(args)
@@ -121,7 +118,6 @@ pub fn parse_command_into(
     frame: RespFrame,
     args: &mut Vec<CompactArg>,
 ) -> Result<(), &'static str> {
-    let _trace = profiler::scope("commands::dispatcher::parse_command_into");
     let RespFrame::Array(Some(items)) = frame else {
         return Err("ERR protocol error");
     };

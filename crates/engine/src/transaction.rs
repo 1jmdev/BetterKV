@@ -24,7 +24,6 @@ impl WatchState {
     }
 
     pub fn is_dirty(&self, store: &Store) -> bool {
-        let _trace = profiler::scope("engine::transaction::is_dirty");
         self.watched
             .iter()
             .any(|(key, expected)| store.dump(key) != *expected)

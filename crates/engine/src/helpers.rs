@@ -18,7 +18,6 @@ fn saturating_u64_to_i64(value: u64) -> i64 {
 }
 
 pub(super) fn monotonic_now_ms() -> u64 {
-    let _trace = profiler::scope("engine::helpers::monotonic_now_ms");
     let cached = CACHED_TIME_MS.load(Ordering::Relaxed);
     if cached != 0 {
         return cached;
@@ -31,20 +30,17 @@ pub(super) fn monotonic_now_ms() -> u64 {
 }
 
 pub(super) fn refresh_monotonic_now_ms() {
-    let _trace = profiler::scope("engine::helpers::refresh_monotonic_now_ms");
     let now = START.get_or_init(Instant::now).elapsed().as_millis();
     let now = saturating_u128_to_u64(now);
     CACHED_TIME_MS.store(now, Ordering::Relaxed);
 }
 
 pub(super) fn deadline_from_ttl(ttl: Duration) -> u64 {
-    let _trace = profiler::scope("engine::helpers::deadline_from_ttl");
     let ttl_ms = saturating_u128_to_u64(ttl.as_millis());
     monotonic_now_ms().saturating_add(ttl_ms)
 }
 
 pub(super) fn remaining_ttl_ms(deadline_ms: u64) -> i64 {
-    let _trace = profiler::scope("engine::helpers::remaining_ttl_ms");
     if deadline_ms == 0 {
         return -1;
     }
@@ -58,7 +54,6 @@ pub(super) fn remaining_ttl_ms(deadline_ms: u64) -> i64 {
 }
 
 pub(super) fn purge_if_expired(shard: &mut Shard, key: &[u8], now_ms: u64) -> bool {
-    let _trace = profiler::scope("engine::helpers::purge_if_expired");
     let expired = is_expired(shard, key, now_ms);
     if expired {
         let _ = shard.remove_key(key);
@@ -77,7 +72,6 @@ pub(super) fn get_live_entry<'a>(
 }
 
 pub(super) fn is_expired(shard: &Shard, key: &[u8], now_ms: u64) -> bool {
-    let _trace = profiler::scope("engine::helpers::is_expired");
     if !shard.has_ttls() {
         return false;
     }
@@ -85,7 +79,6 @@ pub(super) fn is_expired(shard: &Shard, key: &[u8], now_ms: u64) -> bool {
 }
 
 pub(super) fn unix_time_ms() -> u64 {
-    let _trace = profiler::scope("engine::helpers::unix_time_ms");
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|value| value.as_millis() as u64)

@@ -12,7 +12,6 @@ impl Store {
         stop: i64,
         reverse: bool,
     ) -> Result<Vec<(CompactKey, f64)>, ()> {
-        let _trace = profiler::scope("engine::zset::range::zrange");
         let idx = self.shard_index(key);
         let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
@@ -44,7 +43,6 @@ impl Store {
         offset: usize,
         count: Option<usize>,
     ) -> Result<Vec<(CompactKey, f64)>, ()> {
-        let _trace = profiler::scope("engine::zset::range::zrange_by_score");
         let idx = self.shard_index(key);
         let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
@@ -97,7 +95,6 @@ impl Store {
         offset: usize,
         count: Option<usize>,
     ) -> Result<Vec<CompactKey>, ()> {
-        let _trace = profiler::scope("engine::zset::range::zrange_by_lex");
         let idx = self.shard_index(key);
         let shard = self.shards[idx].read();
         let now_ms = monotonic_now_ms();
@@ -137,7 +134,6 @@ impl Store {
     }
 
     pub fn zlexcount(&self, key: &[u8], min: LexBound<'_>, max: LexBound<'_>) -> Result<i64, ()> {
-        let _trace = profiler::scope("engine::zset::range::zlexcount");
         Ok(self.zrange_by_lex(key, min, max, false, 0, None)?.len() as i64)
     }
 
@@ -147,7 +143,6 @@ impl Store {
         min: LexBound<'_>,
         max: LexBound<'_>,
     ) -> Result<i64, ()> {
-        let _trace = profiler::scope("engine::zset::range::zremrangebylex");
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
         let now_ms = monotonic_now_ms();
@@ -182,7 +177,6 @@ pub struct LexBound<'a> {
 }
 
 fn in_lex_range(member: &[u8], min: LexBound<'_>, max: LexBound<'_>) -> bool {
-    let _trace = profiler::scope("engine::zset::range::in_lex_range");
     let above_min = match min.value {
         None => true,
         Some(value) if min.inclusive => member >= value,
