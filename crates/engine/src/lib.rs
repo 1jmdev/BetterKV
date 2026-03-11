@@ -45,7 +45,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use ahash::RandomState;
-use hashbrown::HashMap;
 use parking_lot::RwLock;
 
 use rehash::RehashingMap;
@@ -92,7 +91,7 @@ impl DerefMut for StoredEntry {
 }
 
 type StoreMap = RehashingMap<CompactKey, StoredEntry>;
-type ScriptMap = HashMap<CompactKey, CompactValue, RandomState>;
+type ScriptMap = RehashingMap<CompactKey, CompactValue>;
 
 #[derive(Clone, Copy, Debug)]
 pub enum GetExMode {
@@ -191,7 +190,7 @@ pub enum XTrimMode {
 
 pub struct Shard {
     pub(crate) entries: StoreMap,
-    pub(crate) expirations: HashMap<CompactKey, u64, RandomState>,
+    pub(crate) expirations: RehashingMap<CompactKey, u64>,
     /// Tracks the smallest known deadline so sweep can skip shards that have
     /// no expired keys without rebuilding the full sorted structure.
     pub(crate) ttl_min_deadline: u64,
@@ -202,8 +201,8 @@ impl Shard {
     fn new() -> Self {
         let _trace = profiler::scope("engine::lib::new");
         Self {
-            entries: RehashingMap::new(),
-            expirations: HashMap::with_hasher(RandomState::new()),
+            entries: RehashingMap::with_capacity(256),
+            expirations: RehashingMap::with_capacity(64),
             ttl_min_deadline: u64::MAX,
             ttl_count: 0,
         }
@@ -337,7 +336,7 @@ impl Store {
             shards: Arc::new(shard_vec),
             shard_mask: shard_count - 1,
             hash_builder: RandomState::new(),
-            scripts: Arc::new(RwLock::new(HashMap::with_hasher(RandomState::new()))),
+            scripts: Arc::new(RwLock::new(RehashingMap::with_capacity(64))),
             transaction_gate: Arc::new(RwLock::new(())),
             writer_pending: Arc::new(AtomicBool::new(false)),
             active_commands: Arc::new(AtomicUsize::new(0)),

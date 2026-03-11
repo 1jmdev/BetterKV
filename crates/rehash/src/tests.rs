@@ -113,3 +113,15 @@ fn large_growth_uses_incremental_rehashing() {
         assert_eq!(map.get(&i.to_le_bytes()), Some(&i));
     }
 }
+
+#[test]
+fn with_capacity_preallocates_storage() {
+    let map: RehashingMap<Vec<u8>, u32> = RehashingMap::with_capacity(4096);
+
+    assert_eq!(map.len(), 0);
+    assert!(map.old_table.is_none());
+    assert!(map.metas.capacity() >= 4096);
+    assert!(map.keys.capacity() >= 4096);
+    assert!(map.values.capacity() >= 4096);
+    assert!(map.table.len() >= 1024);
+}

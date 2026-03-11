@@ -1,4 +1,6 @@
 use std::mem;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::constants::{
     INITIAL_BUCKETS, MAX_LOAD_FACTOR, NIL, REHASH_BUCKETS_PER_STEP, SMALL_REHASH_THRESHOLD,
@@ -23,15 +25,26 @@ where
 {
     pub fn new() -> Self {
         let _trace = profiler::scope("rehash::types::new");
+        Self::with_capacity(INITIAL_BUCKETS)
+    }
+
+    pub fn with_capacity(capacity: usize) -> Self {
+        let _trace = profiler::scope("rehash::types::with_capacity");
+        let storage_capacity = capacity.max(INITIAL_BUCKETS);
         Self {
             seed: random_seed(),
-            table: Table::with_buckets(INITIAL_BUCKETS),
+            table: Table::with_buckets(bucket_count_for_entries(storage_capacity)),
             old_table: None,
             rehash_cursor: 0,
-            metas: Vec::with_capacity(INITIAL_BUCKETS),
-            keys: Vec::with_capacity(INITIAL_BUCKETS),
-            values: Vec::with_capacity(INITIAL_BUCKETS),
+            metas: Vec::with_capacity(storage_capacity),
+            keys: Vec::with_capacity(storage_capacity),
+            values: Vec::with_capacity(storage_capacity),
         }
+    }
+
+    pub fn reserve(&mut self, additional: usize) {
+        let _trace = profiler::scope("rehash::types::reserve");
+        self.reserve_for_batch(additional);
     }
 
     #[inline(always)]
@@ -152,6 +165,13 @@ where
             return;
         }
 
+        reserve_storage_for_bucket_growth(
+            &mut self.metas,
+            &mut self.keys,
+            &mut self.values,
+            new_bucket_count,
+        );
+
         let new_table = Table::with_buckets(new_bucket_count);
         let old_table = mem::replace(&mut self.table, new_table);
 
@@ -244,6 +264,46 @@ where
 fn random_seed() -> u64 {
     let _trace = profiler::scope("rehash::types::random_seed");
     let mut buf = [0u8; 8];
-    getrandom::fill(&mut buf).expect("getrandom failed");
-    u64::from_ne_bytes(buf)
+    if getrandom::fill(&mut buf).is_ok() {
+        return u64::from_ne_bytes(buf);
+    }
+
+    static FALLBACK_SEED: AtomicU64 = AtomicU64::new(0x9e37_79b9_7f4a_7c15);
+    let sequence = FALLBACK_SEED.fetch_add(0xa076_1d64_78bd_642f, Ordering::Relaxed);
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_nanos() as u64)
+        .unwrap_or(sequence.rotate_left(17));
+    now ^ sequence.rotate_left(23)
+}
+
+#[inline(always)]
+fn bucket_count_for_entries(entry_capacity: usize) -> usize {
+    entry_capacity
+        .max(1)
+        .div_ceil(MAX_LOAD_FACTOR)
+        .next_power_of_two()
+        .max(INITIAL_BUCKETS)
+}
+
+fn reserve_storage_for_bucket_growth<K, V>(
+    metas: &mut Vec<NodeMeta>,
+    keys: &mut Vec<K>,
+    values: &mut Vec<V>,
+    new_bucket_count: usize,
+) {
+    let target_capacity = new_bucket_count.saturating_mul(MAX_LOAD_FACTOR);
+    reserve_vec_to_capacity(metas, target_capacity);
+    reserve_vec_to_capacity(keys, target_capacity);
+    reserve_vec_to_capacity(values, target_capacity);
+}
+
+#[inline(always)]
+fn reserve_vec_to_capacity<T>(vec: &mut Vec<T>, target_capacity: usize) {
+    if vec.capacity() >= target_capacity {
+        return;
+    }
+
+    let additional = target_capacity.saturating_sub(vec.len());
+    vec.reserve_exact(additional);
 }

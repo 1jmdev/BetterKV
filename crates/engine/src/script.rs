@@ -15,9 +15,9 @@ impl Store {
         }
 
         let mut scripts = self.scripts.write();
-        let _ = scripts
-            .entry(CompactKey::from_vec(digest.clone()))
-            .or_insert_with(|| CompactValue::from_slice(script));
+        let _ = scripts.get_or_insert_with(CompactKey::from_vec(digest.clone()), || {
+            CompactValue::from_slice(script)
+        });
         digest
     }
 
