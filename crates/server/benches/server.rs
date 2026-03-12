@@ -139,6 +139,12 @@ impl ConnectionHarness {
             Err(error) => panic!("failed to build auth service: {error}"),
         };
         let persistence = PersistenceHandle::spawn(store.clone(), runtime_config);
+        let shared = connection::ConnectionShared::new(
+            store,
+            pubsub,
+            auth,
+            persistence.clone(),
+        );
 
         let task = tokio::spawn(async move {
             let accepted = listener.accept().await;
@@ -147,14 +153,7 @@ impl ConnectionHarness {
                 Err(error) => panic!("failed to accept benchmark connection: {error}"),
             };
 
-            if let Err(error) = connection::handle_connection(
-                stream,
-                store,
-                pubsub,
-                auth,
-                persistence.clone(),
-            )
-            .await
+            if let Err(error) = connection::handle_connection(stream, shared).await
             {
                 panic!("connection benchmark task failed: {error}");
             }

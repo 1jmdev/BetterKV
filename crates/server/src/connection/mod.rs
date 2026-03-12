@@ -178,7 +178,8 @@ const WRITE_BUFFER_INITIAL: usize = 64 * 1024;
 const PUSH_DRAIN_BATCH: usize = 128;
 
 #[derive(Clone)]
-pub(crate) struct ConnectionShared {
+#[doc(hidden)]
+pub struct ConnectionShared {
     store: Store,
     pubsub_hub: PubSubHub,
     auth: AuthService,
@@ -186,7 +187,8 @@ pub(crate) struct ConnectionShared {
 }
 
 impl ConnectionShared {
-    pub(crate) fn new(
+    #[doc(hidden)]
+    pub fn new(
         store: Store,
         pubsub_hub: PubSubHub,
         auth: AuthService,
@@ -402,7 +404,8 @@ impl ConnectionProcessor {
     }
 }
 
-pub(crate) async fn handle_connection(
+#[doc(hidden)]
+pub async fn handle_connection(
     mut stream: TcpStream,
     shared: ConnectionShared,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
