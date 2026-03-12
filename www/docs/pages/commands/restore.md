@@ -1,0 +1,33 @@
+# RESTORE
+
+Works at the keyspace layer rather than on a single concrete data type.
+
+## Syntax
+
+```text
+RESTORE <key> <ttl-ms> <serialized-value> [REPLACE] [ABSTTL] [IDLETIME <seconds>] [FREQ <frequency>]
+```
+
+## Parameters
+
+- `key`: Primary key to read or mutate.
+- `ttl`: Command-specific `ttl` argument.
+- `serialized`: Command-specific `serialized` argument.
+- `seconds`: Command-specific `seconds` argument.
+- `frequency`: Command-specific `frequency` argument.
+
+## Returns
+
+Returns `OK`, an integer success flag, or a command-specific mutation result.
+
+## Examples
+
+```bash
+RESTORE restored:key 0 "serialized-payload" REPLACE
+```
+
+## BetterKV Notes
+
+- Group: Keyspace.
+- Access: Write.
+- Status: Implemented in BetterKV and mutates server state or stored data.
