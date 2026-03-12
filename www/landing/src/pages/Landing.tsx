@@ -22,7 +22,7 @@ import {
 const features = [
     {
         icon: ZapIcon,
-        title: "5-15x Faster",
+        title: "5-30x Faster",
         description:
             "Optimized from the ground up for raw throughput and sub-millisecond latency.",
     },
@@ -46,15 +46,15 @@ const features = [
     },
     {
         icon: ShieldCheckIcon,
-        title: "Production Ready",
+        title: "Near Production Ready",
         description:
-            "Built in Rust for memory safety, thread safety, and zero undefined behavior.",
+            "It is not yet production ready, but it will be soon.",
     },
     {
         icon: ReplaceIcon,
-        title: "Drop-in Replacement",
+        title: "Near Drop-in Replacement",
         description:
-            "Migrate in minutes. Switch the connection string — everything else stays the same.",
+            "Migrate in minutes. Goal is to have it to just switch the connection string.",
     },
 ];
 
@@ -186,7 +186,7 @@ export function LandingPage() {
                                             BetterKV
                                         </span>
                                         <span className="font-mono text-xs text-muted-foreground">
-                                            ~2,400,000 ops/s
+                                            ~36,200,000 ops/s
                                         </span>
                                     </div>
                                     <div className="h-3 overflow-hidden rounded-full bg-muted">
@@ -209,7 +209,7 @@ export function LandingPage() {
                                             Redis
                                         </span>
                                         <span className="font-mono text-xs text-muted-foreground">
-                                            ~200,000 ops/s
+                                            ~3,900,000 ops/s
                                         </span>
                                     </div>
                                     <div className="h-3 overflow-hidden rounded-full bg-muted">
@@ -243,7 +243,7 @@ export function LandingPage() {
                                             BetterKV
                                         </span>
                                         <span className="font-mono text-xs text-muted-foreground">
-                                            ~8 &micro;s
+                                            ~4 &micro;s
                                         </span>
                                     </div>
                                     <div className="h-3 overflow-hidden rounded-full bg-muted">
@@ -266,7 +266,7 @@ export function LandingPage() {
                                             Redis
                                         </span>
                                         <span className="font-mono text-xs text-muted-foreground">
-                                            ~100 &micro;s
+                                            ~44 &micro;s
                                         </span>
                                     </div>
                                     <div className="h-3 overflow-hidden rounded-full bg-muted">
@@ -368,7 +368,7 @@ export function LandingPage() {
                         <div className="p-6 font-mono text-sm leading-relaxed">
                             <div className="text-muted-foreground">
                                 <span className="text-primary">$</span>{" "}
-                                redis-cli -h localhost -p 6380
+                                betterkv-cli -h localhost -p 6380
                             </div>
                             <div className="mt-3 text-muted-foreground">
                                 <span className="text-primary">

@@ -65,7 +65,7 @@ export function Footer() {
                         </Link>
                         <p className="mt-3 max-w-xs text-sm text-muted-foreground">
                             Redis-compatible key-value store built in Rust.
-                            5-15x faster.
+                            5-30x faster.
                         </p>
                     </div>
 

@@ -1,106 +1,302 @@
 import { motion } from "framer-motion";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Badge } from "@/components/ui/badge";
-import { CheckIcon, MinusIcon } from "lucide-react";
+import { CheckIcon } from "lucide-react";
 
 const commandGroups = [
     {
-        name: "Strings",
+        name: "Connection",
         commands: [
-            { name: "GET", supported: true },
-            { name: "SET", supported: true },
-            { name: "MGET", supported: true },
-            { name: "MSET", supported: true },
-            { name: "INCR / DECR", supported: true },
-            { name: "APPEND", supported: true },
-            { name: "GETRANGE", supported: true },
-            { name: "SETEX / PSETEX", supported: true },
-            { name: "SETNX", supported: true },
+            "AUTH",
+            "CLIENT",
+            "ECHO",
+            "HELLO",
+            "PING",
+            "QUIT",
+            "SELECT",
         ],
     },
     {
-        name: "Hashes",
+        name: "Server",
         commands: [
-            { name: "HGET", supported: true },
-            { name: "HSET", supported: true },
-            { name: "HMGET / HMSET", supported: true },
-            { name: "HDEL", supported: true },
-            { name: "HGETALL", supported: true },
-            { name: "HINCRBY", supported: true },
-            { name: "HKEYS / HVALS", supported: true },
-            { name: "HEXISTS", supported: true },
-            { name: "HLEN", supported: true },
+            "COMMAND",
+            "CONFIG",
+            "DBSIZE",
+            "FLUSHALL",
+            "FLUSHDB",
         ],
     },
     {
-        name: "Lists",
+        name: "Keyspace",
         commands: [
-            { name: "LPUSH / RPUSH", supported: true },
-            { name: "LPOP / RPOP", supported: true },
-            { name: "LRANGE", supported: true },
-            { name: "LLEN", supported: true },
-            { name: "LINDEX", supported: true },
-            { name: "LSET", supported: true },
-            { name: "LREM", supported: true },
-            { name: "BLPOP / BRPOP", supported: true },
+            "COPY",
+            "DEL",
+            "DUMP",
+            "EXISTS",
+            "EXPIRE",
+            "EXPIREAT",
+            "KEYS",
+            "MOVE",
+            "OBJECT",
+            "PERSIST",
+            "PEXPIRE",
+            "PEXPIREAT",
+            "PTTL",
+            "RANDOMKEY",
+            "RENAME",
+            "RENAMENX",
+            "RESTORE",
+            "SCAN",
+            "SORT",
+            "TOUCH",
+            "TTL",
+            "TYPE",
+            "UNLINK",
         ],
     },
     {
-        name: "Sets",
+        name: "String",
         commands: [
-            { name: "SADD", supported: true },
-            { name: "SREM", supported: true },
-            { name: "SMEMBERS", supported: true },
-            { name: "SISMEMBER", supported: true },
-            { name: "SCARD", supported: true },
-            { name: "SUNION / SINTER", supported: true },
-            { name: "SDIFF", supported: true },
-            { name: "SPOP", supported: true },
+            "APPEND",
+            "BITCOUNT",
+            "BITFIELD",
+            "BITFIELD_RO",
+            "BITOP",
+            "BITPOS",
+            "DECR",
+            "DECRBY",
+            "DELEX",
+            "DIGEST",
+            "GET",
+            "GETBIT",
+            "GETDEL",
+            "GETEX",
+            "GETRANGE",
+            "GETSET",
+            "INCR",
+            "INCRBY",
+            "INCRBYFLOAT",
+            "LCS",
+            "MGET",
+            "MSET",
+            "MSETEX",
+            "MSETNX",
+            "PFADD",
+            "PFCOUNT",
+            "PFMERGE",
+            "PSETEX",
+            "SET",
+            "SETBIT",
+            "SETEX",
+            "SETNX",
+            "SETRANGE",
+            "STRLEN",
+            "SUBSTR",
         ],
     },
     {
-        name: "Sorted Sets",
+        name: "Hash",
         commands: [
-            { name: "ZADD", supported: true },
-            { name: "ZREM", supported: true },
-            { name: "ZRANGE", supported: true },
-            { name: "ZRANGEBYSCORE", supported: true },
-            { name: "ZRANK", supported: true },
-            { name: "ZSCORE", supported: true },
-            { name: "ZCARD", supported: true },
-            { name: "ZINCRBY", supported: true },
+            "HDEL",
+            "HEXISTS",
+            "HGET",
+            "HGETALL",
+            "HINCRBY",
+            "HINCRBYFLOAT",
+            "HKEYS",
+            "HLEN",
+            "HMGET",
+            "HMSET",
+            "HRANDFIELD",
+            "HSCAN",
+            "HSET",
+            "HSETNX",
+            "HSTRLEN",
+            "HVALS",
         ],
     },
     {
-        name: "Keys & Server",
+        name: "List",
         commands: [
-            { name: "DEL", supported: true },
-            { name: "EXISTS", supported: true },
-            { name: "EXPIRE / TTL", supported: true },
-            { name: "KEYS / SCAN", supported: true },
-            { name: "TYPE", supported: true },
-            { name: "PING", supported: true },
-            { name: "INFO", supported: true },
-            { name: "DBSIZE", supported: true },
-            { name: "FLUSHDB", supported: true },
+            "BLMPOP",
+            "BLPOP",
+            "BRPOP",
+            "BRPOPLPUSH",
+            "LINDEX",
+            "LINSERT",
+            "LLEN",
+            "LMOVE",
+            "LMPOP",
+            "LPOP",
+            "LPOS",
+            "LPUSH",
+            "LPUSHX",
+            "LRANGE",
+            "LREM",
+            "LSET",
+            "LTRIM",
+            "RPOP",
+            "RPOPLPUSH",
+            "RPUSH",
+            "RPUSHX",
+        ],
+    },
+    {
+        name: "Set",
+        commands: [
+            "SADD",
+            "SCARD",
+            "SDIFF",
+            "SDIFFSTORE",
+            "SINTER",
+            "SINTERCARD",
+            "SINTERSTORE",
+            "SISMEMBER",
+            "SMEMBERS",
+            "SMISMEMBER",
+            "SMOVE",
+            "SPOP",
+            "SRANDMEMBER",
+            "SREM",
+            "SSCAN",
+            "SUNION",
+            "SUNIONSTORE",
+        ],
+    },
+    {
+        name: "Sorted Set",
+        commands: [
+            "BZMPOP",
+            "BZPOPMAX",
+            "BZPOPMIN",
+            "ZADD",
+            "ZCARD",
+            "ZCOUNT",
+            "ZDIFF",
+            "ZDIFFSTORE",
+            "ZINCRBY",
+            "ZINTER",
+            "ZINTERSTORE",
+            "ZLEXCOUNT",
+            "ZMPOP",
+            "ZMSCORE",
+            "ZPOPMAX",
+            "ZPOPMIN",
+            "ZRANDMEMBER",
+            "ZRANGE",
+            "ZRANGEBYLEX",
+            "ZRANGEBYSCORE",
+            "ZRANGESTORE",
+            "ZRANK",
+            "ZREM",
+            "ZREMRANGEBYLEX",
+            "ZREMRANGEBYRANK",
+            "ZREMRANGEBYSCORE",
+            "ZREVRANGE",
+            "ZREVRANGEBYLEX",
+            "ZREVRANGEBYSCORE",
+            "ZREVRANK",
+            "ZSCAN",
+            "ZSCORE",
+            "ZUNION",
+            "ZUNIONSTORE",
+        ],
+    },
+    {
+        name: "Geo",
+        commands: [
+            "GEOADD",
+            "GEODIST",
+            "GEOHASH",
+            "GEOPOS",
+            "GEORADIUS",
+            "GEORADIUSBYMEMBER",
+            "GEORADIUSBYMEMBER_RO",
+            "GEORADIUS_RO",
+            "GEOSEARCH",
+            "GEOSEARCHSTORE",
+        ],
+    },
+    {
+        name: "Stream",
+        commands: [
+            "XACK",
+            "XADD",
+            "XAUTOCLAIM",
+            "XCLAIM",
+            "XDEL",
+            "XDELEX",
+            "XGROUP",
+            "XLEN",
+            "XPENDING",
+            "XRANGE",
+            "XREAD",
+            "XREADGROUP",
+            "XREVRANGE",
+            "XTRIM",
+        ],
+    },
+    {
+        name: "Scripting",
+        commands: [
+            "EVAL",
+            "EVALSHA",
+            "EVALSHA_RO",
+            "EVAL_RO",
+            "SCRIPT",
+        ],
+    },
+    {
+        name: "Transaction",
+        commands: [
+            "DISCARD",
+            "EXEC",
+            "MULTI",
+            "UNWATCH",
+            "WATCH",
         ],
     },
     {
         name: "Pub/Sub",
         commands: [
-            { name: "PUBLISH", supported: true },
-            { name: "SUBSCRIBE", supported: true },
-            { name: "UNSUBSCRIBE", supported: true },
-            { name: "PSUBSCRIBE", supported: true },
+            "PSUBSCRIBE",
+            "PUBLISH",
+            "PUBSUB",
+            "PUNSUBSCRIBE",
+            "SPUBLISH",
+            "SSUBSCRIBE",
+            "SUBSCRIBE",
+            "SUNSUBSCRIBE",
+            "UNSUBSCRIBE",
         ],
     },
     {
-        name: "Transactions",
+        name: "JSON",
         commands: [
-            { name: "MULTI", supported: true },
-            { name: "EXEC", supported: true },
-            { name: "DISCARD", supported: true },
-            { name: "WATCH", supported: false },
+            "JSON.ARRAPPEND",
+            "JSON.ARRINDEX",
+            "JSON.ARRINSERT",
+            "JSON.ARRLEN",
+            "JSON.ARRPOP",
+            "JSON.ARRTRIM",
+            "JSON.CLEAR",
+            "JSON.DEBUG",
+            "JSON.DEL",
+            "JSON.FORGET",
+            "JSON.GET",
+            "JSON.MERGE",
+            "JSON.MGET",
+            "JSON.MSET",
+            "JSON.NUMINCRBY",
+            "JSON.NUMMULTBY",
+            "JSON.OBJKEYS",
+            "JSON.OBJLEN",
+            "JSON.RESP",
+            "JSON.SET",
+            "JSON.STRAPPEND",
+            "JSON.STRLEN",
+            "JSON.TOGGLE",
+            "JSON.TYPE",
         ],
     },
 ];
@@ -128,8 +324,8 @@ export function CompatibilityPage() {
         <div>
             <PageHeader
                 badge="Compatibility"
-                title="100% Redis protocol compatible."
-                description="Use your existing Redis clients, tools, and workflows. BetterKV speaks the same language."
+                title="Redis command compatibility."
+                description="This page follows the command reference in the docs so the landing page and documentation stay aligned."
             />
 
             <section className="border-b border-border/50 py-24">
@@ -156,22 +352,12 @@ export function CompatibilityPage() {
                                 <ul className="space-y-1.5">
                                     {group.commands.map((cmd) => (
                                         <li
-                                            key={cmd.name}
+                                            key={cmd}
                                             className="flex items-center gap-2 text-sm"
                                         >
-                                            {cmd.supported ? (
-                                                <CheckIcon className="size-3.5 text-emerald-400" />
-                                            ) : (
-                                                <MinusIcon className="size-3.5 text-muted-foreground" />
-                                            )}
-                                            <span
-                                                className={
-                                                    cmd.supported
-                                                        ? "text-foreground"
-                                                        : "text-muted-foreground"
-                                                }
-                                            >
-                                                {cmd.name}
+                                            <CheckIcon className="size-3.5 shrink-0 text-emerald-400" />
+                                            <span className="text-foreground">
+                                                {cmd}
                                             </span>
                                         </li>
                                     ))}
@@ -234,68 +420,6 @@ export function CompatibilityPage() {
                                 ))}
                             </tbody>
                         </table>
-                    </motion.div>
-                </div>
-            </section>
-
-            <section className="py-24">
-                <div className="mx-auto max-w-6xl px-6">
-                    <motion.div {...fadeUp}>
-                        <h2 className="text-2xl font-bold tracking-tight">
-                            Migration Guide
-                        </h2>
-                        <p className="mt-2 text-muted-foreground">
-                            Switching from Redis takes less than a minute.
-                        </p>
-                    </motion.div>
-
-                    <motion.div {...fadeUp} className="mt-10 space-y-6">
-                        <div className="rounded-xl border border-border/50 bg-card p-6">
-                            <div className="flex items-center gap-3 mb-4">
-                                <div className="flex size-7 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-                                    1
-                                </div>
-                                <h3 className="text-sm font-semibold">
-                                    Install BetterKV
-                                </h3>
-                            </div>
-                            <div className="rounded-lg bg-muted/50 p-4 font-mono text-sm">
-                                curl -fsSL https://betterkv.com/install.sh | sh
-                            </div>
-                        </div>
-
-                        <div className="rounded-xl border border-border/50 bg-card p-6">
-                            <div className="flex items-center gap-3 mb-4">
-                                <div className="flex size-7 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-                                    2
-                                </div>
-                                <h3 className="text-sm font-semibold">
-                                    Start the server
-                                </h3>
-                            </div>
-                            <div className="rounded-lg bg-muted/50 p-4 font-mono text-sm">
-                                betterkv-server --port 6380
-                            </div>
-                        </div>
-
-                        <div className="rounded-xl border border-border/50 bg-card p-6">
-                            <div className="flex items-center gap-3 mb-4">
-                                <div className="flex size-7 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-                                    3
-                                </div>
-                                <h3 className="text-sm font-semibold">
-                                    Update your connection string
-                                </h3>
-                            </div>
-                            <div className="rounded-lg bg-muted/50 p-4 font-mono text-sm">
-                                <div className="text-muted-foreground line-through">
-                                    REDIS_URL=redis://localhost:6379
-                                </div>
-                                <div className="mt-1 text-primary">
-                                    REDIS_URL=redis://localhost:6380
-                                </div>
-                            </div>
-                        </div>
                     </motion.div>
                 </div>
             </section>

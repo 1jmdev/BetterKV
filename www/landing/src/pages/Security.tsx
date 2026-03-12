@@ -20,7 +20,7 @@ const securityFeatures = [
         icon: KeyIcon,
         title: "Authentication",
         description:
-            "Password-based AUTH and ACL support. Define per-user permissions to control who can read, write, or administer specific key patterns.",
+            "AUTH and ACL support are available, but the full authentication model is still in beta. It is not complete yet and is not recommended for production deployments today.",
     },
     {
         icon: EyeOffIcon,
@@ -61,8 +61,34 @@ export function SecurityPage() {
             <PageHeader
                 badge="Security"
                 title="Secure by design."
-                description="Built in Rust for memory safety. Encrypted in transit. Authenticated at every layer."
+                description="Built in Rust for memory safety with transport encryption support. Authentication and ACLs are still in beta and are not yet recommended for production use."
             />
+
+            <section className="border-b border-border/50 py-10">
+                <div className="mx-auto max-w-4xl px-6">
+                    <motion.div
+                        {...fadeUp}
+                        className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-6"
+                    >
+                        <div className="flex items-start gap-3">
+                            <div className="mt-0.5 flex size-10 items-center justify-center rounded-lg bg-amber-500/15">
+                                <BugIcon className="size-5 text-amber-400" />
+                            </div>
+                            <div>
+                                <h2 className="text-base font-semibold">
+                                    Authentication is currently in beta
+                                </h2>
+                                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                                    BetterKV's authentication and ACL features are
+                                    still being completed. They should be treated
+                                    as beta functionality and are not recommended
+                                    for production environments yet.
+                                </p>
+                            </div>
+                        </div>
+                    </motion.div>
+                </div>
+            </section>
 
             <section className="border-b border-border/50 py-24">
                 <div className="mx-auto max-w-6xl px-6">
