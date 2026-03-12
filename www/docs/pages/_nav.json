@@ -8,10 +8,5 @@
         "text": "Commands",
         "link": "/commands/",
         "activeMatch": "/commands/"
-    },
-    {
-        "text": "API",
-        "link": "/api/",
-        "activeMatch": "/api/"
     }
 ]

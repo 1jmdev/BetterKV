@@ -354,7 +354,6 @@ export default defineConfig({
                     "^/$|^/(quick-start|installation|configuration|data-types|persistence|replication|cluster|lua-scripting|pubsub|transactions|security)",
             },
             { text: "Commands", link: "/commands/", activeMatch: "/commands/" },
-            { text: "API", link: "/api/", activeMatch: "/api/" },
         ],
         sidebar: {
             "/": [
