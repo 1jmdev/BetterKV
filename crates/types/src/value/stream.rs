@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
-use rapidhash::fast::RandomState;
 use hashbrown::HashMap;
+use rapidhash::fast::RandomState;
 
 use super::{CompactKey, CompactValue};
 

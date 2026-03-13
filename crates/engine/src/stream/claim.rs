@@ -1,5 +1,5 @@
-use rapidhash::fast::RandomState;
 use hashbrown::HashMap;
+use rapidhash::fast::RandomState;
 
 use crate::store::Store;
 use types::value::{CompactArg, CompactKey, StreamId};

@@ -1,8 +1,8 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-use rapidhash::fast::RandomState;
 use hashbrown::HashSet;
+use rapidhash::fast::RandomState;
 
 use crate::store::Store;
 use types::value::{CompactArg, Entry};

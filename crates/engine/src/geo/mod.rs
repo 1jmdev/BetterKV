@@ -3,8 +3,8 @@ mod read;
 mod search;
 mod write;
 
-use rapidhash::fast::RandomState;
 use hashbrown::HashMap;
+use rapidhash::fast::RandomState;
 
 use types::value::{CompactKey, Entry, GeoValue};
 

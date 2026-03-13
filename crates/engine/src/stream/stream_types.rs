@@ -1,5 +1,5 @@
-use rapidhash::fast::RandomState;
 use hashbrown::HashMap;
+use rapidhash::fast::RandomState;
 
 use crate::store::{XAddId, XTrimMode};
 use types::value::{

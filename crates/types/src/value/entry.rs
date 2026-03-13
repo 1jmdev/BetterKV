@@ -1,9 +1,9 @@
 use std::collections::VecDeque;
 
-use rapidhash::fast::RandomState;
 use bytes::Bytes;
 use hashbrown::HashMap;
 use indexmap::IndexSet;
+use rapidhash::fast::RandomState;
 use serde_json::Value as JsonValue;
 
 use super::{CompactKey, CompactValue, StreamValue, ZSetValueMap};

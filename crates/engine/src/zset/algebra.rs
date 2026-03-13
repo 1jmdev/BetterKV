@@ -1,5 +1,5 @@
-use rapidhash::fast::RandomState;
 use hashbrown::HashMap;
+use rapidhash::fast::RandomState;
 
 use crate::helpers::purge_if_expired;
 use crate::store::Store;

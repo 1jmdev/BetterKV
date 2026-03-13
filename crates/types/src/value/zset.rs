@@ -1,8 +1,8 @@
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 
-use rapidhash::fast::RandomState;
 use hashbrown::HashMap;
+use rapidhash::fast::RandomState;
 
 use super::CompactKey;
 

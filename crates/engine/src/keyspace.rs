@@ -589,7 +589,6 @@ impl Store {
         entry: Entry,
         replace: bool,
     ) -> Result<(), RestoreError> {
-
         let idx = self.shard_index(key);
         let mut shard = self.shards[idx].write();
         let now_ms = monotonic_now_ms();
@@ -843,11 +842,10 @@ fn deserialize_entry(payload: &[u8]) -> Option<Entry> {
         }
         5 => {
             let count = read_u32(&mut input)? as usize;
-            let mut geo =
-                hashbrown::HashMap::with_capacity_and_hasher(
-                    count,
-                    rapidhash::fast::RandomState::new(),
-                );
+            let mut geo = hashbrown::HashMap::with_capacity_and_hasher(
+                count,
+                rapidhash::fast::RandomState::new(),
+            );
             for _ in 0..count {
                 let member = CompactKey::from_vec(read_bytes(&mut input)?);
                 if input.len() < 16 {

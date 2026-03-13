@@ -1,9 +1,9 @@
 use std::collections::{BTreeMap, VecDeque};
 use std::io::Write;
 
-use rapidhash::fast::RandomState;
 use hashbrown::HashMap;
 use indexmap::IndexSet;
+use rapidhash::fast::RandomState;
 
 pub(super) const RDB_MAGIC_PREFIX: &[u8; 5] = b"REDIS";
 pub(super) const RDB_VERSION: &str = "0004";
