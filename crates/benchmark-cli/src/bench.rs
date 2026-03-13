@@ -12,6 +12,7 @@ use protocol::types::{BulkData, RespFrame};
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
+use tokio::task::JoinSet;
 
 use crate::args::{Args, Connection};
 use crate::resp::{
@@ -303,7 +304,6 @@ pub async fn run_single_benchmark(
         progress: Arc::clone(&progress),
     });
 
-    let thread_count = args.threads.min(clients).max(1);
     let mut plans = Vec::with_capacity(clients);
     for client_id in 0..clients {
         let tracked_quota = tracked_base + u64::from(client_id < tracked_extra);
@@ -318,11 +318,6 @@ pub async fn run_single_benchmark(
         });
     }
 
-    let mut shards = vec![Vec::new(); thread_count];
-    for (index, plan) in plans.into_iter().enumerate() {
-        shards[index % thread_count].push(plan);
-    }
-
     let progress_handle = if !args.quiet && !args.csv {
         let state = Arc::clone(&progress);
         let name = shared.spec.name.clone();
@@ -334,39 +329,31 @@ pub async fn run_single_benchmark(
         None
     };
 
-    let mut handles = Vec::with_capacity(thread_count);
-    for (thread_index, shard) in shards.into_iter().enumerate() {
-        if shard.is_empty() {
-            continue;
-        }
+    let mut worker_tasks = JoinSet::new();
+    for plan in plans {
         let cfg = Arc::clone(&shared);
-        handles.push(
-            thread::Builder::new()
-                .name(format!("betterkv-bench-{thread_index}"))
-                .spawn(move || run_thread_shard(cfg, shard))
-                .map_err(|err| format!("failed to spawn benchmark thread {thread_index}: {err}"))?,
-        );
+        worker_tasks.spawn(async move {
+            run_worker(plan.client_id, plan.warmup_quota, plan.tracked_quota, cfg).await
+        });
     }
 
     let mut total_completed = 0u64;
     let mut histogram = latency_histogram()?;
     let mut total_latency_ns = 0u64;
-    for handle in handles {
-        let thread_stats = handle
-            .join()
-            .map_err(|_| "benchmark thread panicked".to_string())??;
-        for stats in thread_stats {
-            total_completed += stats.completed;
-            total_latency_ns = total_latency_ns.saturating_add(stats.total_latency_ns);
-            histogram
-                .add(&stats.histogram)
-                .map_err(|err| format!("failed to merge latency histogram: {err}"))?;
-        }
+    while let Some(task_result) = worker_tasks.join_next().await {
+        let stats = task_result.map_err(|err| format!("worker join error: {err}"))??;
+        total_completed += stats.completed;
+        total_latency_ns = total_latency_ns.saturating_add(stats.total_latency_ns);
+        histogram
+            .add(&stats.histogram)
+            .map_err(|err| format!("failed to merge latency histogram: {err}"))?;
     }
 
     progress.stop.store(true, Ordering::Relaxed);
     if let Some(handle) = progress_handle {
-        let _ = handle.join();
+        handle
+            .join()
+            .map_err(|_| "progress thread panicked".to_string())?;
         println!();
     }
 
@@ -406,39 +393,6 @@ pub async fn run_single_benchmark(
         pipeline: shared.spec.pipeline,
         random_keys: shared.spec.random_keys,
         keyspace: shared.spec.keyspace,
-    })
-}
-
-fn run_thread_shard(cfg: Arc<Shared>, shard: Vec<ClientPlan>) -> Result<Vec<WorkerStats>, String> {
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .map_err(|err| format!("failed to create worker runtime: {err}"))?;
-
-    runtime.block_on(async move {
-        let mut handles = Vec::with_capacity(shard.len());
-        for plan in shard {
-            let worker_cfg = Arc::clone(&cfg);
-            handles.push(tokio::spawn(async move {
-                run_worker(
-                    plan.client_id,
-                    plan.warmup_quota,
-                    plan.tracked_quota,
-                    worker_cfg,
-                )
-                .await
-            }));
-        }
-
-        let mut results = Vec::with_capacity(handles.len());
-        for handle in handles {
-            results.push(
-                handle
-                    .await
-                    .map_err(|err| format!("worker join error: {err}"))??,
-            );
-        }
-        Ok(results)
     })
 }
 
@@ -774,13 +728,13 @@ fn progress_loop(name: &str, total_requests: u64, state: Arc<ProgressState>, sta
     let mut last_tick = started;
     let progress = ProgressBar::new(total_requests);
     progress.enable_steady_tick(Duration::from_millis(120));
-    progress.set_style(
-        ProgressStyle::with_template(
-            "{spinner:.cyan} {msg} [{wide_bar:.cyan/blue}] {pos}/{len} {percent:>3}% | {per_sec} | avg {eta_precise}",
-        )
-        .unwrap()
-        .progress_chars("=> "),
-    );
+    let style = match ProgressStyle::with_template(
+        "{spinner:.cyan} {msg} [{wide_bar:.cyan/blue}] {pos}/{len} {percent:>3}% | {per_sec} | avg {eta_precise}",
+    ) {
+        Ok(style) => style.progress_chars("=> "),
+        Err(_) => ProgressStyle::default_bar(),
+    };
+    progress.set_style(style);
 
     loop {
         thread::sleep(Duration::from_millis(250));

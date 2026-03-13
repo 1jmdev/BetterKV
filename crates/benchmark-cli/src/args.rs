@@ -71,7 +71,7 @@ pub struct Args {
 }
 
 pub fn validate_args(args: &Args) -> Result<(), String> {
-    let _ = args.resolved_connection()?;
+    args.resolved_connection()?;
     if args.key_prefix.trim().is_empty() {
         return Err("--key-prefix must not be empty".to_string());
     }
